@@ -43,14 +43,14 @@ export async function handleMessage(event: MessageEvent) {
         // --- Authenticated User Logic Below ---
 
         // Handle active game session
-        const gameSession = await getActiveSession(userId)
+        const gameSession = await getActiveSession(user.id)
         if (gameSession) {
-            await handleGameAnswer(event.replyToken, userId, gameSession, text)
+            await handleGameAnswer(event.replyToken, user.id, gameSession, text)
             return
         }
 
         // Update streak and add points for message
-        await updateStreak(userId)
+        await updateStreak(user.id)
         await addPoints(user.id, 2, 'MESSAGE')
 
         // Natural language understanding
