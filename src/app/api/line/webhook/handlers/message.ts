@@ -719,9 +719,6 @@ async function handleGameAnswer(
     }
 
     // --- Answer Processing ---
-    // Show loading indicator
-    await replyText(replyToken, '⏳ กำลังตรวจคำตอบ...')
-
     let isCorrect = false
     let userAnswerText = text.trim()
 
@@ -750,44 +747,13 @@ async function handleGameAnswer(
             const correctOptionText = currentQ.options[correctIndex]?.toLowerCase().trim()
             isCorrect = userAnswerText.toLowerCase() === correctOptionText
 
-            // If not exact match, use AI for fuzzy matching
-            if (!isCorrect && correctOptionText) {
-                try {
-                    const { generateChitchat } = await import('@/lib/ai/claude')
-                    const validationPrompt = `User answered: "${userAnswerText}"\nCorrect answer: "${correctOptionText}"\n\nAre these semantically the same? Reply ONLY with "YES" or "NO".`
-                    const aiResponse = await generateChitchat({
-                        userId: user.lineUserId,
-                        message: validationPrompt,
-                        userContext: { name: user.thaiName || 'User', level: `Level ${user.currentLevel}`, streak: user.streak, preferredLanguage: user.preferredLanguage }
-                    })
-                    isCorrect = aiResponse.toUpperCase().includes('YES')
-                } catch (error) {
-                    console.error('AI validation error:', error)
-                }
-            }
+            // Only use AI for very close matches (optional - skip for now for speed)
+            // Future: could add fuzzy matching here if needed
         }
     } else {
-        // Free-form answer (no options) - use AI for validation
+        // Free-form answer (no options) - exact match for speed
         const expectedAnswer = String(currentQ.correctAnswer).toLowerCase().trim()
-
-        // First try exact match
         isCorrect = userAnswerText.toLowerCase() === expectedAnswer
-
-        // If not exact, use AI fuzzy matching
-        if (!isCorrect) {
-            try {
-                const { generateChitchat } = await import('@/lib/ai/claude')
-                const validationPrompt = `User answered: "${userAnswerText}"\nCorrect answer: "${expectedAnswer}"\n\nAre these semantically the same or close enough? Reply ONLY with "YES" or "NO".`
-                const aiResponse = await generateChitchat({
-                    userId: user.lineUserId,
-                    message: validationPrompt,
-                    userContext: { name: user.thaiName || 'User', level: `Level ${user.currentLevel}`, streak: user.streak, preferredLanguage: user.preferredLanguage }
-                })
-                isCorrect = aiResponse.toUpperCase().includes('YES')
-            } catch (error) {
-                console.error('AI validation error:', error)
-            }
-        }
     }
 
     const newCorrect = isCorrect ? session.correctCount + 1 : session.correctCount
