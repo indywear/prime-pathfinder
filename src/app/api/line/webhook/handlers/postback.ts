@@ -2,7 +2,7 @@ import { PostbackEvent } from '@line/bot-sdk'
 import { prisma } from '@/lib/prisma'
 import { replyText, replyFlex, flexTemplates, quickReplies, pushText } from '@/lib/line/client'
 import { getLevelInfo, getNextLevelXP, addPoints } from '@/lib/gamification'
-import { GAME_TYPES, createGameSession } from '@/lib/games/engine'
+import { GAME_TYPES, createGameSession, abandonActiveSessions } from '@/lib/games/engine'
 import { generateQuestions } from '@/lib/ai/claude'
 import {
     startRegistrationFlow,
@@ -250,6 +250,9 @@ export async function handlePostback(event: PostbackEvent) {
             await replyText(event.replyToken, 'ขออภัย ไม่สามารถสร้างคำถามได้ในขณะนี้ ลองใหม่อีกครั้งนะครับ 🙏', quickReplies.mainMenu)
             return
         }
+
+        // Cleanup any existing active sessions to prevent zombies
+        await abandonActiveSessions(user.id)
 
         // Create game session
         const session = await createGameSession(user.id, game, questions.length, { questions })

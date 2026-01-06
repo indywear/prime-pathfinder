@@ -200,6 +200,16 @@ export async function abandonSession(sessionId: string): Promise<void> {
     })
 }
 
+export async function abandonActiveSessions(userId: string): Promise<void> {
+    await prisma.gameSession.updateMany({
+        where: {
+            userId,
+            status: { in: ['ACTIVE', 'PAUSED'] }
+        },
+        data: { status: 'ABANDONED' }
+    })
+}
+
 // ==================== TIMEOUT HANDLING ====================
 
 const TIMEOUT_CONFIG = {

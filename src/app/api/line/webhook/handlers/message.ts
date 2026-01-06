@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { replyText, replyFlex, flexTemplates, quickReplies } from '@/lib/line/client'
 import { addPoints, updateStreak } from '@/lib/gamification'
 import { generateFeedback, generateChitchat } from '@/lib/ai/claude'
-import { getActiveSession, updateGameSession, GAME_MESSAGES, getRandomMessage } from '@/lib/games/engine'
+import { getActiveSession, updateGameSession, GAME_MESSAGES, getRandomMessage, abandonSession } from '@/lib/games/engine'
 
 export async function handleMessage(event: MessageEvent) {
     const userId = event.source.userId
@@ -45,6 +45,20 @@ export async function handleMessage(event: MessageEvent) {
         // Handle active game session
         const gameSession = await getActiveSession(user.id)
         if (gameSession) {
+            // Check for exit/special commands during game
+            const lowerText = text.toLowerCase()
+            const exitKeywords = ['ออก', 'ออกจากเกม', 'เลิกเล่น', 'หยุด', 'พอแค่นี้', 'เมนู', 'menu', 'exit', 'quit', 'stop', 'main menu']
+
+            if (exitKeywords.includes(lowerText)) {
+                await abandonSession(gameSession.id)
+                await replyText(
+                    event.replyToken,
+                    'ออกจากเกมแล้วครับ 👋 พักผ่อนก่อนแล้วมาเล่นใหม่นะครับ!',
+                    quickReplies.mainMenu
+                )
+                return
+            }
+
             await handleGameAnswer(event.replyToken, user.id, gameSession, text)
             return
         }
