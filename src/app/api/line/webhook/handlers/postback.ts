@@ -166,8 +166,66 @@ export async function handlePostback(event: PostbackEvent) {
                 await replyFlex(event.replyToken, 'กรุณาลงทะเบียนก่อน', flexTemplates.welcomeCard())
                 return
             }
-            await replyText(event.replyToken, 'ระบบส่งงานกำลังปรับปรุงให้ดียิ่งขึ้น รอสักครู่นะครับ! 🚧')
-            // Temporarily disabled
+
+            // Check for active weekly tasks
+            const now = new Date()
+            const activeTasks = await prisma.weeklyTask.findMany({
+                where: {
+                    isActive: true,
+                    startDate: { lte: now },
+                    deadline: { gte: now }
+                },
+                orderBy: { weekNumber: 'desc' }
+            })
+
+            if (activeTasks.length === 0) {
+                await replyText(event.replyToken, '📭 ไม่มีภาระงานที่ต้องส่งในขณะนี้ครับ\n\nรอประกาศงานใหม่นะครับ!', quickReplies.mainMenu)
+                return
+            }
+
+            // Check if user already submitted
+            const existingSubmissions = await prisma.submission.findMany({
+                where: {
+                    userId: user.id,
+                    taskId: { in: activeTasks.map(t => t.id) }
+                }
+            })
+            const submittedTaskIds = new Set(existingSubmissions.map(s => s.taskId))
+
+            // Filter to show only unsubmitted tasks
+            const pendingTasks = activeTasks.filter(t => !submittedTaskIds.has(t.id))
+
+            if (pendingTasks.length === 0) {
+                await replyText(event.replyToken, '✅ คุณส่งงานครบทุกภาระงานแล้วครับ!\n\nรอภาระงานใหม่นะครับ 🎉', quickReplies.mainMenu)
+                return
+            }
+
+            // Create state for submission flow (step 200)
+            await prisma.registrationState.upsert({
+                where: { lineUserId: userId },
+                update: { step: 200, data: { mode: 'submit', availableTasks: pendingTasks.map(t => ({ id: t.id, title: t.title, weekNumber: t.weekNumber, minWords: t.minWords })) } },
+                create: { lineUserId: userId, step: 200, data: { mode: 'submit', availableTasks: pendingTasks.map(t => ({ id: t.id, title: t.title, weekNumber: t.weekNumber, minWords: t.minWords })) } }
+            })
+
+            // Show task selection
+            if (pendingTasks.length === 1) {
+                // Only one task, go directly to submission
+                await prisma.registrationState.update({
+                    where: { lineUserId: userId },
+                    data: { step: 201, data: { mode: 'submit', selectedTaskId: pendingTasks[0].id, taskTitle: pendingTasks[0].title, minWords: pendingTasks[0].minWords } }
+                })
+                await replyText(
+                    event.replyToken,
+                    `📝 ส่งงานสัปดาห์ ${pendingTasks[0].weekNumber}\n\n"${pendingTasks[0].title}"\n\n✍️ พิมพ์งานเขียนของคุณได้เลยครับ (ขั้นต่ำ ${pendingTasks[0].minWords} คำ)\n\n(พิมพ์ "ยกเลิก" เพื่อออก)`
+                )
+            } else {
+                // Multiple tasks - show selection
+                const taskList = pendingTasks.map((t, i) => `${i + 1}. สัปดาห์ ${t.weekNumber}: ${t.title}`).join('\n')
+                await replyText(
+                    event.replyToken,
+                    `📝 เลือกภาระงานที่จะส่ง:\n\n${taskList}\n\nพิมพ์หมายเลขเพื่อเลือกครับ\n(พิมพ์ "ยกเลิก" เพื่อออก)`
+                )
+            }
             break
 
         case 'practice':

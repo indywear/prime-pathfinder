@@ -409,6 +409,148 @@ async function handlePersistentRegistrationFlow(
                 await replyText(replyToken, 'ขออภัย ไม่สามารถวิเคราะห์ได้ในขณะนี้ ลองใหม่อีกครั้งนะครับ 🙏', quickReplies.mainMenu)
                 return
             }
+
+        // ==================== SUBMIT WORK MODE (step 200-201) ====================
+        case 200:
+            // Task selection (when multiple tasks available)
+            if (text === 'ยกเลิก' || text.toLowerCase() === 'cancel') {
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+                await replyText(replyToken, 'ยกเลิกการส่งงานแล้วครับ 👋', quickReplies.mainMenu)
+                return
+            }
+
+            const taskNumber = parseInt(text)
+            const availableTasks = data.availableTasks || []
+
+            if (isNaN(taskNumber) || taskNumber < 1 || taskNumber > availableTasks.length) {
+                await replyText(replyToken, `กรุณาพิมพ์หมายเลข 1-${availableTasks.length} เพื่อเลือกภาระงานครับ`)
+                return
+            }
+
+            const selectedTask = availableTasks[taskNumber - 1]
+            await prisma.registrationState.update({
+                where: { lineUserId: userId },
+                data: {
+                    step: 201,
+                    data: { mode: 'submit', selectedTaskId: selectedTask.id, taskTitle: selectedTask.title, minWords: selectedTask.minWords }
+                }
+            })
+            await replyText(
+                replyToken,
+                `📝 ส่งงาน: "${selectedTask.title}"\n\n✍️ พิมพ์งานเขียนของคุณได้เลยครับ\n(ขั้นต่ำ ${selectedTask.minWords} คำ)\n\n(พิมพ์ "ยกเลิก" เพื่อออก)`
+            )
+            return
+
+        case 201:
+            // Content submission
+            if (text === 'ยกเลิก' || text.toLowerCase() === 'cancel') {
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+                await replyText(replyToken, 'ยกเลิกการส่งงานแล้วครับ 👋', quickReplies.mainMenu)
+                return
+            }
+
+            // Get user for submission
+            const submitUser = await prisma.user.findUnique({ where: { lineUserId: userId } })
+            if (!submitUser) {
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+                await replyText(replyToken, 'ไม่พบข้อมูลผู้ใช้ กรุณาลงทะเบียนก่อนครับ', quickReplies.mainMenu)
+                return
+            }
+
+            // Word count check
+            const wordCount = text.split(/\s+/).filter(w => w.length > 0).length
+            const minWords = data.minWords || 80
+
+            if (wordCount < minWords) {
+                await replyText(
+                    replyToken,
+                    `⚠️ งานเขียนสั้นเกินไปครับ\n\nคำที่เขียน: ${wordCount} คำ\nขั้นต่ำ: ${minWords} คำ\n\nลองเพิ่มเนื้อหาอีกนิดนะครับ!`
+                )
+                return
+            }
+
+            // Process with AI
+            await replyText(replyToken, '🔍 กำลังตรวจงาน... รอสักครู่นะครับ')
+
+            try {
+                // Get task details for rubrics
+                const task = await prisma.weeklyTask.findUnique({
+                    where: { id: data.selectedTaskId }
+                })
+
+                const feedback = await generateFeedback({
+                    content: text,
+                    taskTitle: task?.title,
+                    rubrics: task?.rubrics as any,
+                    nationality: submitUser.nationality || 'International',
+                    thaiLevel: submitUser.thaiLevel,
+                    userName: submitUser.thaiName || submitUser.chineseName || undefined
+                })
+
+                // Calculate if early submission (bonus points)
+                const isEarly = task && new Date() < new Date(new Date(task.deadline).getTime() - 24 * 60 * 60 * 1000) // 1 day before deadline
+
+                // Save submission
+                await prisma.submission.create({
+                    data: {
+                        userId: submitUser.id,
+                        taskId: data.selectedTaskId,
+                        content: text,
+                        wordCount,
+                        scores: feedback.scores,
+                        aiFeedback: JSON.stringify(feedback),
+                        totalScore: feedback.overallScore,
+                        isEarly: isEarly || false
+                    }
+                })
+
+                // Award points
+                const basePoints = Math.round(feedback.overallScore / 5) + 10
+                const earlyBonus = isEarly ? 10 : 0
+                const totalPoints = basePoints + earlyBonus
+
+                await addPoints(submitUser.id, totalPoints, isEarly ? 'SUBMISSION_EARLY' : 'SUBMISSION', data.selectedTaskId,
+                    `ส่งงาน: ${data.taskTitle}${isEarly ? ' (ส่งก่อนเวลา!)' : ''}`)
+
+                // Clear state
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+
+                // Format response
+                const scoreText = feedback.scores.map(s =>
+                    `${s.name}: ${s.score}/${s.maxScore}`
+                ).join('\n')
+
+                await replyFlex(
+                    replyToken,
+                    'ส่งงานสำเร็จ!',
+                    {
+                        type: 'bubble',
+                        body: {
+                            type: 'box',
+                            layout: 'vertical',
+                            contents: [
+                                { type: 'text' as const, text: `✅ ส่งงานสำเร็จ!`, weight: 'bold' as const, size: 'lg' as const, color: '#10b981' },
+                                { type: 'text' as const, text: data.taskTitle, size: 'sm' as const, color: '#666666', margin: 'sm' as const },
+                                { type: 'separator' as const, margin: 'md' as const },
+                                { type: 'text' as const, text: `📊 คะแนน: ${feedback.overallScore}/100`, weight: 'bold' as const, size: 'md' as const, margin: 'md' as const },
+                                { type: 'text' as const, text: `📝 จำนวนคำ: ${wordCount} คำ`, size: 'sm' as const, margin: 'sm' as const },
+                                { type: 'text' as const, text: `🎯 ได้รับ: +${totalPoints} แต้ม${isEarly ? ' (รวมโบนัสส่งก่อน!)' : ''}`, size: 'sm' as const, color: '#6366f1', margin: 'sm' as const },
+                                { type: 'separator' as const, margin: 'md' as const },
+                                { type: 'text' as const, text: scoreText, margin: 'md' as const, wrap: true, size: 'xs' as const },
+                                { type: 'separator' as const, margin: 'md' as const },
+                                { type: 'text' as const, text: feedback.generalFeedback, margin: 'md' as const, wrap: true, size: 'sm' as const }
+                            ]
+                        }
+                    },
+                    quickReplies.mainMenu
+                )
+                return
+            } catch (error) {
+                console.error('Submit error:', error)
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+                await replyText(replyToken, 'ขออภัย ไม่สามารถตรวจงานได้ในขณะนี้ ลองใหม่อีกครั้งนะครับ 🙏', quickReplies.mainMenu)
+                return
+            }
     }
 
     // Save intermediate state
