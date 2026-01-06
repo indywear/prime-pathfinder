@@ -719,7 +719,77 @@ async function handleGameAnswer(
     }
 
     // --- Answer Processing ---
-    const isCorrect = text.toLowerCase().trim() === String(currentQ.correctAnswer).toLowerCase().trim()
+    // Show loading indicator
+    await replyText(replyToken, '⏳ กำลังตรวจคำตอบ...')
+
+    let isCorrect = false
+    let userAnswerText = text.trim()
+
+    // Check if question has options (multiple choice)
+    if (currentQ.options && Array.isArray(currentQ.options)) {
+        // User can answer with: "1", "2", "3", "4" OR the actual text
+        const answerNum = parseInt(userAnswerText)
+
+        if (!isNaN(answerNum) && answerNum >= 1 && answerNum <= currentQ.options.length) {
+            // User typed a number (1-4) - convert to zero-based index
+            const userIndex = answerNum - 1
+
+            // correctAnswer from AI is an index (0-3)
+            if (typeof currentQ.correctAnswer === 'number') {
+                isCorrect = userIndex === currentQ.correctAnswer
+            } else {
+                // Fallback: compare with option text
+                isCorrect = userIndex === parseInt(String(currentQ.correctAnswer))
+            }
+        } else {
+            // User typed text - try exact match first
+            const correctIndex = typeof currentQ.correctAnswer === 'number'
+                ? currentQ.correctAnswer
+                : parseInt(String(currentQ.correctAnswer))
+
+            const correctOptionText = currentQ.options[correctIndex]?.toLowerCase().trim()
+            isCorrect = userAnswerText.toLowerCase() === correctOptionText
+
+            // If not exact match, use AI for fuzzy matching
+            if (!isCorrect && correctOptionText) {
+                try {
+                    const { generateChitchat } = await import('@/lib/ai/claude')
+                    const validationPrompt = `User answered: "${userAnswerText}"\nCorrect answer: "${correctOptionText}"\n\nAre these semantically the same? Reply ONLY with "YES" or "NO".`
+                    const aiResponse = await generateChitchat({
+                        userId: user.lineUserId,
+                        message: validationPrompt,
+                        userContext: { name: user.thaiName || 'User', level: `Level ${user.currentLevel}`, streak: user.streak, preferredLanguage: user.preferredLanguage }
+                    })
+                    isCorrect = aiResponse.toUpperCase().includes('YES')
+                } catch (error) {
+                    console.error('AI validation error:', error)
+                }
+            }
+        }
+    } else {
+        // Free-form answer (no options) - use AI for validation
+        const expectedAnswer = String(currentQ.correctAnswer).toLowerCase().trim()
+
+        // First try exact match
+        isCorrect = userAnswerText.toLowerCase() === expectedAnswer
+
+        // If not exact, use AI fuzzy matching
+        if (!isCorrect) {
+            try {
+                const { generateChitchat } = await import('@/lib/ai/claude')
+                const validationPrompt = `User answered: "${userAnswerText}"\nCorrect answer: "${expectedAnswer}"\n\nAre these semantically the same or close enough? Reply ONLY with "YES" or "NO".`
+                const aiResponse = await generateChitchat({
+                    userId: user.lineUserId,
+                    message: validationPrompt,
+                    userContext: { name: user.thaiName || 'User', level: `Level ${user.currentLevel}`, streak: user.streak, preferredLanguage: user.preferredLanguage }
+                })
+                isCorrect = aiResponse.toUpperCase().includes('YES')
+            } catch (error) {
+                console.error('AI validation error:', error)
+            }
+        }
+    }
+
     const newCorrect = isCorrect ? session.correctCount + 1 : session.correctCount
 
     // Save last answer for explanation feature
@@ -754,9 +824,18 @@ async function handleGameAnswer(
         })
         const nextQ = questions[session.currentQuestion + 1]
 
-        const feedbackMsg = isCorrect
-            ? '✅ ถูกต้อง!'
-            : `❌ ผิดครับ (คำตอบ: ${currentQ.correctAnswer})`
+        // Build feedback message with correct answer info
+        let feedbackMsg = isCorrect ? '✅ ถูกต้อง!' : '❌ ผิดครับ'
+
+        if (!isCorrect) {
+            // Show correct answer
+            if (currentQ.options && typeof currentQ.correctAnswer === 'number') {
+                const correctOption = currentQ.options[currentQ.correctAnswer]
+                feedbackMsg += ` (คำตอบ: ${currentQ.correctAnswer + 1}. ${correctOption})`
+            } else {
+                feedbackMsg += ` (คำตอบ: ${currentQ.correctAnswer})`
+            }
+        }
 
         const adaptiveFeedback = await generateAdaptiveMessage({
             message: feedbackMsg,
@@ -765,7 +844,14 @@ async function handleGameAnswer(
             messageType: isCorrect ? 'game_correct' : 'game_wrong'
         })
 
-        await replyText(replyToken, `${adaptiveFeedback}\n\n📝 ข้อ ${session.currentQuestion + 2}/${session.totalQuestions}: ${nextQ.question}`)
+        // Build next question text
+        let nextQuestionText = `${adaptiveFeedback}\n\n📝 ข้อ ${session.currentQuestion + 2}/${session.totalQuestions}: ${nextQ.question}`
+
+        if (nextQ.options) {
+            nextQuestionText += '\n\n' + nextQ.options.map((opt: string, idx: number) => `${idx + 1}. ${opt}`).join('\n')
+        }
+
+        await replyText(replyToken, nextQuestionText)
     }
 }
 
