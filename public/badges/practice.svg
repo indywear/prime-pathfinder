@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bronze" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#CD7F32"/>
+      <stop offset="100%" style="stop-color:#8B4513"/>
+    </linearGradient>
+  </defs>
+  <circle cx="50" cy="50" r="45" fill="#FEF3C7" stroke="#CD7F32" stroke-width="3"/>
+  <path d="M50 25 L55 40 L70 40 L58 50 L62 65 L50 55 L38 65 L42 50 L30 40 L45 40 Z" fill="url(#bronze)"/>
+  <text x="50" y="90" text-anchor="middle" font-size="9" fill="#8B4513" font-weight="bold">นักฝึกฝน</text>
+</svg>

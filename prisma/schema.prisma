@@ -1,0 +1,564 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USER & AUTH ====================
+
+model User {
+  id              String   @id @default(cuid())
+  lineUserId      String   @unique
+  chineseName     String?
+  thaiName        String?
+  studentId       String?
+  university      String?
+  email           String?
+  nationality     String?
+  thaiLevel       ThaiLevel @default(BEGINNER)
+  
+  // Gamification
+  totalPoints     Int      @default(0)
+  currentLevel    Int      @default(1)
+  currentXP       Int      @default(0)
+  streak          Int      @default(0)
+  lastActiveAt    DateTime?
+  
+  // Meta
+  registeredAt    DateTime @default(now())
+  consentGiven    Boolean  @default(false)
+  preferences     Json?
+  
+  // Relations
+  submissions       Submission[]
+  feedbackRequests  FeedbackRequest[]
+  practiceSessions  PracticeSession[]
+  gameSessions      GameSession[]
+  achievements      Achievement[]
+  pointLogs         PointLog[]
+  nudgeLogs         NudgeLog[]
+  readingSessions   ReadingSession[]
+  personalityResults PersonalityResult[]
+  dailyChallenges   UserDailyChallenge[]
+  buddiesAsUser     StudyBuddy[] @relation("BuddyUser")
+  buddiesAsBuddy    StudyBuddy[] @relation("BuddyBuddy")
+  cheersSent        Cheer[] @relation("CheerFrom")
+  cheersReceived    Cheer[] @relation("CheerTo")
+  spinLogs          SpinLog[]
+  easterEggTriggers EasterEggTrigger[]
+  
+  @@index([lineUserId])
+  @@index([nationality])
+  @@index([thaiLevel])
+}
+
+enum ThaiLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  role         AdminRole @default(TEACHER)
+  createdAt    DateTime @default(now())
+  
+  // Relations
+  createdTasks WeeklyTask[]
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
+}
+
+// ==================== WEEKLY TASKS ====================
+
+model WeeklyTask {
+  id              String   @id @default(cuid())
+  weekNumber      Int
+  title           String
+  description     String   @db.Text
+  contentHtml     String   @db.Text
+  landingPageSlug String   @unique
+  
+  // Rubrics
+  rubrics         Json     // Array of rubric criteria
+  minWords        Int      @default(80)
+  maxWords        Int      @default(150)
+  
+  // Schedule
+  startDate       DateTime
+  deadline        DateTime
+  isActive        Boolean  @default(true)
+  
+  // Meta
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  creator           AdminUser @relation(fields: [createdBy], references: [id])
+  submissions       Submission[]
+  feedbackRequests  FeedbackRequest[]
+  readingSessions   ReadingSession[]
+  
+  @@index([weekNumber])
+  @@index([isActive])
+}
+
+model Submission {
+  id           String   @id @default(cuid())
+  userId       String
+  taskId       String
+  content      String   @db.Text
+  wordCount    Int
+  
+  // Evaluation
+  scores       Json     // Rubric scores
+  aiFeedback   String?  @db.Text
+  totalScore   Int      @default(0)
+  
+  // Points
+  pointsEarned Int      @default(0)
+  isOnTime     Boolean  @default(true)
+  isEarly      Boolean  @default(false)
+  
+  // Meta
+  submittedAt  DateTime @default(now())
+  
+  // Relations
+  user         User     @relation(fields: [userId], references: [id])
+  task         WeeklyTask @relation(fields: [taskId], references: [id])
+  
+  @@index([userId])
+  @@index([taskId])
+  @@index([submittedAt])
+}
+
+model FeedbackRequest {
+  id             String   @id @default(cuid())
+  userId         String
+  taskId         String?
+  draftContent   String   @db.Text
+  
+  // AI Feedback
+  aiFeedback     String?  @db.Text
+  detailedScores Json?
+  
+  // Points
+  pointsEarned   Int      @default(0)
+  isRevision     Boolean  @default(false)  // ขอ feedback ซ้ำหลังแก้ไข
+  
+  // Meta
+  requestedAt    DateTime @default(now())
+  
+  // Relations
+  user           User     @relation(fields: [userId], references: [id])
+  task           WeeklyTask? @relation(fields: [taskId], references: [id])
+  
+  @@index([userId])
+  @@index([taskId])
+}
+
+// ==================== READING TRACKING ====================
+
+model ReadingSession {
+  id                String   @id @default(cuid())
+  userId            String
+  taskId            String
+  
+  // Tracking
+  startedAt         DateTime @default(now())
+  endedAt           DateTime?
+  timeSpentSec      Int      @default(0)
+  scrollDepth       Int      @default(0)  // 0-100
+  focusLostCount    Int      @default(0)
+  tabSwitchCount    Int      @default(0)
+  
+  // Status
+  completed         Boolean  @default(false)
+  flaggedSuspicious Boolean  @default(false)
+  suspiciousReason  String?
+  
+  // Relations
+  user              User     @relation(fields: [userId], references: [id])
+  task              WeeklyTask @relation(fields: [taskId], references: [id])
+  
+  @@index([userId])
+  @@index([taskId])
+}
+
+// ==================== GAMES & PRACTICE ====================
+
+model GameConfig {
+  id               String   @id @default(cuid())
+  gameType         String   @unique
+  displayName      String
+  description      String?
+  
+  // Settings
+  isEnabled        Boolean  @default(true)
+  difficulty       Int      @default(2)  // 1-3
+  timeLimit        Int?     // seconds
+  pointMultiplier  Float    @default(1.0)
+  levelRequired    Int      @default(1)
+  
+  // Custom questions by teacher
+  customQuestions  Json?
+  
+  // Meta
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model GameSession {
+  id               String   @id @default(cuid())
+  userId           String
+  gameType         String
+  
+  // Status
+  status           GameStatus @default(ACTIVE)
+  
+  // Progress
+  currentQuestion  Int      @default(0)
+  totalQuestions   Int
+  answeredQuestions Json    // Array of answers
+  correctCount     Int      @default(0)
+  
+  // Time
+  startedAt        DateTime @default(now())
+  lastActivityAt   DateTime @default(now())
+  pausedAt         DateTime?
+  completedAt      DateTime?
+  totalPausedSec   Int      @default(0)
+  timeSpentSec     Int      @default(0)
+  
+  // Points
+  pointsEarned     Int      @default(0)
+  
+  // State preservation
+  savedState       Json?
+  
+  // Relations
+  user             User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([status])
+  @@index([gameType])
+}
+
+enum GameStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ABANDONED
+}
+
+model PracticeSession {
+  id               String   @id @default(cuid())
+  userId           String
+  gameType         String
+  
+  // Results
+  questions        Json
+  answers          Json
+  correctCount     Int
+  totalQuestions   Int
+  
+  // Points
+  pointsEarned     Int      @default(0)
+  
+  // Time
+  timeSpentSeconds Int      @default(0)
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+  
+  // Relations
+  user             User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([gameType])
+}
+
+// ==================== GAMIFICATION ====================
+
+model Badge {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  nameThai    String
+  description String
+  iconUrl     String?
+  category    BadgeCategory
+  
+  // Criteria
+  criteria    Json     // Conditions to earn
+  bonusXP     Int      @default(0)
+  
+  // Meta
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  achievements Achievement[]
+}
+
+enum BadgeCategory {
+  LEARNING
+  ENGAGEMENT
+  STREAK
+  SOCIAL
+  SPECIAL
+}
+
+model Achievement {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id])
+  badge     Badge    @relation(fields: [badgeId], references: [id])
+  
+  @@unique([userId, badgeId])
+  @@index([userId])
+}
+
+model PointLog {
+  id          String   @id @default(cuid())
+  userId      String
+  points      Int
+  source      PointSource
+  referenceId String?  // ID of related entity
+  description String?
+  earnedAt    DateTime @default(now())
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([source])
+  @@index([earnedAt])
+}
+
+enum PointSource {
+  MESSAGE
+  FEEDBACK_REQUEST
+  FEEDBACK_REVISION
+  SUBMISSION
+  SUBMISSION_EARLY
+  SUBMIT_LATE
+  PRACTICE
+  PRACTICE_PERFECT
+  STREAK_BONUS
+  LEVEL_UP
+  BADGE
+  DAILY_CHALLENGE
+  EASTER_EGG
+  SPIN_WHEEL
+  MYSTERY_BOX
+  CHEER_RECEIVED
+  CHEER_SENT
+}
+
+model DailyChallenge {
+  id          String   @id @default(cuid())
+  type        ChallengeType
+  title       String
+  description String
+  reward      Int
+  date        DateTime @db.Date
+  isActive    Boolean  @default(true)
+  
+  // Relations
+  userChallenges UserDailyChallenge[]
+  
+  @@unique([type, date])
+  @@index([date])
+}
+
+enum ChallengeType {
+  VOCAB
+  SPEED
+  STREAK
+  SOCIAL
+  PRACTICE
+  READING
+}
+
+model UserDailyChallenge {
+  id           String   @id @default(cuid())
+  userId       String
+  challengeId  String
+  completed    Boolean  @default(false)
+  completedAt  DateTime?
+  progress     Int      @default(0)  // For partial progress
+  
+  // Relations
+  user         User     @relation(fields: [userId], references: [id])
+  challenge    DailyChallenge @relation(fields: [challengeId], references: [id])
+  
+  @@unique([userId, challengeId])
+  @@index([userId])
+}
+
+// ==================== SMART NUDGE ====================
+
+model NudgeLog {
+  id          String   @id @default(cuid())
+  userId      String
+  type        NudgeType
+  message     String
+  delivered   Boolean  @default(false)
+  sentAt      DateTime @default(now())
+  readAt      DateTime?
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([type])
+  @@index([sentAt])
+}
+
+enum NudgeType {
+  INACTIVE
+  DEADLINE
+  STREAK
+  LEVEL_UP
+  NEW_TASK
+  GAME_REMINDER
+}
+
+model NudgeConfig {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  value           Json
+  updatedAt       DateTime @updatedAt
+}
+
+// ==================== PERSONALITY QUIZ ====================
+
+model PersonalityQuiz {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  questions   Json     // Array of questions
+  resultTypes Json     // Possible result types
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  results     PersonalityResult[]
+}
+
+model PersonalityResult {
+  id         String   @id @default(cuid())
+  userId     String
+  quizId     String
+  resultType String
+  scores     Json
+  takenAt    DateTime @default(now())
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id])
+  quiz       PersonalityQuiz @relation(fields: [quizId], references: [id])
+  
+  @@index([userId])
+  @@index([quizId])
+}
+
+// ==================== SYSTEM ====================
+
+model SystemConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model LevelConfig {
+  level       Int      @id
+  title       String
+  titleThai   String
+  xpRequired  Int
+  iconUrl     String?
+  benefits    Json?
+}
+
+// ==================== SOCIAL FEATURES ====================
+
+model StudyBuddy {
+  id          String   @id @default(cuid())
+  userId      String
+  buddyId     String
+  status      BuddyStatus @default(PENDING)
+  connectedAt DateTime?
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation("BuddyUser", fields: [userId], references: [id])
+  buddy       User     @relation("BuddyBuddy", fields: [buddyId], references: [id])
+  
+  @@unique([userId, buddyId])
+  @@index([userId])
+  @@index([buddyId])
+}
+
+enum BuddyStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model Cheer {
+  id          String   @id @default(cuid())
+  fromUserId  String
+  toUserId    String
+  type        String
+  message     String?
+  createdAt   DateTime @default(now())
+  
+  from        User     @relation("CheerFrom", fields: [fromUserId], references: [id])
+  to          User     @relation("CheerTo", fields: [toUserId], references: [id])
+  
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([createdAt])
+}
+
+// ==================== REWARDS SYSTEM ====================
+
+model SpinLog {
+  id          String   @id @default(cuid())
+  userId      String
+  prizeId     String
+  prizeName   String
+  used        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model EasterEggTrigger {
+  id          String   @id @default(cuid())
+  userId      String
+  eggId       String
+  triggeredAt DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@unique([userId, eggId])
+  @@index([userId])
+}
+

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6"/>
+      <stop offset="100%" style="stop-color:#1D4ED8"/>
+    </linearGradient>
+  </defs>
+  <circle cx="50" cy="50" r="45" fill="#EFF6FF" stroke="#3B82F6" stroke-width="3"/>
+  <path d="M30 55 L40 50 L45 55 L55 40 L65 48 L75 35" fill="none" stroke="url(#blue)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <polygon points="75,35 75,45 65,40" fill="#3B82F6"/>
+  <text x="50" y="90" text-anchor="middle" font-size="9" fill="#1D4ED8" font-weight="bold">พัฒนาเร็ว</text>
+</svg>
