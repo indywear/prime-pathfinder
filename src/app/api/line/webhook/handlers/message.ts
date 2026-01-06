@@ -332,6 +332,83 @@ async function handlePersistentRegistrationFlow(
                 }
             }
             break
+
+        // ==================== FEEDBACK MODE (step 100+) ====================
+        case 100:
+            // Cancel check
+            if (text === 'ยกเลิก' || text.toLowerCase() === 'cancel') {
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+                await replyText(replyToken, 'ยกเลิกขอ Feedback แล้วครับ 👋', quickReplies.mainMenu)
+                return
+            }
+
+            // Get user for context
+            const feedbackUser = await prisma.user.findUnique({ where: { lineUserId: userId } })
+            if (!feedbackUser) {
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+                await replyText(replyToken, 'ไม่พบข้อมูลผู้ใช้ กรุณาลงทะเบียนก่อนครับ', quickReplies.mainMenu)
+                return
+            }
+
+            // Process feedback with AI
+            await replyText(replyToken, '🔍 กำลังวิเคราะห์... รอสักครู่นะครับ')
+
+            try {
+                const feedback = await generateFeedback({
+                    content: text,
+                    nationality: feedbackUser.nationality || 'International',
+                    thaiLevel: feedbackUser.thaiLevel,
+                    userName: feedbackUser.thaiName || feedbackUser.chineseName || undefined
+                })
+
+                // Add points for requesting feedback
+                await addPoints(feedbackUser.id, 5, 'FEEDBACK_REQUEST', undefined, 'ขอ Feedback')
+
+                // Clear state
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+
+                // Format response
+                const scoreText = feedback.scores.map(s =>
+                    `${s.name}: ${s.score}/${s.maxScore}`
+                ).join('\n')
+
+                await replyFlex(
+                    replyToken,
+                    'Feedback ของคุณ',
+                    {
+                        type: 'bubble',
+                        body: {
+                            type: 'box',
+                            layout: 'vertical',
+                            contents: [
+                                { type: 'text', text: `📊 คะแนนรวม: ${feedback.overallScore}/100`, weight: 'bold', size: 'lg', color: '#6366f1' },
+                                { type: 'separator', margin: 'md' },
+                                { type: 'text', text: scoreText, margin: 'md', wrap: true, size: 'sm' },
+                                { type: 'separator', margin: 'md' },
+                                { type: 'text', text: feedback.generalFeedback, margin: 'md', wrap: true },
+                                { type: 'text', text: feedback.encouragement, margin: 'md', wrap: true, color: '#10b981' }
+                            ]
+                        },
+                        footer: {
+                            type: 'box',
+                            layout: 'vertical',
+                            contents: [
+                                { type: 'text' as const, text: '💡 จุดที่ควรปรับปรุง:', weight: 'bold' as const, size: 'sm' as const },
+                                ...feedback.improvements.slice(0, 3).map(imp => (
+                                    { type: 'text' as const, text: `• ${imp}`, size: 'xs' as const, wrap: true, color: '#666666' }
+                                ))
+                            ]
+                        }
+                    },
+                    quickReplies.mainMenu
+                )
+                return
+            } catch (error) {
+                console.error('Feedback error:', error)
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+                await replyText(replyToken, 'ขออภัย ไม่สามารถวิเคราะห์ได้ในขณะนี้ ลองใหม่อีกครั้งนะครับ 🙏', quickReplies.mainMenu)
+                return
+            }
     }
 
     // Save intermediate state
@@ -386,47 +463,169 @@ export async function finalizeRegistration(userId: string, data: any, levelRaw: 
     }
 }
 
-// ==================== GAME ANSWER HANDLING (Kept simple for now) ====================
+// ==================== GAME ANSWER HANDLING (Full Featured) ====================
+
+import { classifyIntent, generateHint, explainAnswer, generateAdaptiveMessage } from '@/lib/ai/claude'
+import { addPoints as addGamePoints } from '@/lib/gamification'
 
 async function handleGameAnswer(
     replyToken: string,
-    userId: string,
+    internalUserId: string,
     session: { id: string; currentQuestion: number; totalQuestions: number; correctCount: number },
     text: string
 ) {
-    // ... (Existing game logic kept, omitted for brevity in this specific update unless requested to verify)
-    // For safety, re-implementing basic game response to avoid breaking changes if this file is fully replaced
-
-    // Quick re-implementation of minimal game logic to keep it working
-    const fullSession = await prisma.gameSession.findUnique({ where: { id: session.id } })
+    const fullSession = await prisma.gameSession.findUnique({
+        where: { id: session.id },
+        include: { user: true }
+    })
     if (!fullSession) return
 
     const savedState = fullSession.savedState as any
     const questions = savedState?.questions || []
     const currentQ = questions[session.currentQuestion]
+    const user = fullSession.user
 
     if (!currentQ) {
         await updateGameSession(session.id, { status: 'COMPLETED' })
-        await replyText(replyToken, 'เกมจบแล้ว! เก่งมากครับ 🎉', quickReplies.mainMenu)
+        const endMsg = await generateAdaptiveMessage({
+            message: 'เกมจบแล้ว! เก่งมากครับ 🎉',
+            userLevel: user.currentLevel,
+            preferredLanguage: user.preferredLanguage,
+            messageType: 'encouragement'
+        })
+        await replyText(replyToken, endMsg, quickReplies.mainMenu)
         return
     }
 
-    const isCorrect = text.toLowerCase() === String(currentQ.correctAnswer).toLowerCase()
+    // Use Intent Classification
+    const intent = await classifyIntent(text, true)
+
+    // Handle based on intent
+    switch (intent.intent) {
+        case 'command':
+            if (intent.command === 'hint') {
+                // Check if user has enough points (cost: 5 points)
+                if (user.totalPoints < 5) {
+                    await replyText(replyToken, 'แต้มไม่พอขอ Hint ครับ 😅 (ต้องการ 5 แต้ม)\n\nตอบคำถามต่อเลยนะ!')
+                    return
+                }
+
+                // Deduct points
+                await prisma.user.update({
+                    where: { id: internalUserId },
+                    data: { totalPoints: { decrement: 5 } }
+                })
+
+                // Generate hint
+                const hintLevel = (savedState.hintCount || 0) + 1
+                const hint = await generateHint({
+                    question: currentQ.question,
+                    correctAnswer: String(currentQ.correctAnswer),
+                    hintLevel: Math.min(3, hintLevel) as 1 | 2 | 3,
+                    gameType: fullSession.gameType
+                })
+
+                // Save hint count
+                await updateGameSession(session.id, {
+                    savedState: { ...savedState, hintCount: hintLevel }
+                })
+
+                const hintMsg = await generateAdaptiveMessage({
+                    message: `💡 คำใบ้ (-5 แต้ม):\n${hint}`,
+                    userLevel: user.currentLevel,
+                    preferredLanguage: user.preferredLanguage,
+                    messageType: 'instruction'
+                })
+                await replyText(replyToken, hintMsg)
+                return
+            }
+
+            if (intent.command === 'skip') {
+                // Move to next question
+                if (session.currentQuestion >= session.totalQuestions - 1) {
+                    await updateGameSession(session.id, { status: 'COMPLETED' })
+                    await replyText(replyToken, `เกมจบแล้ว! คุณตอบถูก ${session.correctCount}/${session.totalQuestions} ข้อ 🎉`, quickReplies.mainMenu)
+                } else {
+                    await updateGameSession(session.id, { currentQuestion: session.currentQuestion + 1 })
+                    const nextQ = questions[session.currentQuestion + 1]
+                    await replyText(replyToken, `⏭️ ข้ามแล้ว! คำตอบคือ "${currentQ.correctAnswer}"\n\nข้อต่อไป: ${nextQ.question}`)
+                }
+                return
+            }
+            break
+
+        case 'question':
+            // User is asking "why?" or wants explanation
+            const explanation = await explainAnswer(
+                currentQ.question,
+                String(currentQ.correctAnswer),
+                savedState.lastAnswer || 'ยังไม่ได้ตอบ'
+            )
+            const explainMsg = await generateAdaptiveMessage({
+                message: explanation,
+                userLevel: user.currentLevel,
+                preferredLanguage: user.preferredLanguage,
+                messageType: 'instruction'
+            })
+            await replyText(replyToken, `📚 ${explainMsg}\n\nลองตอบอีกครั้งได้เลยนะ!`)
+            return
+
+        case 'answer':
+        default:
+            // Process as answer
+            break
+    }
+
+    // --- Answer Processing ---
+    const isCorrect = text.toLowerCase().trim() === String(currentQ.correctAnswer).toLowerCase().trim()
     const newCorrect = isCorrect ? session.correctCount + 1 : session.correctCount
 
+    // Save last answer for explanation feature
+    await updateGameSession(session.id, {
+        savedState: { ...savedState, lastAnswer: text }
+    })
+
     if (session.currentQuestion >= session.totalQuestions - 1) {
-        // Finish
+        // Finish game
         await updateGameSession(session.id, { status: 'COMPLETED', correctCount: newCorrect })
-        await replyText(replyToken, `เกมจบแล้ว! คุณตอบถูก ${newCorrect}/${session.totalQuestions} ข้อ 🎉`, quickReplies.mainMenu)
+
+        // Award points
+        const pointsEarned = newCorrect * 5 + (newCorrect === session.totalQuestions ? 10 : 0) // Bonus for perfect
+        await addGamePoints(internalUserId, pointsEarned, 'PRACTICE', session.id, `เกม: ${newCorrect}/${session.totalQuestions} ข้อ`)
+
+        const resultMsg = newCorrect === session.totalQuestions
+            ? `🎉 Perfect! ตอบถูกหมดเลย! (+${pointsEarned} แต้ม)`
+            : `เกมจบแล้ว! คุณตอบถูก ${newCorrect}/${session.totalQuestions} ข้อ (+${pointsEarned} แต้ม)`
+
+        const adaptiveResult = await generateAdaptiveMessage({
+            message: resultMsg,
+            userLevel: user.currentLevel,
+            preferredLanguage: user.preferredLanguage,
+            messageType: isCorrect ? 'game_correct' : 'encouragement'
+        })
+        await replyText(replyToken, adaptiveResult, quickReplies.mainMenu)
     } else {
-        // Next
+        // Next question
         await updateGameSession(session.id, {
             currentQuestion: session.currentQuestion + 1,
             correctCount: newCorrect
         })
         const nextQ = questions[session.currentQuestion + 1]
-        await replyText(replyToken, `${isCorrect ? '✅ ถูกต้อง!' : '❌ ผิดครับ'}\n\nข้อต่อไป: ${nextQ.question}`)
+
+        const feedbackMsg = isCorrect
+            ? '✅ ถูกต้อง!'
+            : `❌ ผิดครับ (คำตอบ: ${currentQ.correctAnswer})`
+
+        const adaptiveFeedback = await generateAdaptiveMessage({
+            message: feedbackMsg,
+            userLevel: user.currentLevel,
+            preferredLanguage: user.preferredLanguage,
+            messageType: isCorrect ? 'game_correct' : 'game_wrong'
+        })
+
+        await replyText(replyToken, `${adaptiveFeedback}\n\n📝 ข้อ ${session.currentQuestion + 2}/${session.totalQuestions}: ${nextQ.question}`)
     }
 }
+
 
 

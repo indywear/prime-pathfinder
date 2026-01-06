@@ -322,3 +322,196 @@ export async function generateChitchat(request: ChitchatRequest): Promise<string
         return 'วันนี้น้องไทยมึนๆ นิดหน่อย... คุยเรื่องอื่นกันดีกว่าครับ 😵‍💫'
     }
 }
+
+// ==================== ADAPTIVE LANGUAGE (ภาษาตามเลเวล) ====================
+
+interface AdaptiveMessageRequest {
+    message: string // The message to adapt
+    userLevel: number // 1-10
+    preferredLanguage: string // 'TH', 'CN', 'EN'
+    messageType: 'game_correct' | 'game_wrong' | 'encouragement' | 'instruction' | 'general'
+}
+
+export async function generateAdaptiveMessage(request: AdaptiveMessageRequest): Promise<string> {
+    // Calculate language mix based on level
+    // Level 1-2: 100% native, Level 9-10: 100% Thai
+    const thaiPercent = Math.min(100, Math.max(0, (request.userLevel - 1) * 12.5))
+    const nativePercent = 100 - thaiPercent
+
+    const languageMap: Record<string, string> = {
+        'CN': 'Chinese (中文)',
+        'EN': 'English',
+        'TH': 'Thai (ภาษาไทย)'
+    }
+
+    const prompt = `คุณคือ "น้องไทย" AI ช่วยฝึกภาษาไทย
+    
+งาน: แปลง/ปรับข้อความต่อไปนี้ให้ผสมภาษาตามสัดส่วนที่กำหนด
+
+ข้อความต้นฉบับ: "${request.message}"
+ภาษาแม่ของผู้เรียน: ${languageMap[request.preferredLanguage]}
+เลเวลผู้เรียน: ${request.userLevel}/10
+
+สัดส่วนภาษา:
+- ภาษาไทย: ${thaiPercent}%
+- ${languageMap[request.preferredLanguage]}: ${nativePercent}%
+
+กฎสำคัญ:
+1. ไวยากรณ์ต้องถูกต้องทั้งสองภาษา (Make Sense)
+2. ผสมอย่างเป็นธรรมชาติ ไม่ใช่แปะคำมั่ว
+3. ถ้า Level ต่ำ ใช้ภาษาแม่เป็นหลัก เสริมคำไทยง่ายๆ
+4. ถ้า Level สูง ใช้ภาษาไทยเป็นหลัก เสริมคำภาษาแม่เพื่อเน้น
+5. อารมณ์เหมือนเพื่อนคุยกัน ไม่ใช่ครูสอน
+
+ตัวอย่าง (ถ้าภาษาแม่คือจีน):
+- Level 1: "哇！答对了！你真 เก่ง！"
+- Level 5: "ว้าว！ตอบถูกแล้ว！เก่งมาก 👍"
+- Level 10: "ว้าว! ตอบถูกแล้ว! เก่งมากๆ เลยนะ!"
+
+ตอบข้อความที่ปรับแล้วเท่านั้น (ไม่ต้องอธิบาย):`
+
+    try {
+        const response = await openrouter.chat.completions.create({
+            model: MODELS.CLAUDE_HAIKU,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7,
+            max_tokens: 200,
+        })
+
+        return response.choices[0]?.message?.content || request.message
+    } catch (error) {
+        console.error('Adaptive Message error:', error)
+        return request.message // Fallback to original
+    }
+}
+
+// ==================== INTENT CLASSIFICATION ====================
+
+export type IntentType = 'command' | 'question' | 'answer' | 'unknown'
+
+interface IntentResult {
+    intent: IntentType
+    command?: 'exit' | 'hint' | 'menu' | 'help' | 'skip' | null
+    confidence: number
+}
+
+export async function classifyIntent(text: string, isInGame: boolean): Promise<IntentResult> {
+    // First: Quick keyword matching for common commands (no AI needed)
+    const lowerText = text.toLowerCase().trim()
+
+    // Exit commands
+    const exitKeywords = ['ออก', 'ออกจากเกม', 'เลิกเล่น', 'หยุด', 'พอแค่นี้', 'เมนู', 'menu', 'exit', 'quit', 'stop', 'main menu', 'กลับ', 'ยกเลิก']
+    if (exitKeywords.includes(lowerText)) {
+        return { intent: 'command', command: 'exit', confidence: 1.0 }
+    }
+
+    // Hint commands
+    const hintKeywords = ['hint', 'ใบ้', 'คำใบ้', 'ช่วย', 'ช่วยด้วย', 'ไม่รู้', 'บอกใบ้', 'clue']
+    if (hintKeywords.includes(lowerText)) {
+        return { intent: 'command', command: 'hint', confidence: 1.0 }
+    }
+
+    // Help/Question patterns
+    const questionPatterns = ['ทำไม', 'อธิบาย', 'หมายความว่า', 'แปลว่า', 'คืออะไร', 'why', 'explain', 'what does', 'how']
+    if (questionPatterns.some(p => lowerText.includes(p))) {
+        return { intent: 'question', command: null, confidence: 0.9 }
+    }
+
+    // Skip command
+    if (['ข้าม', 'skip', 'next', 'ต่อไป'].includes(lowerText)) {
+        return { intent: 'command', command: 'skip', confidence: 1.0 }
+    }
+
+    // If short and in game, likely an answer
+    if (isInGame && text.length <= 50) {
+        return { intent: 'answer', command: null, confidence: 0.8 }
+    }
+
+    // Default: treat as answer in game, unknown otherwise
+    return {
+        intent: isInGame ? 'answer' : 'unknown',
+        command: null,
+        confidence: 0.5
+    }
+}
+
+// ==================== HINT GENERATION ====================
+
+interface HintRequest {
+    question: string
+    correctAnswer: string
+    hintLevel: 1 | 2 | 3 // 1 = subtle, 2 = moderate, 3 = obvious
+    gameType: string
+}
+
+export async function generateHint(request: HintRequest): Promise<string> {
+    const hintStyles: Record<number, string> = {
+        1: 'แบบแนะเบาๆ (เช่น หมวดหมู่ของคำ, จำนวนพยางค์)',
+        2: 'แบบปานกลาง (เช่น ตัวอักษรแรก, ความหมายคร่าวๆ)',
+        3: 'แบบชัดเจน (เช่น เกือบบอกคำตอบ แต่ให้คิดนิดหน่อย)'
+    }
+
+    const prompt = `คุณคือ "น้องไทย" AI ช่วยฝึกภาษาไทย
+
+โจทย์: "${request.question}"
+คำตอบที่ถูกต้อง: "${request.correctAnswer}"
+ประเภทเกม: ${request.gameType}
+ระดับคำใบ้: ${hintStyles[request.hintLevel]}
+
+สร้างคำใบ้ที่:
+1. ไม่บอกคำตอบตรงๆ
+2. ช่วยให้ผู้เรียนคิดได้
+3. สั้นๆ กระชับ (1-2 ประโยค)
+4. ใส่อารมณ์เป็นกันเอง
+
+ตอบคำใบ้เท่านั้น:`
+
+    try {
+        const response = await openrouter.chat.completions.create({
+            model: MODELS.CLAUDE_HAIKU,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7,
+            max_tokens: 100,
+        })
+
+        return response.choices[0]?.message?.content || 'ลองคิดอีกนิดนะ! 🤔'
+    } catch (error) {
+        console.error('Hint generation error:', error)
+        return 'ลองคิดอีกนิดนะ! 💭'
+    }
+}
+
+// ==================== EXPLAIN ANSWER ====================
+
+export async function explainAnswer(question: string, correctAnswer: string, userAnswer: string): Promise<string> {
+    const prompt = `คุณคือ "น้องไทย" AI ช่วยฝึกภาษาไทย
+
+โจทย์: "${question}"
+คำตอบที่ถูกต้อง: "${correctAnswer}"
+คำตอบของผู้เรียน: "${userAnswer}"
+
+อธิบายสั้นๆ ว่า:
+1. ทำไมคำตอบที่ถูกจึงถูก
+2. ถ้าผู้เรียนตอบผิด อธิบายว่าผิดตรงไหน
+3. ให้ตัวอย่างการใช้คำที่ถูกต้องในประโยค
+
+อารมณ์: เป็นกันเอง ให้กำลังใจ ไม่ตำหนิ
+ความยาว: ไม่เกิน 3-4 ประโยค
+
+ตอบคำอธิบายเท่านั้น:`
+
+    try {
+        const response = await openrouter.chat.completions.create({
+            model: MODELS.CLAUDE_HAIKU,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.6,
+            max_tokens: 200,
+        })
+
+        return response.choices[0]?.message?.content || 'คำตอบที่ถูกคือ: ' + correctAnswer
+    } catch (error) {
+        console.error('Explain answer error:', error)
+        return `คำตอบที่ถูกคือ "${correctAnswer}" ครับ 📚`
+    }
+}
+

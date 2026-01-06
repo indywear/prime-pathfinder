@@ -148,8 +148,17 @@ export async function handlePostback(event: PostbackEvent) {
                 await replyFlex(event.replyToken, 'กรุณาลงทะเบียนก่อน', flexTemplates.welcomeCard())
                 return
             }
-            await replyText(event.replyToken, 'ระบบ Feedback กำลังปรับปรุงให้ดียิ่งขึ้น รอสักครู่นะครับ! 🚧')
-            // Temporarily disabled until Feedback flow is persistent
+            // Create feedback state
+            await prisma.registrationState.upsert({
+                where: { lineUserId: userId },
+                update: { step: 100, data: { mode: 'feedback' } }, // 100+ = feedback mode
+                create: { lineUserId: userId, step: 100, data: { mode: 'feedback' } }
+            })
+            await replyText(
+                event.replyToken,
+                '💬 ขอ Feedback\n\nส่งข้อความที่คุณอยากให้ตรวจมาได้เลยครับ!\n(พิมพ์ "ยกเลิก" เพื่อออก)',
+                quickReplies.mainMenu
+            )
             break
 
         case 'submit':
