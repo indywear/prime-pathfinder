@@ -8,6 +8,9 @@
 import { Client } from '@line/bot-sdk'
 import * as fs from 'fs'
 import * as path from 'path'
+import * as dotenv from 'dotenv'
+
+dotenv.config()
 
 const client = new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN!,
@@ -15,33 +18,33 @@ const client = new Client({
 
 // Rich Menu Configuration
 const RICH_MENU_CONFIG = {
-    size: { width: 2500, height: 1686 },
+    size: { width: 1200, height: 810 },
     selected: true,
     name: 'ProficienThAI Main Menu',
     chatBarText: 'เมนู',
     areas: [
         {
-            bounds: { x: 0, y: 0, width: 833, height: 843 },
+            bounds: { x: 0, y: 0, width: 400, height: 405 },
             action: { type: 'postback' as const, data: 'action=submit', displayText: '📝 ส่งงาน' },
         },
         {
-            bounds: { x: 833, y: 0, width: 834, height: 843 },
+            bounds: { x: 400, y: 0, width: 400, height: 405 },
             action: { type: 'postback' as const, data: 'action=feedback', displayText: '💬 ขอ Feedback' },
         },
         {
-            bounds: { x: 1667, y: 0, width: 833, height: 843 },
+            bounds: { x: 800, y: 0, width: 400, height: 405 },
             action: { type: 'postback' as const, data: 'action=practice', displayText: '🎮 ฝึกฝน' },
         },
         {
-            bounds: { x: 0, y: 843, width: 833, height: 843 },
+            bounds: { x: 0, y: 405, width: 400, height: 405 },
             action: { type: 'postback' as const, data: 'action=dashboard', displayText: '📊 แดชบอร์ด' },
         },
         {
-            bounds: { x: 833, y: 843, width: 834, height: 843 },
+            bounds: { x: 400, y: 405, width: 400, height: 405 },
             action: { type: 'postback' as const, data: 'action=leaderboard', displayText: '🏆 Leaderboard' },
         },
         {
-            bounds: { x: 1667, y: 843, width: 833, height: 843 },
+            bounds: { x: 800, y: 405, width: 400, height: 405 },
             action: { type: 'postback' as const, data: 'action=spin', displayText: '🎰 Spin Wheel' },
         },
     ],

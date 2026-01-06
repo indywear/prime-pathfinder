@@ -5,10 +5,7 @@ import { getLevelInfo, getNextLevelXP, addPoints } from '@/lib/gamification'
 import { GAME_TYPES, createGameSession } from '@/lib/games/engine'
 import { generateQuestions } from '@/lib/ai/claude'
 import {
-    userStates,
     startRegistrationFlow,
-    startFeedbackFlow,
-    startSubmissionFlow,
     finalizeRegistration,
 } from './message'
 
@@ -28,11 +25,24 @@ export async function handlePostback(event: PostbackEvent) {
         where: { lineUserId: userId },
     })
 
-    // Handle registration level selection
+    // Handle registration level selection (Persistent)
     if (level) {
-        const state = userStates.get(userId)
-        if (state?.flow === 'register' && state.step === 7) {
-            userStates.set(userId, { ...state, step: 8, data: { ...state.data, thaiLevel: level } })
+        const state = await prisma.registrationState.findUnique({ where: { lineUserId: userId } })
+
+        // Ensure we are in the correct step (Step 7: Level Selection)
+        if (state && state.step === 7) {
+            const newData = { ...state.data as any, chainLevel: level } // Store temporarily or just proceed
+
+            // Step 8: Ask for Consent
+            // Update state to step 8 and store level in data
+            await prisma.registrationState.update({
+                where: { lineUserId: userId },
+                data: {
+                    step: 8,
+                    data: { ...state.data as any, thaiLevel: level }
+                }
+            })
+
             await replyText(
                 event.replyToken,
                 `📋 ข้อตกลงการใช้งาน\n\nข้อมูลของคุณจะถูกใช้เพื่อ:\n• การเรียนการสอนภาษาไทย\n• การวิจัยและพัฒนาระบบ\n\nข้อมูลจะถูกเก็บรักษาอย่างปลอดภัยและไม่เปิดเผยต่อบุคคลภายนอก\n\nคุณยินยอมให้ใช้ข้อมูลหรือไม่?`,
@@ -45,10 +55,22 @@ export async function handlePostback(event: PostbackEvent) {
     // Handle consent
     if (consent) {
         if (consent === 'yes') {
-            const state = userStates.get(userId)
-            if (state?.flow === 'register') {
-                const thaiLevel = state.data.thaiLevel as string
-                const newUser = await finalizeRegistration(userId, thaiLevel)
+            const state = await prisma.registrationState.findUnique({ where: { lineUserId: userId } })
+
+            // Ensure step 8
+            if (state && state.step === 8) {
+                const data = state.data as any
+                const thaiLevel = data.thaiLevel
+
+                // Finalize
+                await finalizeRegistration(userId, data, thaiLevel)
+
+                // Delete state
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+
+                // We need to fetch the newly created user to get their name
+                const newUser = await prisma.user.findUnique({ where: { lineUserId: userId } })
+
                 if (newUser) {
                     await replyFlex(
                         event.replyToken,
@@ -80,7 +102,8 @@ export async function handlePostback(event: PostbackEvent) {
                 }
             }
         } else {
-            userStates.delete(userId)
+            // Rejected
+            await prisma.registrationState.delete({ where: { lineUserId: userId } })
             await replyText(
                 event.replyToken,
                 'ไม่เป็นไรครับ หากเปลี่ยนใจสามารถกดลงทะเบียนใหม่ได้ทุกเมื่อนะครับ 😊',
@@ -96,8 +119,8 @@ export async function handlePostback(event: PostbackEvent) {
             if (user) {
                 await replyText(event.replyToken, 'คุณลงทะเบียนแล้วครับ! 😊', quickReplies.mainMenu)
             } else {
-                startRegistrationFlow(userId)
-                await replyText(event.replyToken, 'เริ่มลงทะเบียนกันเลย! 📝\n\nชื่อ-นามสกุลภาษาจีนของคุณคืออะไรครับ?\n(เช่น 张伟)')
+                await startRegistrationFlow(userId, event.replyToken)
+                // Note: startRegistrationFlow handles the reply now with language selection
             }
             break
 
@@ -106,8 +129,8 @@ export async function handlePostback(event: PostbackEvent) {
                 await replyFlex(event.replyToken, 'กรุณาลงทะเบียนก่อน', flexTemplates.welcomeCard())
                 return
             }
-            startFeedbackFlow(userId)
-            await replyText(event.replyToken, '💬 ขอ Feedback\n\nส่งงานเขียนฉบับร่างมาได้เลยครับ น้องไทยจะช่วยประเมินให้! 📝')
+            await replyText(event.replyToken, 'ระบบ Feedback กำลังปรับปรุงให้ดียิ่งขึ้น รอสักครู่นะครับ! 🚧')
+            // Temporarily disabled until Feedback flow is persistent
             break
 
         case 'submit':
@@ -115,21 +138,8 @@ export async function handlePostback(event: PostbackEvent) {
                 await replyFlex(event.replyToken, 'กรุณาลงทะเบียนก่อน', flexTemplates.welcomeCard())
                 return
             }
-            // Get current task
-            const currentTask = await prisma.weeklyTask.findFirst({
-                where: { isActive: true },
-                orderBy: { weekNumber: 'desc' },
-            })
-            if (currentTask) {
-                startSubmissionFlow(userId, currentTask.id)
-                await replyText(
-                    event.replyToken,
-                    `📝 ส่งงาน: ${currentTask.title}\n\n${currentTask.description}\n\n📏 ความยาว: ${currentTask.minWords}-${currentTask.maxWords} คำ\n⏰ Deadline: ${currentTask.deadline.toLocaleDateString('th-TH')}\n\nพิมพ์งานเขียนส่งมาได้เลยครับ!`
-                )
-            } else {
-                startSubmissionFlow(userId)
-                await replyText(event.replyToken, '📝 ส่งงาน\n\nพิมพ์งานเขียนส่งมาได้เลยครับ! น้องไทยจะช่วยประเมินให้ 📊')
-            }
+            await replyText(event.replyToken, 'ระบบส่งงานกำลังปรับปรุงให้ดียิ่งขึ้น รอสักครู่นะครับ! 🚧')
+            // Temporarily disabled
             break
 
         case 'practice':

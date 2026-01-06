@@ -19,6 +19,7 @@ model User {
   email           String?
   nationality     String?
   thaiLevel       ThaiLevel @default(BEGINNER)
+  preferredLanguage String @default("TH")
   
   // Gamification
   totalPoints     Int      @default(0)
@@ -560,5 +561,13 @@ model EasterEggTrigger {
   
   @@unique([userId, eggId])
   @@index([userId])
+}
+
+
+model RegistrationState {
+  lineUserId String   @id
+  step       Int      @default(0)
+  data       Json
+  updatedAt  DateTime @updatedAt
 }
 
