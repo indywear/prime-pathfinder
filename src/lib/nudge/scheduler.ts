@@ -58,43 +58,80 @@ async function sendInactiveNudges() {
             id: true,
             lineUserId: true,
             thaiName: true,
+            chineseName: true,
             nationality: true,
             streak: true,
+            currentLevel: true,
+            preferredLanguage: true,
         },
     })
 
+    let sentCount = 0
+
     for (const user of inactiveUsers) {
-        const lang = user.nationality?.toLowerCase() === 'chinese' ? 'chinese' : 'thai'
-        const messages = NUDGE_MESSAGES.INACTIVE[lang] || NUDGE_MESSAGES.INACTIVE.thai
-
-        const message = formatMessage(getRandomMessage(messages), {
-            name: user.thaiName || 'คุณ',
-        })
-
         try {
-            await pushText(user.lineUserId, message)
+            // Use AI to generate personalized nudge message
+            const { generateChitchat } = await import('@/lib/ai/claude')
+
+            const contextMessage = user.streak > 0
+                ? `User hasn't been active for 2 days. Their ${user.streak}-day streak is at risk!`
+                : `User has been inactive for 2 days. Encourage them to come back and practice.`
+
+            const aiMessage = await generateChitchat({
+                userId: user.lineUserId,
+                message: contextMessage,
+                userContext: {
+                    name: user.thaiName || user.chineseName || 'คุณ',
+                    level: `Level ${user.currentLevel}`,
+                    streak: user.streak,
+                    preferredLanguage: user.preferredLanguage
+                }
+            })
+
+            await pushText(user.lineUserId, aiMessage)
             await prisma.nudgeLog.create({
                 data: {
                     userId: user.id,
                     type: 'INACTIVE',
-                    message,
+                    message: aiMessage,
                     delivered: true,
                 },
             })
+            sentCount++
         } catch (error) {
             console.error('Failed to send nudge:', error)
-            await prisma.nudgeLog.create({
-                data: {
-                    userId: user.id,
-                    type: 'INACTIVE',
-                    message,
-                    delivered: false,
-                },
+            // Fallback to static message
+            const lang = user.nationality?.toLowerCase() === 'chinese' ? 'chinese' : 'thai'
+            const messages = NUDGE_MESSAGES.INACTIVE[lang] || NUDGE_MESSAGES.INACTIVE.thai
+            const fallbackMessage = formatMessage(getRandomMessage(messages), {
+                name: user.thaiName || user.chineseName || 'คุณ',
             })
+
+            try {
+                await pushText(user.lineUserId, fallbackMessage)
+                await prisma.nudgeLog.create({
+                    data: {
+                        userId: user.id,
+                        type: 'INACTIVE',
+                        message: fallbackMessage,
+                        delivered: true,
+                    },
+                })
+                sentCount++
+            } catch (fallbackError) {
+                await prisma.nudgeLog.create({
+                    data: {
+                        userId: user.id,
+                        type: 'INACTIVE',
+                        message: fallbackMessage,
+                        delivered: false,
+                    },
+                })
+            }
         }
     }
 
-    return inactiveUsers.length
+    return sentCount
 }
 
 async function sendDeadlineReminders() {
