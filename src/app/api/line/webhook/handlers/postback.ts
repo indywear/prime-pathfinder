@@ -31,90 +31,109 @@ export async function handlePostback(event: PostbackEvent) {
 
         // Ensure we are in the correct step (Step 7: Level Selection)
         if (state && state.step === 7) {
-            const newData = { ...state.data as any, chainLevel: level } // Store temporarily or just proceed
-
-            // Step 8: Ask for Consent
-            // Update state to step 8 and store level in data
+            // Save Level
             await prisma.registrationState.update({
                 where: { lineUserId: userId },
                 data: {
-                    step: 8,
+                    step: 8, // Go to Confirmation
                     data: { ...state.data as any, thaiLevel: level }
                 }
             })
 
-            await replyText(
+            const data = { ...state.data as any, thaiLevel: level }
+
+            // Show Confirmation (Same as message.ts)
+            await replyFlex(
                 event.replyToken,
-                `📋 ข้อตกลงการใช้งาน\n\nข้อมูลของคุณจะถูกใช้เพื่อ:\n• การเรียนการสอนภาษาไทย\n• การวิจัยและพัฒนาระบบ\n\nข้อมูลจะถูกเก็บรักษาอย่างปลอดภัยและไม่เปิดเผยต่อบุคคลภายนอก\n\nคุณยินยอมให้ใช้ข้อมูลหรือไม่?`,
-                quickReplies.consent
+                'ตรวจสอบข้อมูล',
+                {
+                    type: 'bubble',
+                    body: {
+                        type: 'box',
+                        layout: 'vertical',
+                        contents: [
+                            { type: 'text', text: '📋 ตรวจสอบข้อมูล', weight: 'bold', size: 'lg', color: '#6366f1' },
+                            { type: 'separator', margin: 'md' },
+                            { type: 'text', text: `ชื่อ: ${data.chineseName || '-'}`, margin: 'md' },
+                            { type: 'text', text: `ชื่อไทย: ${data.thaiName}` },
+                            { type: 'text', text: `รหัสนักศึกษา: ${data.studentId || '-'}` },
+                            { type: 'text', text: `มหาวิทยาลัย: ${data.university}` },
+                            { type: 'text', text: `อีเมล: ${data.email}` },
+                            { type: 'text', text: `สัญชาติ: ${data.nationality}` },
+                            { type: 'text', text: `ระดับภาษา: ${level}` },
+                            { type: 'text', text: 'โดยการกดยืนยัน ถือว่าท่านยอมรับข้อตกลงการใช้งาน', size: 'xs', color: '#aaaaaa', margin: 'lg', wrap: true }
+                        ]
+                    },
+                    footer: {
+                        type: 'box',
+                        layout: 'horizontal',
+                        spacing: 'sm',
+                        contents: [
+                            {
+                                type: 'button',
+                                style: 'primary',
+                                action: { type: 'postback', label: '✅ ยืนยัน', data: 'action=confirm_reg' }
+                            },
+                            {
+                                type: 'button',
+                                style: 'secondary',
+                                action: { type: 'postback', label: '❌ แก้ไข/เริ่มใหม่', data: 'action=cancel_reg' }
+                            }
+                        ]
+                    }
+                }
             )
             return
         }
     }
 
-    // Handle consent
-    if (consent) {
-        if (consent === 'yes') {
-            const state = await prisma.registrationState.findUnique({ where: { lineUserId: userId } })
-
-            // Ensure step 8
-            if (state && state.step === 8) {
-                const data = state.data as any
-                const thaiLevel = data.thaiLevel
-
-                // Finalize
-                await finalizeRegistration(userId, data, thaiLevel)
-
-                // Delete state
-                await prisma.registrationState.delete({ where: { lineUserId: userId } })
-
-                // We need to fetch the newly created user to get their name
-                const newUser = await prisma.user.findUnique({ where: { lineUserId: userId } })
-
-                if (newUser) {
-                    await replyFlex(
-                        event.replyToken,
-                        'ลงทะเบียนสำเร็จ!',
-                        {
-                            type: 'bubble',
-                            hero: {
-                                type: 'box',
-                                layout: 'vertical',
-                                contents: [
-                                    { type: 'text', text: '🎉', size: 'xxl', align: 'center' },
-                                    { type: 'text', text: 'ลงทะเบียนสำเร็จ!', size: 'xl', weight: 'bold', color: '#ffffff', align: 'center' },
-                                ],
-                                paddingAll: '20px',
-                                backgroundColor: '#10b981',
-                            },
-                            body: {
-                                type: 'box',
-                                layout: 'vertical',
-                                contents: [
-                                    { type: 'text', text: `ยินดีต้อนรับ ${newUser.thaiName}!`, weight: 'bold', size: 'lg' },
-                                    { type: 'text', text: 'คุณได้รับ 50 แต้มต้อนรับ! 🎁', margin: 'md' },
-                                    { type: 'text', text: 'พร้อมเริ่มเรียนภาษาไทยแล้ว!', margin: 'md', color: '#666666' },
-                                ],
-                            },
-                        },
-                        quickReplies.mainMenu
-                    )
-                }
-            }
-        } else {
-            // Rejected
-            await prisma.registrationState.delete({ where: { lineUserId: userId } })
-            await replyText(
-                event.replyToken,
-                'ไม่เป็นไรครับ หากเปลี่ยนใจสามารถกดลงทะเบียนใหม่ได้ทุกเมื่อนะครับ 😊',
-                quickReplies.mainMenu
-            )
-        }
-        return
-    }
-
     // Handle actions
     switch (action) {
+        case 'confirm_reg':
+            const state = await prisma.registrationState.findUnique({ where: { lineUserId: userId } })
+            if (state && state.step === 8) {
+                const data = state.data as any
+                await finalizeRegistration(userId, data, data.thaiLevel)
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+
+                // Get new user for name
+                const newUser = await prisma.user.findUnique({ where: { lineUserId: userId } })
+
+                await replyFlex(
+                    event.replyToken,
+                    'ลงทะเบียนสำเร็จ!',
+                    {
+                        type: 'bubble',
+                        hero: {
+                            type: 'box',
+                            layout: 'vertical',
+                            contents: [
+                                { type: 'text', text: '🎉', size: 'xxl', align: 'center' },
+                                { type: 'text', text: 'ลงทะเบียนสำเร็จ!', size: 'xl', weight: 'bold', color: '#ffffff', align: 'center' },
+                            ],
+                            paddingAll: '20px',
+                            backgroundColor: '#10b981',
+                        },
+                        body: {
+                            type: 'box',
+                            layout: 'vertical',
+                            contents: [
+                                { type: 'text', text: `ยินดีต้อนรับ ${newUser?.thaiName || ''}!`, weight: 'bold', size: 'lg' },
+                                { type: 'text', text: 'คุณได้รับ 50 แต้มต้อนรับ! 🎁', margin: 'md' },
+                                { type: 'text', text: 'พร้อมเริ่มเรียนภาษาไทยแล้ว!', margin: 'md', color: '#666666' },
+                            ],
+                        },
+                    },
+                    quickReplies.mainMenu
+                )
+            }
+            break;
+
+        case 'cancel_reg':
+            await prisma.registrationState.delete({ where: { lineUserId: userId } })
+            await replyText(event.replyToken, 'ยกเลิกการลงทะเบียนเรียบร้อยครับ พิมพ์ข้อความเพื่อเริ่มใหม่ได้เสมอครับ', quickReplies.mainMenu)
+            break;
+
         case 'register':
             if (user) {
                 await replyText(event.replyToken, 'คุณลงทะเบียนแล้วครับ! 😊', quickReplies.mainMenu)

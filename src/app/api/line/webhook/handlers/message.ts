@@ -2,7 +2,7 @@ import { MessageEvent, TextEventMessage } from '@line/bot-sdk'
 import { prisma } from '@/lib/prisma'
 import { replyText, replyFlex, flexTemplates, quickReplies } from '@/lib/line/client'
 import { addPoints, updateStreak } from '@/lib/gamification'
-import { generateFeedback } from '@/lib/ai/claude'
+import { generateFeedback, generateChitchat } from '@/lib/ai/claude'
 import { getActiveSession, updateGameSession, GAME_MESSAGES, getRandomMessage } from '@/lib/games/engine'
 
 export async function handleMessage(event: MessageEvent) {
@@ -73,12 +73,29 @@ export async function handleMessage(event: MessageEvent) {
             if (text === '📝 ส่งงาน') {
                 // Trigger submission flow (Implement persistent state if needed later)
                 await replyText(event.replyToken, 'ระบบส่งงานจะเปิดให้ใช้งานเร็วๆ นี้นะครับ (กำลังย้ายระบบใหม่) 🚧')
-            } else {
+            } else if (text === 'ยืนยันการลงทะเบียน') {
+                // Specific catch for text-based confirmation if postback fails
+                // But normally this should be in Reg Flow. 
+                // Since this block is for authenticated users, this is unlikely to be hit for REGISTRATION.
+                // Keeping it generic chitchat below.
                 await replyText(
                     event.replyToken,
                     `ไม่เข้าใจครับ 😅 ลองกดปุ่มด้านล่างดูนะครับ!`,
                     quickReplies.mainMenu
                 )
+            } else {
+                // AI Chitchat Fallback
+                const response = await generateChitchat({
+                    userId,
+                    message: text,
+                    userContext: {
+                        name: user.thaiName || user.chineseName || 'Friend',
+                        level: user.thaiLevel,
+                        streak: user.streak,
+                        preferredLanguage: user.preferredLanguage,
+                    }
+                })
+                await replyText(event.replyToken, response, quickReplies.mainMenu)
             }
         }
     } catch (error) {
@@ -135,6 +152,8 @@ async function handlePersistentRegistrationFlow(
     let nextStep = state.step
     let responseMsg = ''
     let quickReply = undefined
+    let useFlex = false
+    let flexContent: any = null
 
     // Update State Logic
     switch (state.step) {
@@ -208,16 +227,97 @@ async function handlePersistentRegistrationFlow(
             quickReply = quickReplies.thaiLevels
             break
 
-        case 7: // Thai Level + Finalize
-            // This is the final manual input step.
-            // Save everything
-            await finalizeRegistration(userId, data, text) // Use text as level input
+        case 7: // Thai Level -> Go to Confirmation (NEW)
+            // Map level text to enum for preview
+            let levelRaw = text
+            let level = 'BEGINNER'
+            if (levelRaw.includes('กลาง') || levelRaw.includes('Intermediate')) level = 'INTERMEDIATE'
+            if (levelRaw.includes('สูง') || levelRaw.includes('Advanced')) level = 'ADVANCED'
+            data.thaiLevel = level // Store in data for confirmation
 
-            // Cleanup state
-            await prisma.registrationState.delete({ where: { lineUserId: userId } })
+            nextStep = 8 // Confirmation Step
+            useFlex = true
+            flexContent = {
+                type: 'bubble',
+                body: {
+                    type: 'box',
+                    layout: 'vertical',
+                    contents: [
+                        { type: 'text', text: '📋 ตรวจสอบข้อมูล', weight: 'bold', size: 'lg', color: '#6366f1' },
+                        { type: 'separator', margin: 'md' },
+                        { type: 'text', text: `ชื่อ: ${data.chineseName || '-'}`, margin: 'md' },
+                        { type: 'text', text: `ชื่อไทย: ${data.thaiName}` },
+                        { type: 'text', text: `รหัสนักศึกษา: ${data.studentId || '-'}` },
+                        { type: 'text', text: `มหาวิทยาลัย: ${data.university}` },
+                        { type: 'text', text: `อีเมล: ${data.email}` },
+                        { type: 'text', text: `สัญชาติ: ${data.nationality}` },
+                        { type: 'text', text: `ระดับภาษา: ${level}` },
+                    ]
+                },
+                footer: {
+                    type: 'box',
+                    layout: 'horizontal',
+                    spacing: 'sm',
+                    contents: [
+                        {
+                            type: 'button',
+                            style: 'primary',
+                            action: { type: 'postback', label: '✅ ยืนยัน', data: 'action=confirm_reg' }
+                        },
+                        {
+                            type: 'button',
+                            style: 'secondary',
+                            // Simplified reject to just cancel/reset flow
+                            action: { type: 'postback', label: '❌ แก้ไข/เริ่มใหม่', data: 'action=cancel_reg' }
+                        }
+                    ]
+                }
+            }
+            responseMsg = 'กรุณาตรวจสอบข้อมูลก่อนยืนยันนะครับ'
+            break
 
-            await replyText(replyToken, '🎉 ลงทะเบียนเสร็จสมบูรณ์! เริ่มต้นใช้งานได้เลยครับ', quickReplies.mainMenu)
-            return // End here
+        case 8:
+            // Waiting for Confirmation.
+            // If user types text "ยืนยัน" instead of button
+            if (text === 'ยืนยัน' || text === 'Confirm') {
+                // Finalize
+                await finalizeRegistration(userId, data, data.thaiLevel)
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+                // Welcome message handled in finalize helper or here?
+                // Reuse the welcome logic from postback or just simple text
+                // Let's replicate simple success here
+                await replyText(replyToken, '🎉 ลงทะเบียนเสร็จสมบูรณ์! เริ่มต้นใช้งานได้เลยครับ', quickReplies.mainMenu)
+                return
+            } else if (text === 'แก้ไข' || text === 'Cancel') {
+                await prisma.registrationState.delete({ where: { lineUserId: userId } })
+                await replyText(replyToken, 'ยกเลิกการลงทะเบียนแล้วครับ พิมพ์ข้อความเพื่อเริ่มใหม่ได้เลยครับ', quickReplies.mainMenu)
+                return
+            } else {
+                responseMsg = 'กรุณากดยืนยันหรือยกเลิกนะครับ'
+                // Resend flex?
+                useFlex = true
+                flexContent = { // Re-send confirmation card
+                    type: 'bubble',
+                    body: {
+                        type: 'box',
+                        layout: 'vertical',
+                        contents: [
+                            { type: 'text', text: '📋 ตรวจสอบข้อมูล', weight: 'bold', size: 'lg', color: '#6366f1' },
+                            { type: 'text', text: 'กรุณายืนยันข้อมูลเพื่อดำเนินการต่อ', margin: 'md' }
+                        ]
+                    },
+                    footer: {
+                        type: 'box',
+                        layout: 'horizontal',
+                        spacing: 'sm',
+                        contents: [
+                            { type: 'button', style: 'primary', action: { type: 'postback', label: '✅ ยืนยัน', data: 'action=confirm_reg' } },
+                            { type: 'button', style: 'secondary', action: { type: 'postback', label: '❌ ยกเลิก', data: 'action=cancel_reg' } }
+                        ]
+                    }
+                }
+            }
+            break
     }
 
     // Save intermediate state
@@ -227,7 +327,9 @@ async function handlePersistentRegistrationFlow(
             data: { step: nextStep, data }
         })
 
-        if (responseMsg) {
+        if (useFlex && flexContent) {
+            await replyFlex(replyToken, responseMsg, flexContent)
+        } else if (responseMsg) {
             await replyText(replyToken, responseMsg, quickReply)
         }
     }
@@ -236,8 +338,8 @@ async function handlePersistentRegistrationFlow(
 export async function finalizeRegistration(userId: string, data: any, levelRaw: string) {
     // Map level text to enum
     let level = 'BEGINNER'
-    if (levelRaw.includes('กลาง') || levelRaw.includes('Intermediate')) level = 'INTERMEDIATE'
-    if (levelRaw.includes('สูง') || levelRaw.includes('Advanced')) level = 'ADVANCED'
+    if (levelRaw && (levelRaw.includes('กลาง') || levelRaw.includes('Intermediate') || levelRaw === 'INTERMEDIATE')) level = 'INTERMEDIATE'
+    if (levelRaw && (levelRaw.includes('สูง') || levelRaw.includes('Advanced') || levelRaw === 'ADVANCED')) level = 'ADVANCED'
 
     await prisma.user.create({
         data: {
@@ -312,4 +414,5 @@ async function handleGameAnswer(
         await replyText(replyToken, `${isCorrect ? '✅ ถูกต้อง!' : '❌ ผิดครับ'}\n\nข้อต่อไป: ${nextQ.question}`)
     }
 }
+
 
