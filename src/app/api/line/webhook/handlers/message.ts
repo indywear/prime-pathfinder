@@ -9,17 +9,23 @@ export async function handleMessage(event: MessageEvent) {
     const userId = event.source.userId
     if (!userId) return
 
-    // Get or create user
-    let user = await prisma.user.findUnique({
-        where: { lineUserId: userId },
-    })
+    try {
+        // Handle non-text messages
+        if (event.message.type !== 'text') {
+            await replyText(event.replyToken, 'น้องไทยยังอ่านรูปภาพหรือสติกเกอร์ไม่ได้ครับ 😅\nพิมพ์ข้อความมาคุยกันนะครับ!')
+            return
+        }
 
-    // Check if user is in a registration/flow state (Persistent DB Check)
-    const state = await prisma.registrationState.findUnique({
-        where: { lineUserId: userId },
-    })
+        // Get or create user
+        let user = await prisma.user.findUnique({
+            where: { lineUserId: userId },
+        })
 
-    if (event.message.type === 'text') {
+        // Check if user is in a registration/flow state (Persistent DB Check)
+        const state = await prisma.registrationState.findUnique({
+            where: { lineUserId: userId },
+        })
+
         const text = (event.message as TextEventMessage).text.trim()
 
         // Handle registration flow (Priority)
@@ -75,6 +81,13 @@ export async function handleMessage(event: MessageEvent) {
                 )
             }
         }
+    } catch (error) {
+        console.error('Error in handleMessage:', error)
+        // Reply with error to debug in chat
+        await replyText(
+            event.replyToken,
+            `เกิดข้อผิดพลาด: ${(error as Error).message}\n\nกรุณาลองใหม่อีกครั้ง หรือติดต่อผู้ดูแลระบบ`
+        )
     }
 }
 
