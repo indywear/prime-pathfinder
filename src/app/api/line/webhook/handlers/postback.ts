@@ -369,8 +369,8 @@ export async function handlePostback(event: PostbackEvent) {
         }
 
         const gameType = GAME_TYPES[gameTypeMap[game] || 'VOCAB_MEANING']
+        console.log(`[Game Start] Generating ${game} questions for user ${user.thaiName}`)
 
-        // Generate questions
         const questions = await generateQuestions({
             gameType: game as 'vocab' | 'fillblank' | 'arrange' | 'compose',
             difficulty: gameType.difficulty as 1 | 2 | 3,
@@ -378,7 +378,10 @@ export async function handlePostback(event: PostbackEvent) {
             count: 5,
         })
 
+        console.log(`[Game Start] Generated ${questions.length} questions for ${game}`)
+
         if (questions.length === 0) {
+            console.error(`[Game Start] CRITICAL: No questions generated for ${game}`)
             await replyText(event.replyToken, 'ขออภัย ไม่สามารถสร้างคำถามได้ในขณะนี้ ลองใหม่อีกครั้งนะครับ 🙏', quickReplies.mainMenu)
             return
         }

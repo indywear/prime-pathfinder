@@ -4,38 +4,38 @@ import { Question } from '@/lib/ai/claude'
 export const FALLBACK_QUESTIONS: Record<string, Question[]> = {
     vocab: [
         {
-            question: "คำว่า 'สวัสดี' แปลว่าอะไร?",
-            options: ["Hello", "Goodbye", "Thank you", "Sorry"],
+            question: "'Hello' ภาษาไทยว่าอะไร?",
+            options: ["สวัสดี", "ขอบคุณ", "ลาก่อน", "ขอโทษ"],
             correctAnswer: 0,
-            explanation: "สวัสดี แปลว่า Hello ใช้ทักทายกัน",
+            explanation: "Hello ภาษาไทยคือ สวัสดี",
             points: 10
         },
         {
-            question: "คำว่า 'ขอบคุณ' แปลว่าอะไร?",
-            options: ["Thank you", "Please", "Sorry", "Excuse me"],
+            question: "'Thank you' ภาษาไทยว่าอะไร?",
+            options: ["ขอบคุณ", "ครับ/ค่ะ", "ขอโทษ", "สวัสดี"],
             correctAnswer: 0,
-            explanation: "ขอบคุณ แปลว่า Thank you",
+            explanation: "Thank you ภาษาไทยคือ ขอบคุณ",
             points: 10
         },
         {
-            question: "คำว่า 'น้ำ' แปลว่าอะไร?",
-            options: ["Water", "Food", "Rice", "Tea"],
+            question: "'Water' ภาษาไทยว่าอะไร?",
+            options: ["น้ำ", "ข้าว", "อาหาร", "ชา"],
             correctAnswer: 0,
-            explanation: "น้ำ แปลว่า Water",
+            explanation: "Water ภาษาไทยคือ น้ำ",
             points: 10
         },
         {
-            question: "คำว่า 'ข้าว' แปลว่าอะไร?",
-            options: ["Rice", "Noodle", "Bread", "Soup"],
+            question: "'Rice' ภาษาไทยว่าอะไร?",
+            options: ["ข้าว", "ก๋วยเตี๋ยว", "ขนมปัง", "ซุป"],
             correctAnswer: 0,
-            explanation: "ข้าว แปลว่า Rice",
+            explanation: "Rice ภาษาไทยคือ ข้าว",
             points: 10
         },
         {
-            question: "คำว่า 'บ้าน' แปลว่าอะไร?",
-            options: ["House", "School", "Shop", "Office"],
+            question: "'House/Home' ภาษาไทยว่าอะไร?",
+            options: ["บ้าน", "โรงเรียน", "ร้าน", "สำนักงาน"],
             correctAnswer: 0,
-            explanation: "บ้าน แปลว่า House/Home",
+            explanation: "House/Home ภาษาไทยคือ บ้าน",
             points: 10
         }
     ],

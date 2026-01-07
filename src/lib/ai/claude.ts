@@ -127,15 +127,16 @@ export async function generateQuestions(request: QuestionRequest): Promise<Quest
 
 กฎสำคัญ:
 - แต่ละข้อต้องมี 4 ตัวเลือกที่แตกต่างกันทั้งหมด
+- ถามเป็นภาษาอังกฤษหรือความหมาย ให้ตอบเป็นภาษาไทย
 - ตัวเลือกที่ผิดต้องดูน่าเชื่อถือ (distractors ที่ดี)
 - correctAnswer เป็นตัวเลข 0-3 (index ของ options)
 
 ตัวอย่าง:
 {
-  "question": "คำว่า 'แมว' ในภาษาไทยแปลว่าอะไร?",
+  "question": "'Cat' ภาษาไทยว่าอะไร?",
   "options": ["แมว", "หมา", "นก", "ปลา"],
   "correctAnswer": 0,
-  "explanation": "แมว คือสัตว์เลี้ยงที่มี 4 ขา มีหนวด",
+  "explanation": "Cat ภาษาไทยคือ แมว",
   "points": 10
 }`,
 
@@ -682,7 +683,32 @@ export async function generateAdaptiveMessage(request: AdaptiveMessageRequest): 
             max_tokens: 200,
         })
 
-        return response.choices[0]?.message?.content || request.message
+        let adaptedMessage = response.choices[0]?.message?.content || request.message
+
+        // Filter out debug/explanation lines
+        const lines = adaptedMessage.split('\n')
+        const filtered = lines.filter(line => {
+            const lower = line.toLowerCase()
+            return !lower.includes('เนื่องจาก') &&
+                !lower.includes('ระดับผู้เรียน') &&
+                !lower.includes('สัดส่วน') &&
+                !lower.includes('%')
+        })
+
+        adaptedMessage = filtered.join('\n').trim() || request.message
+
+        // Profanity filter
+        const profanityWords = ['เย็ด', 'ควย', 'หี', 'สัส']
+        profanityWords.forEach(word => {
+            const regex = new RegExp(word, 'gi')
+            if (word === 'เย็ด') {
+                adaptedMessage = adaptedMessage.replace(regex, 'เยี่ยม')
+            } else {
+                adaptedMessage = adaptedMessage.replace(regex, '***')
+            }
+        })
+
+        return adaptedMessage
     } catch (error) {
         console.error('Adaptive Message error:', error)
         return request.message // Fallback to original
