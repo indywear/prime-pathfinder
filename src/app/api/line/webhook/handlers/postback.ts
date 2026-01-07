@@ -233,9 +233,27 @@ export async function handlePostback(event: PostbackEvent) {
                 await replyFlex(event.replyToken, 'กรุณาลงทะเบียนก่อน', flexTemplates.welcomeCard())
                 return
             }
+
+            // Get enabled games from DB
+            const enabledGames = await prisma.gameConfig.findMany({
+                where: { isEnabled: true },
+                select: { gameType: true, displayName: true }
+            })
+
+            // If no games in DB, use defaults (vocab, fillblank, arrange, compose)
+            const defaultGames = ['VOCAB_MEANING', 'FILL_BLANK', 'ARRANGE_SENTENCE', 'COMPOSE_SENTENCE']
+            const gamesToShow = enabledGames.length > 0
+                ? enabledGames.map(g => ({ type: g.gameType, name: g.displayName }))
+                : defaultGames.map(gt => ({ type: gt, name: GAME_TYPES[gt as keyof typeof GAME_TYPES].name }))
+
+            const gameList = gamesToShow.map((g, i) => {
+                const icons = ['🎯', '✏️', '🔢', '📝', '📖', '🎮', '⚡', '🌟']
+                return `${icons[i] || '🎯'} ${g.name}`
+            }).join('\n')
+
             await replyText(
                 event.replyToken,
-                '🎮 เลือกเกมที่อยากเล่นครับ!\n\n🎯 คำศัพท์ - จับคู่คำกับความหมาย\n✏️ เติมคำ - เติมคำลงในประโยค\n🔢 เรียงประโยค - เรียงคำให้ถูกต้อง\n📝 แต่งประโยค - แต่งประโยคจากคำที่กำหนด',
+                `🎮 เลือกเกมที่อยากเล่นครับ!\n\n${gameList}`,
                 quickReplies.gameTypes
             )
             break
