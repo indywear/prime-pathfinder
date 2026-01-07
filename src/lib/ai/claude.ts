@@ -378,10 +378,21 @@ export async function generateQuestions(request: QuestionRequest): Promise<Quest
 งาน: ${gamePrompts[request.gameType]}
 
 ⚠️ สำคัญมาก:
-1. ตัวเลือกทั้ง 4 ต้องแตกต่างกันทั้งหมด (ห้ามซ้ำ!)
-2. correctAnswer สำหรับ Multiple Choice = ตัวเลข 0-3 (index)
-3. correctAnswer สำหรับ Free Form = string
-4. ตอบเป็น JSON array เท่านั้น ไม่ต้องอธิบายเพิ่ม
+1. ตัวเลือกทั้ง 4 ต้องแตกต่างกันทั้งหมด (ห้ามซ้ำโดยเด็ดขาด!)
+2. ตรวจสอบให้แน่ใจว่าไม่มีตัวเลือกซ้ำกัน
+3. correctAnswer สำหรับ Multiple Choice = ตัวเลข 0-3 (index)
+4. correctAnswer สำหรับ Free Form = string
+5. ตอบเป็น JSON array เท่านั้น ไม่ต้องอธิบายเพิ่ม
+
+❌ ตัวอย่างที่ผิด (ห้ามทำ):
+{
+  "options": ["กิน", "กิน", "กิน", "กิน"] // ❌ ซ้ำกัน!
+}
+
+✅ ตัวอย่างที่ถูก:
+{
+  "options": ["กิน", "ดื่ม", "นอน", "เดิน"] // ✅ แตกต่างกันหมด
+}
 
 Format:
 [
@@ -395,34 +406,52 @@ Format:
 ]`
 
     try {
-        const response = await openrouter.chat.completions.create({
-            model: MODELS.CLAUDE_OPUS, // Use better model for quality
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.7,
-            max_tokens: 3000,
-        })
+        let validQuestions: Question[] = []
+        let attempts = 0
+        const maxAttempts = 3
 
-        const content = response.choices[0]?.message?.content || '[]'
-        const jsonMatch = content.match(/\[[\s\S]*\]/)
-        if (jsonMatch) {
-            const questions = JSON.parse(jsonMatch[0]) as Question[]
+        while (validQuestions.length < count && attempts < maxAttempts) {
+            attempts++
 
-            // Validate questions
-            const validQuestions = questions.filter(q => {
-                // Check for duplicate options
-                if (q.options && Array.isArray(q.options)) {
-                    const uniqueOptions = new Set(q.options)
-                    if (uniqueOptions.size !== q.options.length) {
-                        console.warn('Duplicate options detected, skipping question:', q.question)
-                        return false
-                    }
-                }
-                return true
+            const response = await openrouter.chat.completions.create({
+                model: MODELS.CLAUDE_OPUS, // Use better model for quality
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.7,
+                max_tokens: 3000,
             })
 
-            return validQuestions
+            const content = response.choices[0]?.message?.content || '[]'
+            const jsonMatch = content.match(/\[[\s\S]*\]/)
+
+            if (jsonMatch) {
+                const questions = JSON.parse(jsonMatch[0]) as Question[]
+
+                // Validate questions
+                const newValidQuestions = questions.filter(q => {
+                    // Check for duplicate options
+                    if (q.options && Array.isArray(q.options)) {
+                        const uniqueOptions = new Set(q.options)
+                        if (uniqueOptions.size !== q.options.length) {
+                            console.warn(`[Attempt ${attempts}] Duplicate options detected, skipping:`, q.question, q.options)
+                            return false
+                        }
+                    }
+                    return true
+                })
+
+                validQuestions = [...validQuestions, ...newValidQuestions]
+
+                // If we have enough valid questions, break
+                if (validQuestions.length >= count) {
+                    break
+                }
+
+                console.log(`[Attempt ${attempts}] Got ${newValidQuestions.length} valid questions, need ${count - validQuestions.length} more`)
+            }
         }
-        throw new Error('Invalid JSON response')
+
+        // Return only what we need
+        return validQuestions.slice(0, count)
     } catch (error) {
         console.error('AI Question generation error:', error)
         return []
