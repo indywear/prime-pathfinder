@@ -98,7 +98,53 @@ export async function handleMessage(event: MessageEvent) {
                     quickReplies.mainMenu
                 )
             } else {
-                // AI Chitchat Fallback
+                // Check for game selection keywords first
+                const lowerText = text.toLowerCase().trim()
+                const gameKeywords: Record<string, string> = {
+                    'คำศัพท์': 'vocab',
+                    'ความหมาย': 'vocab',
+                    'เติมคำ': 'fillblank',
+                    'เติมคำในช่องว่าง': 'fillblank',
+                    'เรียงประโยค': 'arrange',
+                    'แต่งประโยค': 'compose',
+                    'จับคู่': 'vocabmatch',
+                    'ตรงข้าม': 'vocabopposite',
+                    'พ้องความหมาย': 'vocabsynonym',
+                    'แก้ไข': 'fixsentence',
+                    'อ่าน': 'readanswer',
+                    'สรุป': 'summarize',
+                    'เขียนต่อ': 'continuestory',
+                }
+
+                let matchedGame: string | null = null
+                for (const [keyword, gameType] of Object.entries(gameKeywords)) {
+                    if (lowerText.includes(keyword)) {
+                        matchedGame = gameType
+                        break
+                    }
+                }
+
+                if (matchedGame) {
+                    // Start game with matched type
+                    const postbackData = new URLSearchParams()
+                    postbackData.set('game', matchedGame)
+
+                    // Simulate postback event
+                    const { handlePostback } = await import('./postback')
+                    await handlePostback({
+                        type: 'postback',
+                        replyToken: event.replyToken,
+                        source: event.source,
+                        timestamp: event.timestamp,
+                        mode: 'active',
+                        postback: {
+                            data: postbackData.toString()
+                        }
+                    } as any)
+                    return
+                }
+
+                // AI Chitchat Fallback (more professional tone)
                 const response = await generateChitchat({
                     userId,
                     message: text,

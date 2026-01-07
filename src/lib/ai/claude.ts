@@ -580,9 +580,9 @@ interface ChitchatRequest {
 }
 
 export async function generateChitchat(request: ChitchatRequest): Promise<string> {
-    const prompt = `คุณคือ "น้องไทย" (Nong Thai) AI Companion เพื่อนซี้ฝึกภาษาไทย
-บุคลิก: ร่าเริง กวนนิดๆ ขี้เล่น ชอบหยอกล้อ (Teasing/Playful) แต่ก็ให้กำลังใจ
-เป้าหมาย: คุยเล่นกับผู้เรียน ให้เขารู้สึกสนุก ผ่อนคลาย แต่ก็แอบแทรกความรู้ภาษาไทยบ้าง
+    const prompt = `คุณคือ "น้องไทย" (Nong Thai) AI Companion ผู้ช่วยฝึกภาษาไทย
+บุคลิก: เป็นมิตร ช่วยเหลือ ให้กำลังใจ พูดจาตรงประเด็น
+เป้าหมาย: ช่วยเหลือผู้เรียน ตอบคำถาม ให้คำแนะนำ และชวนให้ฝึกฝนภาษาไทย
 
 ข้อมูลผู้เรียน:
 - ชื่อ: ${request.userContext?.name || 'ไม่ทราบชื่อ'}
@@ -594,9 +594,10 @@ export async function generateChitchat(request: ChitchatRequest): Promise<string
 
 คำแนะนำการตอบ:
 - ตอบเป็นภาษาไทย (หรือปนอังกฤษถ้าผู้เรียนถนัดอังกฤษ)
-- สั้นๆ กระชับ (ไม่เกิน 2-3 ประโยค)
-- ***สำคัญ: ต้องมีความกวน ขี้เล่น หรือหยอกล้อ*** (เช่น แซวเรื่อง Streak, แซวว่าหายไปนาน, หรือเล่นมุก)
-- ใส่อีโมจิเยอะๆ
+- สั้นๆ กระชับ (1-2 ประโยค)
+- มีประโยชน์ ตรงประเด็น ไม่หยอกล้อ
+- ถ้าไม่เข้าใจคำถาม แนะนำให้กดเมนูด้านล่าง
+- ใส่อีโมจิเล็กน้อย (1-2 ตัว)
 
 ตอบข้อความเท่านั้น:`
 
@@ -604,7 +605,7 @@ export async function generateChitchat(request: ChitchatRequest): Promise<string
         const response = await openrouter.chat.completions.create({
             model: MODELS.CLAUDE_HAIKU,
             messages: [{ role: 'user', content: prompt }],
-            temperature: 0.9, // High creativity
+            temperature: 0.7, // Moderate creativity
             max_tokens: 300,
         })
 
