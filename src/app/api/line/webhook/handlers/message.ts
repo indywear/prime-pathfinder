@@ -751,9 +751,48 @@ async function handleGameAnswer(
             // Future: could add fuzzy matching here if needed
         }
     } else {
-        // Free-form answer (no options) - exact match for speed
+        // Free-form answer (no options)
         const expectedAnswer = String(currentQ.correctAnswer).toLowerCase().trim()
-        isCorrect = userAnswerText.toLowerCase() === expectedAnswer
+
+        // Get game type from session
+        const gameType = fullSession.gameType
+
+        if (gameType === 'compose') {
+            // COMPOSE: Use AI semantic validation for creativity
+            try {
+                const { generateChitchat } = await import('@/lib/ai/claude')
+                const validationPrompt = `คำถาม: ${currentQ.question}
+คำตอบที่คาดหวัง (ตัวอย่าง): ${expectedAnswer}
+คำตอบของผู้เล่น: ${userAnswerText}
+
+ผู้เล่นตอบถูกหรือไม่? (พิจารณาจากความหมายและความสมเหตุสมผล ไม่ใช่ตรงทุกตัวอักษร)
+ตอบแค่: YES หรือ NO`
+
+                const aiResponse = await generateChitchat({
+                    userId: user.lineUserId,
+                    message: validationPrompt,
+                    userContext: {
+                        name: user.thaiName || 'User',
+                        level: `Level ${user.currentLevel}`,
+                        streak: user.streak,
+                        preferredLanguage: user.preferredLanguage
+                    }
+                })
+
+                isCorrect = aiResponse.toUpperCase().includes('YES')
+            } catch (error) {
+                console.error('AI validation error for COMPOSE:', error)
+                // Fallback to exact match if AI fails
+                isCorrect = userAnswerText.toLowerCase() === expectedAnswer
+            }
+        } else if (gameType === 'arrange') {
+            // ARRANGE: Normalize by removing all spaces for comparison
+            const normalizeText = (text: string) => text.replace(/\s+/g, '').toLowerCase()
+            isCorrect = normalizeText(userAnswerText) === normalizeText(expectedAnswer)
+        } else {
+            // Other free-form games: exact match
+            isCorrect = userAnswerText.toLowerCase() === expectedAnswer
+        }
     }
 
     const newCorrect = isCorrect ? session.correctCount + 1 : session.correctCount
