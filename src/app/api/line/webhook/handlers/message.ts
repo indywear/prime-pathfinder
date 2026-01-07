@@ -1,6 +1,6 @@
 import { MessageEvent, TextEventMessage } from '@line/bot-sdk'
 import { prisma } from '@/lib/prisma'
-import { replyText, replyFlex, flexTemplates, quickReplies } from '@/lib/line/client'
+import { replyText, replyFlex, pushText, flexTemplates, quickReplies } from '@/lib/line/client'
 import { addPoints, updateStreak } from '@/lib/gamification'
 import { generateFeedback, generateChitchat } from '@/lib/ai/claude'
 import { getActiveSession, updateGameSession, GAME_MESSAGES, getRandomMessage, abandonSession } from '@/lib/games/engine'
@@ -351,7 +351,7 @@ async function handlePersistentRegistrationFlow(
             }
 
             // Process feedback with AI
-            await replyText(replyToken, '🔍 กำลังวิเคราะห์... รอสักครู่นะครับ')
+            await pushText(feedbackUser.lineUserId, '🔍 กำลังวิเคราะห์... รอสักครู่นะครับ')
 
             try {
                 const feedback = await generateFeedback({
@@ -470,7 +470,7 @@ async function handlePersistentRegistrationFlow(
             }
 
             // Process with AI
-            await replyText(replyToken, '🔍 กำลังตรวจงาน... รอสักครู่นะครับ')
+            await pushText(submitUser.lineUserId, '🔍 กำลังตรวจงาน... รอสักครู่นะครับ')
 
             try {
                 // Get task details for rubrics
