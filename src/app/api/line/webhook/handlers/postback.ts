@@ -308,6 +308,53 @@ export async function handlePostback(event: PostbackEvent) {
                 quickReplies.mainMenu
             )
             break
+
+        case 'leaderboard':
+            if (!user) {
+                await replyFlex(event.replyToken, 'กรุณาลงทะเบียนก่อน', flexTemplates.welcomeCard())
+                return
+            }
+
+            // Get top 10 users
+            const topUsers = await prisma.user.findMany({
+                take: 10,
+                orderBy: { totalPoints: 'desc' },
+                select: {
+                    thaiName: true,
+                    chineseName: true,
+                    totalPoints: true,
+                    currentLevel: true,
+                    streak: true
+                }
+            })
+
+            // Find user's rank
+            const allUsers = await prisma.user.findMany({
+                orderBy: { totalPoints: 'desc' },
+                select: { lineUserId: true }
+            })
+            const userRank = allUsers.findIndex(u => u.lineUserId === userId) + 1
+
+            const leaderboardText = topUsers.map((u, idx) => {
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`
+                const name = u.thaiName || u.chineseName || 'Anonymous'
+                return `${medal} ${name} - ${u.totalPoints}pts (Lv${u.currentLevel})`
+            }).join('\n')
+
+            await replyText(
+                event.replyToken,
+                `🏆 Leaderboard\n\n${leaderboardText}\n\n━━━━━━━━━━━━━━━━\n📍 อันดับของคุณ: #${userRank}\n💎 คะแนน: ${user.totalPoints}`,
+                quickReplies.mainMenu
+            )
+            break
+
+        case 'spin':
+            await replyText(
+                event.replyToken,
+                '🎰 Spin Wheel จะเปิดให้บริการเร็วๆ นี้!\n\nหมุนวงล้อเพื่อรับรางวัลพิเศษ 🎁',
+                quickReplies.mainMenu
+            )
+            break
     }
 
     // Handle game selection
