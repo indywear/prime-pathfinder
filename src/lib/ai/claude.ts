@@ -117,47 +117,127 @@ interface Question {
 
 export async function generateQuestions(request: QuestionRequest): Promise<Question[]> {
     const count = request.count || 5
-    const difficultyDesc = request.difficulty === 1 ? 'ง่าย' : request.difficulty === 2 ? 'ปานกลาง' : 'ยาก'
+    const difficultyDesc = request.difficulty === 1 ? 'ง่าย (A1-A2)' : request.difficulty === 2 ? 'ปานกลาง (B1-B2)' : 'ยาก (C1-C2)'
 
+    // Detailed prompts with examples for each game type
     const gamePrompts: Record<string, string> = {
-        vocab: `สร้างคำถามคำศัพท์ภาษาไทย ${count} ข้อ แต่ละข้อมี 4 ตัวเลือก`,
-        fillblank: `สร้างประโยคเติมคำ ${count} ข้อ มีช่องว่าง ___ และ 4 ตัวเลือก`,
-        arrange: `สร้างคำถามเรียงประโยค ${count} ข้อ ให้คำแยกมา ผู้เล่นต้องเรียงให้ถูก`,
-        compose: `สร้างโจทย์แต่งประโยค ${count} ข้อ กำหนดคำศัพท์ให้ใช้`,
-        reading: `สร้างบทอ่านสั้นพร้อมคำถาม ${count} ข้อ`,
+        vocab: `สร้างคำถามคำศัพท์ภาษาไทย ${count} ข้อ
+
+กฎสำคัญ:
+- แต่ละข้อต้องมี 4 ตัวเลือกที่แตกต่างกันทั้งหมด
+- ตัวเลือกที่ผิดต้องดูน่าเชื่อถือ (distractors ที่ดี)
+- correctAnswer เป็นตัวเลข 0-3 (index ของ options)
+
+ตัวอย่าง:
+{
+  "question": "คำว่า 'แมว' ในภาษาไทยแปลว่าอะไร?",
+  "options": ["แมว", "หมา", "นก", "ปลา"],
+  "correctAnswer": 0,
+  "explanation": "แมว คือสัตว์เลี้ยงที่มี 4 ขา มีหนวด",
+  "points": 10
+}`,
+
+        fillblank: `สร้างประโยคเติมคำ ${count} ข้อ (Fill in the blank)
+
+กฎสำคัญ:
+- ประโยคต้องมีช่องว่าง ___ ที่ต้องเติม
+- 4 ตัวเลือกต้องแตกต่างกัน และเป็นคำที่เหมาะสมทางไวยากรณ์
+- แต่มีเพียง 1 คำเดียวที่ถูกต้องตามบริบท
+- correctAnswer เป็นตัวเลข 0-3
+
+ตัวอย่าง:
+{
+  "question": "ฉัน ___ ไปโรงเรียนทุกวัน",
+  "options": ["ไป", "มา", "กลับ", "วิ่ง"],
+  "correctAnswer": 0,
+  "explanation": "ใช้ 'ไป' เพราะหมายถึงการเดินทางจากที่หนึ่งไปอีกที่",
+  "points": 10
+}`,
+
+        arrange: `สร้างคำถามเรียงประโยค ${count} ข้อ
+
+กฎสำคัญ:
+- ให้คำศัพท์แยกกันมา 4-6 คำ
+- ผู้เล่นต้องเรียงคำให้เป็นประโยคที่ถูกต้อง
+- correctAnswer เป็น string ของประโยคที่ถูกต้อง (ไม่มี options)
+- ห้ามใส่ options สำหรับเกมนี้
+
+ตัวอย่าง:
+{
+  "question": "เรียงคำต่อไปนี้ให้เป็นประโยค: ฉัน / ชอบ / กิน / ข้าว",
+  "correctAnswer": "ฉันชอบกินข้าว",
+  "explanation": "โครงสร้าง: ประธาน + กริยา + กรรม",
+  "points": 15
+}`,
+
+        compose: `สร้างโจทย์แต่งประโยค ${count} ข้อ
+
+กฎสำคัญ:
+- ให้คำศัพท์ 2-3 คำที่ต้องใช้
+- ผู้เล่นต้องแต่งประโยคเอง (ไม่มี options)
+- correctAnswer เป็น string ตัวอย่างประโยคที่ถูกต้อง
+
+ตัวอย่าง:
+{
+  "question": "แต่งประโยคโดยใช้คำว่า 'แมว' และ 'นอน'",
+  "correctAnswer": "แมวกำลังนอนบนเตียง",
+  "explanation": "ตัวอย่างประโยคที่ใช้ทั้ง 2 คำถูกต้อง",
+  "points": 20
+}`
     }
 
-    const prompt = `สร้างคำถามเกมภาษาไทยสำหรับผู้เรียนต่างชาติ
-ระดับ: ${request.thaiLevel}
-ความยาก: ${difficultyDesc}
+    const prompt = `คุณเป็นผู้สร้างคำถามภาษาไทยสำหรับผู้เรียนต่างชาติ
 
-${gamePrompts[request.gameType]}
+ข้อมูลผู้เรียน:
+- ระดับภาษาไทย: ${request.thaiLevel}
+- ความยาก: ${difficultyDesc}
 
-ตอบเป็น JSON array:
+งาน: ${gamePrompts[request.gameType]}
+
+⚠️ สำคัญมาก:
+1. ตัวเลือกทั้ง 4 ต้องแตกต่างกันทั้งหมด (ห้ามซ้ำ!)
+2. correctAnswer สำหรับ Multiple Choice = ตัวเลข 0-3 (index)
+3. correctAnswer สำหรับ Free Form = string
+4. ตอบเป็น JSON array เท่านั้น ไม่ต้องอธิบายเพิ่ม
+
+Format:
 [
   {
     "question": "<คำถาม>",
-    "options": ["<ตัวเลือก 1>", "<ตัวเลือก 2>", ...] (ถ้ามี),
-    "correctAnswer": <index ของคำตอบถูก หรือ string ถ้าไม่มีตัวเลือก>,
+    "options": ["<ตัวเลือก1>", "<ตัวเลือก2>", "<ตัวเลือก3>", "<ตัวเลือก4>"],
+    "correctAnswer": <0-3 หรือ string>,
     "explanation": "<คำอธิบาย>",
-    "points": <คะแนน 5-15>
+    "points": <5-20>
   }
-]
-
-ตอบเป็น JSON เท่านั้น`
+]`
 
     try {
         const response = await openrouter.chat.completions.create({
-            model: MODELS.CLAUDE_HAIKU, // Use faster model for questions
+            model: MODELS.CLAUDE_OPUS, // Use better model for quality
             messages: [{ role: 'user', content: prompt }],
-            temperature: 0.8,
-            max_tokens: 2000,
+            temperature: 0.7,
+            max_tokens: 3000,
         })
 
         const content = response.choices[0]?.message?.content || '[]'
         const jsonMatch = content.match(/\[[\s\S]*\]/)
         if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]) as Question[]
+            const questions = JSON.parse(jsonMatch[0]) as Question[]
+
+            // Validate questions
+            const validQuestions = questions.filter(q => {
+                // Check for duplicate options
+                if (q.options && Array.isArray(q.options)) {
+                    const uniqueOptions = new Set(q.options)
+                    if (uniqueOptions.size !== q.options.length) {
+                        console.warn('Duplicate options detected, skipping question:', q.question)
+                        return false
+                    }
+                }
+                return true
+            })
+
+            return validQuestions
         }
         throw new Error('Invalid JSON response')
     } catch (error) {
