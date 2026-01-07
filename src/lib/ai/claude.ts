@@ -121,6 +121,7 @@ export async function generateQuestions(request: QuestionRequest): Promise<Quest
 
     // Detailed prompts with examples for each game type
     const gamePrompts: Record<string, string> = {
+        // ===== VOCABULARY GAMES =====
         vocab: `สร้างคำถามคำศัพท์ภาษาไทย ${count} ข้อ
 
 กฎสำคัญ:
@@ -183,6 +184,188 @@ export async function generateQuestions(request: QuestionRequest): Promise<Quest
   "correctAnswer": "แมวกำลังนอนบนเตียง",
   "explanation": "ตัวอย่างประโยคที่ใช้ทั้ง 2 คำถูกต้อง",
   "points": 20
+}`,
+
+        // ===== NEW VOCAB GAMES =====
+        vocabmatch: `สร้างคำถามจับคู่คำศัพท์ ${count} ข้อ (Matching)
+
+กฎสำคัญ:
+- ให้คำศัพท์ไทย และให้เลือกความหมายที่ถูกต้อง
+- 4 ตัวเลือกต้องเป็นความหมายที่แตกต่างกัน
+- correctAnswer เป็นตัวเลข 0-3
+
+ตัวอย่าง:
+{
+  "question": "คำว่า 'ร้อน' หมายถึงอะไร?",
+  "options": ["อุณหภูมิสูง", "อุณหภูมิต่ำ", "ชื้น", "แห้ง"],
+  "correctAnswer": 0,
+  "explanation": "ร้อน หมายถึง อุณหภูมิสูง",
+  "points": 10
+}`,
+
+        vocabopposite: `สร้างคำถามคำตรงข้าม ${count} ข้อ
+
+กฎสำคัญ:
+- ให้คำศัพท์ 1 คำ และให้เลือกคำตรงข้าม
+- 4 ตัวเลือกต้องแตกต่างกัน
+- correctAnswer เป็นตัวเลข 0-3
+
+ตัวอย่าง:
+{
+  "question": "คำตรงข้ามของ 'ร้อน' คืออะไร?",
+  "options": ["เย็น", "อุ่น", "ชื้น", "แห้ง"],
+  "correctAnswer": 0,
+  "explanation": "ร้อน ตรงข้ามกับ เย็น",
+  "points": 15
+}`,
+
+        vocabsynonym: `สร้างคำถามคำพ้องความหมาย ${count} ข้อ
+
+กฎสำคัญ:
+- ให้คำศัพท์ 1 คำ และให้เลือกคำที่มีความหมายใกล้เคียง
+- 4 ตัวเลือกต้องแตกต่างกัน
+- correctAnswer เป็นตัวเลข 0-3
+
+ตัวอย่าง:
+{
+  "question": "คำใดมีความหมายเหมือน 'สวย'?",
+  "options": ["งาม", "น่าเกลียด", "ดี", "เก่ง"],
+  "correctAnswer": 0,
+  "explanation": "สวย และ งาม มีความหมายเหมือนกัน",
+  "points": 20
+}`,
+
+        // ===== GRAMMAR GAMES =====
+        fixsentence: `สร้างคำถามแก้ไขประโยค ${count} ข้อ
+
+กฎสำคัญ:
+- ให้ประโยคที่ผิดไวยากรณ์
+- 4 ตัวเลือกเป็นประโยคที่แก้แล้ว (1 ถูก 3 ผิด)
+- correctAnswer เป็นตัวเลข 0-3
+
+ตัวอย่าง:
+{
+  "question": "แก้ไขประโยคนี้: ฉันไปโรงเรียนเมื่อวานนี้",
+  "options": ["ฉันไปโรงเรียนเมื่อวาน", "ฉันไปโรงเรียนวันนี้", "ฉันไปโรงเรียนพรุ่งนี้", "ฉันไม่ไปโรงเรียน"],
+  "correctAnswer": 0,
+  "explanation": "ใช้ 'เมื่อวาน' ไม่ต้องมี 'นี้'",
+  "points": 15
+}`,
+
+        speedgrammar: `สร้างคำถามไวยากรณ์เร็ว ${count} ข้อ (Speed Grammar)
+
+กฎสำคัญ:
+- คำถามสั้นๆ ตรงประเด็น
+- ตอบได้รวดเร็ว
+- 4 ตัวเลือก
+- correctAnswer เป็นตัวเลข 0-3
+
+ตัวอย่าง:
+{
+  "question": "กริยาใดถูกต้อง: ฉัน ___ ข้าว",
+  "options": ["กิน", "กินแล้ว", "จะกิน", "กำลังกิน"],
+  "correctAnswer": 0,
+  "explanation": "ใช้ 'กิน' (ปัจจุบัน)",
+  "points": 10
+}`,
+
+        // ===== READING & WRITING =====
+        readanswer: `สร้างบทอ่านสั้นพร้อมคำถาม ${count} ข้อ
+
+กฎสำคัญ:
+- บทอ่าน 2-3 ประโยค
+- คำถามเกี่ยวกับเนื้อหา
+- 4 ตัวเลือก
+- correctAnswer เป็นตัวเลข 0-3
+
+ตัวอย่าง:
+{
+  "question": "อ่านแล้วตอบ: 'วันนี้อากาศดี ฉันไปเดินเล่นที่สวน' - ฉันทำอะไร?",
+  "options": ["เดินเล่น", "วิ่ง", "นอน", "กิน"],
+  "correctAnswer": 0,
+  "explanation": "ตามบทอ่าน ฉันไปเดินเล่น",
+  "points": 15
+}`,
+
+        summarize: `สร้างโจทย์สรุปเรื่อง ${count} ข้อ
+
+กฎสำคัญ:
+- ให้บทอ่านสั้น 3-4 ประโยค
+- ผู้เล่นสรุปเป็นประโยคเดียว (free-form)
+- correctAnswer เป็น string ตัวอย่างคำสรุป
+- ไม่มี options
+
+ตัวอย่าง:
+{
+  "question": "สรุปเรื่อง: 'วันนี้อากาศดี ฉันไปตลาด ซื้อผักและผลไม้ แล้วกลับบ้าน'",
+  "correctAnswer": "ฉันไปตลาดซื้อของแล้วกลับบ้าน",
+  "explanation": "สรุปกิจกรรมหลัก",
+  "points": 20
+}`,
+
+        continuestory: `สร้างโจทย์เขียนต่อเรื่อง ${count} ข้อ
+
+กฎสำคัญ:
+- ให้ประโยคเริ่มต้น
+- ผู้เล่นเขียนต่อ (free-form)
+- correctAnswer เป็น string ตัวอย่าง
+- ไม่มี options
+
+ตัวอย่าง:
+{
+  "question": "เขียนต่อ: 'วันหนึ่งฉันเห็นแมวน้อยตัวหนึ่ง...'",
+  "correctAnswer": "มันหิวข้าว ฉันเลยให้อาหารมัน",
+  "explanation": "ตัวอย่างการเขียนต่อที่สมเหตุสมผล",
+  "points": 25
+}`,
+
+        // ===== FUN GAMES =====
+        dailyvocab: `สร้างคำศัพท์รายวัน ${count} ข้อ (Daily Vocab)
+
+กฎสำคัญ:
+- คำศัพท์ที่ใช้บ่อยในชีวิตประจำวัน
+- 4 ตัวเลือก
+- correctAnswer เป็นตัวเลข 0-3
+
+ตัวอย่าง:
+{
+  "question": "อาหารเช้าภาษาอังกฤษคืออะไร?",
+  "options": ["breakfast", "lunch", "dinner", "snack"],
+  "correctAnswer": 0,
+  "explanation": "breakfast = อาหารเช้า",
+  "points": 5
+}`,
+
+        raceclock: `สร้างคำถามแข่งกับเวลา ${count} ข้อ (Race the Clock)
+
+กฎสำคัญ:
+- คำถามสั้น ตอบเร็ว
+- 4 ตัวเลือก
+- correctAnswer เป็นตัวเลข 0-3
+
+ตัวอย่าง:
+{
+  "question": "1+1=?",
+  "options": ["2", "3", "4", "5"],
+  "correctAnswer": 0,
+  "explanation": "1+1=2",
+  "points": 5
+}`,
+
+        vocabgacha: `สร้างคำศัพท์สุ่ม ${count} ข้อ (Gacha Vocab)
+
+กฎสำคัญ:
+- คำศัพท์แปลก/น่ารู้
+- 4 ตัวเลือก
+- correctAnswer เป็นตัวเลข 0-3
+
+ตัวอย่าง:
+{
+  "question": "คำว่า 'ระเบิด' แปลว่าอะไร?",
+  "options": ["ระเบิด", "ดัง", "ไฟ", "เสียง"],
+  "correctAnswer": 0,
+  "explanation": "ระเบิด = explode",
+  "points": 3
 }`
     }
 

@@ -757,8 +757,8 @@ async function handleGameAnswer(
         // Get game type from session
         const gameType = fullSession.gameType
 
-        if (gameType === 'compose') {
-            // COMPOSE: Use AI semantic validation for creativity
+        if (gameType === 'compose' || gameType === 'summarize' || gameType === 'continuestory') {
+            // COMPOSE/SUMMARIZE/CONTINUESTORY: Use AI semantic validation for creativity
             try {
                 const { generateChitchat } = await import('@/lib/ai/claude')
                 const validationPrompt = `คำถาม: ${currentQ.question}
@@ -781,7 +781,7 @@ async function handleGameAnswer(
 
                 isCorrect = aiResponse.toUpperCase().includes('YES')
             } catch (error) {
-                console.error('AI validation error for COMPOSE:', error)
+                console.error(`AI validation error for ${gameType}:`, error)
                 // Fallback to exact match if AI fails
                 isCorrect = userAnswerText.toLowerCase() === expectedAnswer
             }
