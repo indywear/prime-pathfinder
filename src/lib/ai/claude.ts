@@ -11,6 +11,15 @@ const MODELS = {
     CLAUDE_HAIKU: 'anthropic/claude-3-haiku',
 }
 
+// Question Type for Games
+export interface Question {
+    question: string
+    options?: string[]
+    correctAnswer: number | string
+    explanation: string
+    points: number
+}
+
 // ==================== FEEDBACK GENERATION ====================
 
 interface FeedbackRequest {
@@ -105,14 +114,6 @@ interface QuestionRequest {
     difficulty: 1 | 2 | 3
     thaiLevel: string
     count?: number
-}
-
-interface Question {
-    question: string
-    options?: string[]
-    correctAnswer: string | number
-    explanation?: string
-    points: number
 }
 
 export async function generateQuestions(request: QuestionRequest): Promise<Question[]> {
@@ -450,11 +451,21 @@ Format:
             }
         }
 
+        // If we don't have enough questions, use fallback
+        if (validQuestions.length < count) {
+            console.warn(`[generateQuestions] Only got ${validQuestions.length}/${count} questions, using fallback`)
+            const { getFallbackQuestions } = await import('@/lib/games/fallback-questions')
+            const fallbackQuestions = getFallbackQuestions(request.gameType, count - validQuestions.length)
+            validQuestions = [...validQuestions, ...fallbackQuestions]
+        }
+
         // Return only what we need
         return validQuestions.slice(0, count)
     } catch (error) {
         console.error('AI Question generation error:', error)
-        return []
+        // Return fallback questions on error
+        const { getFallbackQuestions } = await import('@/lib/games/fallback-questions')
+        return getFallbackQuestions(request.gameType, count)
     }
 }
 
