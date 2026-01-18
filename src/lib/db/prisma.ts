@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
-import { neon } from "@neondatabase/serverless";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+
+neonConfig.fetchConnectionCache = true;
 
 const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
@@ -17,14 +19,14 @@ function createPrismaClient(): PrismaClient {
     console.log("[Prisma] Connecting with URL length:", connectionString.length);
 
     try {
-        const sql = neon(connectionString);
-        const adapter = new PrismaNeon(sql);
+        const pool = new Pool({ connectionString });
+        const adapter = new PrismaNeon(pool);
 
         const client = new PrismaClient({
             adapter,
         } as any);
 
-        console.log("[Prisma] Client created successfully with Neon adapter");
+        console.log("[Prisma] Client created successfully");
         return client;
     } catch (error) {
         console.error("[Prisma] Failed to create client:", error);
