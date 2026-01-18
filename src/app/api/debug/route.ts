@@ -4,27 +4,42 @@ import prisma from "@/lib/db/prisma";
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-    try {
-        // Check env var
-        const dbUrl = process.env.DATABASE_URL;
-        const envStatus = dbUrl ? `Defined (starts with ${dbUrl.substring(0, 10)}...)` : "Undefined";
+    const dbUrl = process.env.DATABASE_URL;
+    
+    const envStatus = {
+        DATABASE_URL: dbUrl ? `Set (length: ${dbUrl.length})` : "NOT SET",
+        LINE_CHANNEL_ACCESS_TOKEN: process.env.LINE_CHANNEL_ACCESS_TOKEN ? "Set" : "NOT SET",
+        LINE_CHANNEL_SECRET: process.env.LINE_CHANNEL_SECRET ? "Set" : "NOT SET",
+        OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ? "Set" : "NOT SET",
+        ADMIN_EMAIL: process.env.ADMIN_EMAIL ? "Set" : "NOT SET",
+        ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ? "Set" : "NOT SET",
+    };
 
-        // Test database connection
+    if (!dbUrl) {
+        return NextResponse.json({
+            status: "error",
+            message: "DATABASE_URL not set",
+            env: envStatus
+        }, { status: 500 });
+    }
+
+    try {
         const userCount = await prisma.user.count();
-        return NextResponse.json({ status: "ok", userCount, env: envStatus });
+        return NextResponse.json({ 
+            status: "ok", 
+            userCount, 
+            env: envStatus,
+            dbUrlPreview: dbUrl.substring(0, 30) + "..."
+        });
     } catch (error: any) {
         console.error("Database Error:", error);
-
-        // Re-check env var for error response
-        const dbUrl = process.env.DATABASE_URL;
-        const envStatus = dbUrl ? `Defined (starts with ${dbUrl.substring(0, 10)}...)` : "Undefined";
 
         return NextResponse.json({
             status: "error",
             message: error.message,
-            stack: error.stack,
-            name: error.name,
-            env: envStatus
+            errorName: error.name,
+            env: envStatus,
+            dbUrlPreview: dbUrl.substring(0, 30) + "..."
         }, { status: 500 });
     }
 }
