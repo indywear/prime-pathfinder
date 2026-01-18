@@ -1,8 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
-import { Pool, neonConfig } from "@neondatabase/serverless";
-
-neonConfig.fetchConnectionCache = true;
+import { neon } from "@neondatabase/serverless";
 
 const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
@@ -16,17 +14,17 @@ function createPrismaClient(): PrismaClient {
         throw new Error("DATABASE_URL environment variable is required");
     }
 
-    console.log("[Prisma] Connecting with URL length:", connectionString.length);
+    console.log("[Prisma] Connecting with DATABASE_URL length:", connectionString.length);
 
     try {
-        const pool = new Pool({ connectionString });
-        const adapter = new PrismaNeon(pool as any);
+        const sql = neon(connectionString);
+        const adapter = new PrismaNeon(sql as any);
 
         const client = new PrismaClient({
             adapter,
         } as any);
 
-        console.log("[Prisma] Client created successfully");
+        console.log("[Prisma] Client created successfully with HTTP adapter");
         return client;
     } catch (error) {
         console.error("[Prisma] Failed to create client:", error);
