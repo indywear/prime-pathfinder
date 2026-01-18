@@ -2,6 +2,8 @@ import prisma from '@/lib/db/prisma'
 import { LEVEL_CONFIG, getLevelInfo, calculateProgress } from '@/lib/gamification'
 import { notFound } from 'next/navigation'
 
+export const dynamic = 'force-dynamic'
+
 interface DashboardProps {
     params: Promise<{ id: string }>
 }

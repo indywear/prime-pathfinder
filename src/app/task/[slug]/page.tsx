@@ -1,6 +1,8 @@
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/db/prisma'
 import { notFound } from 'next/navigation'
 import TaskContent from './TaskContent'
+
+export const dynamic = 'force-dynamic'
 
 interface PageProps {
     params: Promise<{ slug: string }>
