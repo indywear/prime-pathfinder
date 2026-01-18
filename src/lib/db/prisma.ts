@@ -1,57 +1,43 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaNeon } from "@prisma/adapter-neon";
-import { neonConfig, Pool } from "@neondatabase/serverless";
-
-neonConfig.fetchConnectionCache = true;
 
 const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
 };
 
-let prismaInstance: PrismaClient | null = null;
-
 function createPrismaClient(): PrismaClient {
     const connectionString = process.env.DATABASE_URL;
     
     if (!connectionString) {
-        console.warn("DATABASE_URL not set - database operations will fail");
-        return new Proxy({} as PrismaClient, {
-            get(target, prop) {
-                if (prop === 'then') return undefined;
-                return () => Promise.reject(new Error("DATABASE_URL not configured"));
-            }
+        console.error("[Prisma] DATABASE_URL is not defined");
+        throw new Error("DATABASE_URL environment variable is required");
+    }
+
+    console.log("[Prisma] Connecting with URL length:", connectionString.length);
+    console.log("[Prisma] URL protocol:", connectionString.split("://")[0]);
+
+    try {
+        const client = new PrismaClient({
+            datasources: {
+                db: {
+                    url: connectionString,
+                },
+            },
+            log: ['error', 'warn'],
         });
+
+        console.log("[Prisma] Client created successfully");
+        return client;
+    } catch (error) {
+        console.error("[Prisma] Failed to create client:", error);
+        throw error;
     }
-
-    const pool = new Pool({ connectionString });
-    const adapter = new PrismaNeon(pool as any);
-
-    return new PrismaClient({
-        adapter,
-    } as any);
 }
 
-function getPrismaClient(): PrismaClient {
-    if (!prismaInstance) {
-        prismaInstance = globalForPrisma.prisma ?? createPrismaClient();
-        if (process.env.NODE_ENV !== "production") {
-            globalForPrisma.prisma = prismaInstance;
-        }
-    }
-    return prismaInstance;
-}
+const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-const prisma = new Proxy({} as PrismaClient, {
-    get(target, prop) {
-        if (prop === 'then') return undefined;
-        const client = getPrismaClient();
-        const value = (client as any)[prop];
-        if (typeof value === 'function') {
-            return value.bind(client);
-        }
-        return value;
-    }
-});
+if (process.env.NODE_ENV !== "production") {
+    globalForPrisma.prisma = prisma;
+}
 
 export { prisma };
 export default prisma;
