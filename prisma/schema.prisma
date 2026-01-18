@@ -28,6 +28,7 @@ model User {
   // Gamification
   totalPoints     Int       @default(0)
   currentLevel    Int       @default(1)
+  lastSpinAt      DateTime?
   
   // Timestamps
   createdAt       DateTime  @default(now())

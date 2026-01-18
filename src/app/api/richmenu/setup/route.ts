@@ -22,7 +22,7 @@ const RICH_MENU_TEMPLATE = {
         },
         {
             bounds: { x: 1667, y: 0, width: 833, height: 843 },
-            action: { type: "message" as const, text: "เกม" },
+            action: { type: "message" as const, text: "ฝึกฝน" },
         },
         {
             bounds: { x: 0, y: 843, width: 833, height: 843 },
@@ -30,11 +30,11 @@ const RICH_MENU_TEMPLATE = {
         },
         {
             bounds: { x: 833, y: 843, width: 834, height: 843 },
-            action: { type: "message" as const, text: "ข้อมูลส่วนตัว" },
+            action: { type: "message" as const, text: "leaderboard" },
         },
         {
             bounds: { x: 1667, y: 843, width: 833, height: 843 },
-            action: { type: "message" as const, text: "เมนู" },
+            action: { type: "message" as const, text: "spin wheel" },
         },
     ],
 };

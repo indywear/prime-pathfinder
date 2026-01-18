@@ -55,12 +55,14 @@ const REGISTRATION_STEPS = [
 const MENU_KEYWORDS = {
     REGISTER: ["ลงทะเบียน", "register", "สมัคร"],
     FEEDBACK: ["ขอผลป้อนกลับ", "feedback", "ผลป้อนกลับ"],
-    SUBMIT: ["ส่งงาน", "submit", "ส่ง"],
+    SUBMIT: ["ส่งงาน", "submit", "ส่ง", "submit task"],
     PRACTICE: ["ฝึกฝน", "practice", "ฝึก"],
     DASHBOARD: ["แดชบอร์ด", "dashboard", "ความก้าวหน้า"],
     PROFILE: ["ข้อมูลส่วนตัว", "profile", "โปรไฟล์"],
     CANCEL: ["ยกเลิก", "cancel", "หยุด", "ออก"],
     HELP: ["ช่วยเหลือ", "help", "วิธีใช้", "เมนู", "menu"],
+    LEADERBOARD: ["leaderboard", "อันดับ", "ลีดเดอร์บอร์ด", "ranking"],
+    SPIN_WHEEL: ["spin wheel", "สปินวงล้อ", "วงล้อ", "spin", "หมุนวงล้อ"],
     GAME_MENU: ["เกม", "game", "games", "เล่นเกม"],
     VOCAB_GAME: ["คำศัพท์", "vocabulary", "vocab", "คำศัพท์จีน"],
     FILL_BLANK_GAME: ["เติมคำ", "fill blank", "fillblank", "เติมช่องว่าง"],
@@ -175,6 +177,12 @@ export async function handleTextMessage(
                 break;
             case "HELP":
                 await handleHelp(event.replyToken, userId);
+                break;
+            case "LEADERBOARD":
+                await handleLeaderboard(event.replyToken, userId);
+                break;
+            case "SPIN_WHEEL":
+                await handleSpinWheel(event.replyToken, userId);
                 break;
             case "GAME_MENU":
                 await handleGameMenu(event.replyToken, userId);
@@ -961,5 +969,150 @@ ${wordsDisplay}`;
         await replyText(replyToken, `${isCorrect ? "✅ ถูกต้อง! +10 คะแนน" : `❌ ไม่ถูกต้อง\nคำตอบคือ: ${correctAnswer}`}
 
 ${nextQuestionText}`);
+    }
+}
+
+// =====================
+// Leaderboard Handler
+// =====================
+
+async function handleLeaderboard(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ");
+        return;
+    }
+
+    const topUsers = await prisma.user.findMany({
+        where: { isRegistered: true },
+        orderBy: { totalPoints: "desc" },
+        take: 10,
+        select: {
+            thaiName: true,
+            totalPoints: true,
+            currentLevel: true,
+        },
+    });
+
+    if (topUsers.length === 0) {
+        await replyText(replyToken, "ยังไม่มีข้อมูลผู้ใช้ในระบบครับ");
+        return;
+    }
+
+    const userRank = await prisma.user.count({
+        where: {
+            isRegistered: true,
+            totalPoints: { gt: user.totalPoints },
+        },
+    });
+    const myRank = userRank + 1;
+
+    const medals = ["🥇", "🥈", "🥉"];
+    const leaderboardLines = topUsers.map((u, i) => {
+        const medal = i < 3 ? medals[i] : `${i + 1}.`;
+        const isMe = u.thaiName === user.thaiName ? " (คุณ)" : "";
+        return `${medal} ${u.thaiName}${isMe} - Lv.${u.currentLevel} (${u.totalPoints} pts)`;
+    });
+
+    const leaderboardMessage = `🏆 อันดับนักเรียน Top 10
+
+${leaderboardLines.join("\n")}
+
+📊 อันดับของคุณ: #${myRank}
+⭐ คะแนนของคุณ: ${user.totalPoints} pts
+🎯 Level: ${user.currentLevel}
+
+พิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้าทั้งหมด`;
+
+    await replyText(replyToken, leaderboardMessage);
+}
+
+// =====================
+// Spin Wheel Handler
+// =====================
+
+const SPIN_WHEEL_REWARDS = [
+    { name: "5 แต้ม", points: 5, probability: 0.30 },
+    { name: "10 แต้ม", points: 10, probability: 0.25 },
+    { name: "20 แต้ม", points: 20, probability: 0.20 },
+    { name: "50 แต้ม", points: 50, probability: 0.10 },
+    { name: "100 แต้ม", points: 100, probability: 0.05 },
+    { name: "เสียใจด้วย ไม่ได้รางวัล", points: 0, probability: 0.10 },
+];
+
+const SPIN_COOLDOWN_HOURS = 24;
+
+async function handleSpinWheel(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ");
+        return;
+    }
+
+    const now = new Date();
+    const lastSpin = user.lastSpinAt;
+    
+    if (lastSpin) {
+        const hoursSinceLastSpin = (now.getTime() - lastSpin.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceLastSpin < SPIN_COOLDOWN_HOURS) {
+            const hoursRemaining = Math.ceil(SPIN_COOLDOWN_HOURS - hoursSinceLastSpin);
+            await replyText(replyToken, `🎡 หมุนวงล้อได้วันละ 1 ครั้ง
+
+⏰ กรุณารออีก ${hoursRemaining} ชั่วโมง
+
+💡 ระหว่างรอ คุณสามารถ:
+• "ส่งงาน" - ส่งภาระงานประจำสัปดาห์
+• "ฝึกฝน" - ฝึกคำศัพท์
+• "เกม" - เล่นเกมสะสมแต้ม`);
+            return;
+        }
+    }
+
+    const random = Math.random();
+    let cumulativeProbability = 0;
+    let reward = SPIN_WHEEL_REWARDS[SPIN_WHEEL_REWARDS.length - 1];
+
+    for (const r of SPIN_WHEEL_REWARDS) {
+        cumulativeProbability += r.probability;
+        if (random < cumulativeProbability) {
+            reward = r;
+            break;
+        }
+    }
+
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            totalPoints: { increment: reward.points },
+            lastSpinAt: now,
+        },
+    });
+
+    const spinAnimation = ["🎰", "🎡", "🎲", "🎯", "✨"];
+    const randomEmoji = spinAnimation[Math.floor(Math.random() * spinAnimation.length)];
+
+    if (reward.points > 0) {
+        const newTotal = user.totalPoints + reward.points;
+        await replyText(replyToken, `${randomEmoji} หมุนวงล้อ... ${randomEmoji}
+
+🎉 ยินดีด้วย! คุณได้รับ ${reward.name}!
+
+💰 คะแนนรวม: ${newTotal} pts
+⏰ หมุนครั้งต่อไปได้ใน ${SPIN_COOLDOWN_HOURS} ชั่วโมง
+
+พิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้าของคุณ`);
+    } else {
+        await replyText(replyToken, `${randomEmoji} หมุนวงล้อ... ${randomEmoji}
+
+😅 ${reward.name}
+
+💪 อย่าเพิ่งท้อนะครับ! โชคดีครั้งหน้า!
+⏰ หมุนครั้งต่อไปได้ใน ${SPIN_COOLDOWN_HOURS} ชั่วโมง
+
+💡 ทำกิจกรรมอื่นเพื่อสะสมแต้ม:
+• "ส่งงาน" - ส่งภาระงาน
+• "เกม" - เล่นเกมสะสมแต้ม`);
     }
 }
