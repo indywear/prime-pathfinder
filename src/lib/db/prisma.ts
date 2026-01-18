@@ -20,7 +20,7 @@ function createPrismaClient(): PrismaClient {
 
     try {
         const pool = new Pool({ connectionString });
-        const adapter = new PrismaNeon(pool);
+        const adapter = new PrismaNeon(pool as any);
 
         const client = new PrismaClient({
             adapter,
