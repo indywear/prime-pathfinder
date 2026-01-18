@@ -9,8 +9,11 @@ interface PageProps {
 export default async function TaskPage({ params }: PageProps) {
     const { slug } = await params
 
-    const task = await prisma.weeklyTask.findUnique({
-        where: { landingPageSlug: slug },
+    const task = await prisma.task.findFirst({
+        where: { 
+            title: { contains: slug },
+            isActive: true 
+        },
     })
 
     if (!task || !task.isActive) {
@@ -24,8 +27,12 @@ export default async function TaskPage({ params }: PageProps) {
                 <div className="max-w-4xl mx-auto">
                     <div className="flex items-center gap-2 text-indigo-200 text-sm mb-2">
                         <span>📚 ProficienThAI</span>
-                        <span>•</span>
-                        <span>สัปดาห์ที่ {task.weekNumber}</span>
+                        {task.weekNumber && (
+                            <>
+                                <span>•</span>
+                                <span>สัปดาห์ที่ {task.weekNumber}</span>
+                            </>
+                        )}
                     </div>
                     <h1 className="text-3xl font-bold mb-2">{task.title}</h1>
                     <p className="text-indigo-100">{task.description}</p>
@@ -49,7 +56,7 @@ export default async function TaskPage({ params }: PageProps) {
             {/* Content with reading tracker */}
             <TaskContent
                 taskId={task.id}
-                content={task.contentHtml}
+                content={task.contentUrl || ''}
                 title={task.title}
             />
 
@@ -67,8 +74,11 @@ export default async function TaskPage({ params }: PageProps) {
 export async function generateMetadata({ params }: PageProps) {
     const { slug } = await params
 
-    const task = await prisma.weeklyTask.findUnique({
-        where: { landingPageSlug: slug },
+    const task = await prisma.task.findFirst({
+        where: { 
+            title: { contains: slug },
+            isActive: true 
+        },
         select: { title: true, description: true },
     })
 

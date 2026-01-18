@@ -1,9 +1,8 @@
-import { prisma } from '@/lib/prisma'
-import { LEVEL_CONFIG } from '@/lib/gamification'
+import prisma from '@/lib/db/prisma'
 
 export default async function UsersPage() {
     const users = await prisma.user.findMany({
-        orderBy: { registeredAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
         include: {
             _count: {
                 select: {
@@ -25,7 +24,6 @@ export default async function UsersPage() {
                 </div>
             </div>
 
-            {/* Users Table */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full">
@@ -47,7 +45,7 @@ export default async function UsersPage() {
                                     Submissions
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Last Active
+                                    Last Updated
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Actions
@@ -55,62 +53,55 @@ export default async function UsersPage() {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {users.map((user) => {
-                                const levelInfo = LEVEL_CONFIG.find((l) => l.level === user.currentLevel)
-                                return (
-                                    <tr key={user.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <div>
-                                                    <div className="text-sm font-medium text-gray-900">{user.thaiName}</div>
-                                                    <div className="text-sm text-gray-500">{user.chineseName}</div>
-                                                    <div className="text-xs text-gray-400">{user.nationality}</div>
-                                                </div>
+                            {users.map((user) => (
+                                <tr key={user.id} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center">
+                                            <div>
+                                                <div className="text-sm font-medium text-gray-900">{user.thaiName}</div>
+                                                <div className="text-sm text-gray-500">{user.chineseName}</div>
+                                                <div className="text-xs text-gray-400">{user.nationality}</div>
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900">{user.university}</div>
-                                            <div className="text-xs text-gray-500">{user.email}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-lg font-bold text-indigo-600">{user.currentLevel}</span>
-                                                <span className="text-xs text-gray-500">{levelInfo?.title}</span>
-                                            </div>
-                                            <div className="text-xs text-gray-400">
-                                                {user.currentXP} XP | Thai: {user.thaiLevel}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm font-medium text-gray-900">{user.totalPoints}</div>
-                                            <div className="text-xs text-gray-500">🔥 Streak: {user.streak}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            <div>📝 {user._count.submissions}</div>
-                                            <div className="text-xs text-gray-500">💬 {user._count.feedbackRequests} feedback</div>
-                                            <div className="text-xs text-gray-500">🎮 {user._count.practiceSessions} practice</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {user.lastActiveAt
-                                                ? new Date(user.lastActiveAt).toLocaleDateString('th-TH', {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })
-                                                : 'Never'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            <a
-                                                href={`/admin/users/${user.id}`}
-                                                className="text-indigo-600 hover:text-indigo-900"
-                                            >
-                                                View Details
-                                            </a>
-                                        </td>
-                                    </tr>
-                                )
-                            })}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm text-gray-900">{user.university}</div>
+                                        <div className="text-xs text-gray-500">{user.email}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg font-bold text-indigo-600">{user.currentLevel}</span>
+                                        </div>
+                                        <div className="text-xs text-gray-400">
+                                            Thai: {user.thaiLevel}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm font-medium text-gray-900">{user.totalPoints} pts</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <div>📝 {user._count.submissions}</div>
+                                        <div className="text-xs text-gray-500">💬 {user._count.feedbackRequests} feedback</div>
+                                        <div className="text-xs text-gray-500">🎮 {user._count.practiceSessions} practice</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {new Date(user.updatedAt).toLocaleDateString('th-TH', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <a
+                                            href={`/admin/users/${user.id}`}
+                                            className="text-indigo-600 hover:text-indigo-900"
+                                        >
+                                            View Details
+                                        </a>
+                                    </td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>

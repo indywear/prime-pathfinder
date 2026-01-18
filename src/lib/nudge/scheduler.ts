@@ -1,7 +1,10 @@
-import { prisma } from '@/lib/prisma'
-import { pushText } from '@/lib/line/client'
+import prisma from '@/lib/db/prisma'
+import { pushMessage, createTextMessage } from '@/lib/line/client'
 
-// Nudge types and messages
+async function pushText(userId: string, text: string) {
+    await pushMessage(userId, [createTextMessage(text)])
+}
+
 const NUDGE_MESSAGES = {
     INACTIVE: {
         chinese: [
@@ -12,7 +15,7 @@ const NUDGE_MESSAGES = {
         thai: [
             'เฮ้ {name}! บทเรียนภาษาไทยคิดถึงนะ 📚',
             'สุดหล่อ {name} ไม่กลับมาเรียนต่อหรอ? 😊',
-            'สู้ๆ นะ! ใกล้หลุด streak แล้ว 💪',
+            'สู้ๆ นะ! กลับมาฝึกฝนกันเถอะ 💪',
         ],
         english: [
             'Hey {name}! Your Thai lessons miss you 📚',
@@ -28,7 +31,7 @@ const NUDGE_MESSAGES = {
     STREAK: {
         thai: [
             '🔥 อย่าให้ streak หลุดนะ! เข้ามาทำกิจกรรมวันนี้เลย',
-            '💥 streak {days} วันจะหายไป! รีบมาต่อเลย',
+            '💥 กลับมาฝึกฝนกันเถอะ! รีบมาต่อเลย',
         ],
     },
 }
@@ -46,13 +49,14 @@ function formatMessage(template: string, vars: Record<string, string>): string {
 }
 
 async function sendInactiveNudges() {
-    const inactiveThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000) // 48 hours
+    const inactiveThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000)
 
     const inactiveUsers = await prisma.user.findMany({
         where: {
-            lastActiveAt: {
+            updatedAt: {
                 lt: inactiveThreshold,
             },
+            isRegistered: true,
         },
         select: {
             id: true,
@@ -60,9 +64,7 @@ async function sendInactiveNudges() {
             thaiName: true,
             chineseName: true,
             nationality: true,
-            streak: true,
             currentLevel: true,
-            preferredLanguage: true,
         },
     })
 
@@ -70,64 +72,16 @@ async function sendInactiveNudges() {
 
     for (const user of inactiveUsers) {
         try {
-            // Use AI to generate personalized nudge message
-            const { generateChitchat } = await import('@/lib/ai/claude')
-
-            const contextMessage = user.streak > 0
-                ? `User hasn't been active for 2 days. Their ${user.streak}-day streak is at risk!`
-                : `User has been inactive for 2 days. Encourage them to come back and practice.`
-
-            const aiMessage = await generateChitchat({
-                userId: user.lineUserId,
-                message: contextMessage,
-                userContext: {
-                    name: user.thaiName || user.chineseName || 'คุณ',
-                    level: `Level ${user.currentLevel}`,
-                    streak: user.streak,
-                    preferredLanguage: user.preferredLanguage
-                }
-            })
-
-            await pushText(user.lineUserId, aiMessage)
-            await prisma.nudgeLog.create({
-                data: {
-                    userId: user.id,
-                    type: 'INACTIVE',
-                    message: aiMessage,
-                    delivered: true,
-                },
-            })
-            sentCount++
-        } catch (error) {
-            console.error('Failed to send nudge:', error)
-            // Fallback to static message
             const lang = user.nationality?.toLowerCase() === 'chinese' ? 'chinese' : 'thai'
             const messages = NUDGE_MESSAGES.INACTIVE[lang] || NUDGE_MESSAGES.INACTIVE.thai
-            const fallbackMessage = formatMessage(getRandomMessage(messages), {
+            const message = formatMessage(getRandomMessage(messages), {
                 name: user.thaiName || user.chineseName || 'คุณ',
             })
 
-            try {
-                await pushText(user.lineUserId, fallbackMessage)
-                await prisma.nudgeLog.create({
-                    data: {
-                        userId: user.id,
-                        type: 'INACTIVE',
-                        message: fallbackMessage,
-                        delivered: true,
-                    },
-                })
-                sentCount++
-            } catch (fallbackError) {
-                await prisma.nudgeLog.create({
-                    data: {
-                        userId: user.id,
-                        type: 'INACTIVE',
-                        message: fallbackMessage,
-                        delivered: false,
-                    },
-                })
-            }
+            await pushText(user.lineUserId, message)
+            sentCount++
+        } catch (error) {
+            console.error('Failed to send nudge:', error)
         }
     }
 
@@ -138,7 +92,7 @@ async function sendDeadlineReminders() {
     const now = new Date()
     const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
-    const upcomingTasks = await prisma.weeklyTask.findMany({
+    const upcomingTasks = await prisma.task.findMany({
         where: {
             isActive: true,
             deadline: {
@@ -151,9 +105,9 @@ async function sendDeadlineReminders() {
     let sentCount = 0
 
     for (const task of upcomingTasks) {
-        // Find users who haven't submitted
         const usersWithoutSubmission = await prisma.user.findMany({
             where: {
+                isRegistered: true,
                 submissions: {
                     none: {
                         taskId: task.id,
@@ -176,14 +130,6 @@ async function sendDeadlineReminders() {
 
             try {
                 await pushText(user.lineUserId, message)
-                await prisma.nudgeLog.create({
-                    data: {
-                        userId: user.id,
-                        type: 'DEADLINE',
-                        message,
-                        delivered: true,
-                    },
-                })
                 sentCount++
             } catch (error) {
                 console.error('Failed to send deadline reminder:', error)
@@ -195,45 +141,40 @@ async function sendDeadlineReminders() {
 }
 
 async function sendStreakReminders() {
+    const twentyHoursAgo = new Date(Date.now() - 20 * 60 * 60 * 1000)
+
     const users = await prisma.user.findMany({
         where: {
-            streak: {
-                gte: 3, // Only remind users with streaks
-            },
-            lastActiveAt: {
-                lt: new Date(Date.now() - 20 * 60 * 60 * 1000), // Haven't been active in 20 hours
+            isRegistered: true,
+            totalPoints: { gte: 50 },
+            updatedAt: {
+                lt: twentyHoursAgo,
             },
         },
         select: {
             id: true,
             lineUserId: true,
             thaiName: true,
-            streak: true,
         },
     })
+
+    let sentCount = 0
 
     for (const user of users) {
         const message = formatMessage(getRandomMessage(NUDGE_MESSAGES.STREAK.thai), {
             name: user.thaiName || 'คุณ',
-            days: String(user.streak),
+            days: '7',
         })
 
         try {
             await pushText(user.lineUserId, message)
-            await prisma.nudgeLog.create({
-                data: {
-                    userId: user.id,
-                    type: 'STREAK',
-                    message,
-                    delivered: true,
-                },
-            })
+            sentCount++
         } catch (error) {
             console.error('Failed to send streak reminder:', error)
         }
     }
 
-    return users.length
+    return sentCount
 }
 
 export async function sendNudges() {

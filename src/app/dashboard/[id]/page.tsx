@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/db/prisma'
 import { LEVEL_CONFIG, getLevelInfo, calculateProgress } from '@/lib/gamification'
 import { notFound } from 'next/navigation'
 
@@ -12,17 +12,12 @@ export default async function UserDashboard({ params }: DashboardProps) {
     const user = await prisma.user.findUnique({
         where: { id },
         include: {
-            achievements: {
+            badges: {
                 include: { badge: true },
                 orderBy: { earnedAt: 'desc' },
             },
-            _count: {
-                select: {
-                    submissions: true,
-                    feedbackRequests: true,
-                    practiceSessions: true,
-                },
-            },
+            submissions: { select: { id: true } },
+            practiceSessions: { select: { id: true } },
         },
     })
 
@@ -32,35 +27,69 @@ export default async function UserDashboard({ params }: DashboardProps) {
 
     const levelInfo = getLevelInfo(user.currentLevel)
     const nextLevel = LEVEL_CONFIG.find((l) => l.level === user.currentLevel + 1)
-    const progress = calculateProgress(user.currentXP, user.currentLevel)
+    const progress = calculateProgress(user.totalPoints, user.currentLevel)
 
-    // Get recent activity
-    const recentActivity = await prisma.pointLog.findMany({
-        where: { userId: id },
-        orderBy: { earnedAt: 'desc' },
-        take: 10,
-    })
-
-    // Get streak calendar data (last 30 days)
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    const activityDays = await prisma.pointLog.findMany({
+    const recentSubmissions = await prisma.submission.findMany({
         where: {
             userId: id,
-            earnedAt: { gte: thirtyDaysAgo },
+            submittedAt: { gte: thirtyDaysAgo },
         },
-        select: { earnedAt: true },
-        distinct: ['earnedAt'],
+        select: { submittedAt: true },
+        orderBy: { submittedAt: 'desc' },
+        take: 10,
+    })
+
+    const recentPractice = await prisma.practiceSession.findMany({
+        where: {
+            userId: id,
+            completedAt: { gte: thirtyDaysAgo },
+        },
+        select: { completedAt: true },
+        orderBy: { completedAt: 'desc' },
+        take: 10,
+    })
+
+    const recentActivity = [
+        ...recentSubmissions.map(s => ({
+            id: `sub-${s.submittedAt.getTime()}`,
+            description: 'ส่งงานเขียน',
+            source: 'submission',
+            earnedAt: s.submittedAt,
+            points: 10,
+        })),
+        ...recentPractice.map(p => ({
+            id: `prac-${p.completedAt?.getTime()}`,
+            description: 'ฝึกฝนภาษา',
+            source: 'practice',
+            earnedAt: p.completedAt || new Date(),
+            points: 5,
+        })),
+    ]
+        .sort((a, b) => b.earnedAt.getTime() - a.earnedAt.getTime())
+        .slice(0, 10)
+
+    const activityDays = await prisma.submission.findMany({
+        where: {
+            userId: id,
+            submittedAt: { gte: thirtyDaysAgo },
+        },
+        select: { submittedAt: true },
+        distinct: ['submittedAt'],
     })
 
     const activeDates = new Set(
-        activityDays.map((a) => a.earnedAt.toISOString().split('T')[0])
+        activityDays.map((a) => a.submittedAt.toISOString().split('T')[0])
     )
+
+    const submissionCount = user.submissions.length
+    const practiceCount = user.practiceSessions.length
+    const badgeCount = user.badges.length
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
-            {/* Header */}
             <header className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-8 px-4">
                 <div className="max-w-4xl mx-auto">
                     <h1 className="text-3xl font-bold">{user.thaiName}</h1>
@@ -71,20 +100,19 @@ export default async function UserDashboard({ params }: DashboardProps) {
                             <span className="ml-2 text-sm">{levelInfo.title}</span>
                         </div>
                         <div className="bg-white/20 rounded-lg px-4 py-2">
-                            <span className="text-2xl font-bold">🔥 {user.streak}</span>
-                            <span className="ml-2 text-sm">day streak</span>
+                            <span className="text-2xl font-bold">{user.totalPoints}</span>
+                            <span className="ml-2 text-sm">points</span>
                         </div>
                     </div>
                 </div>
             </header>
 
             <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-                {/* XP Progress */}
                 <div className="bg-white rounded-xl p-6 shadow-sm">
                     <div className="flex justify-between items-center mb-2">
                         <span className="font-medium">Progress to Level {user.currentLevel + 1}</span>
                         <span className="text-sm text-gray-500">
-                            {user.currentXP} / {nextLevel?.xpRequired || 'MAX'} XP
+                            {user.totalPoints} / {nextLevel?.xpRequired || 'MAX'} Points
                         </span>
                     </div>
                     <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
@@ -94,46 +122,44 @@ export default async function UserDashboard({ params }: DashboardProps) {
                         />
                     </div>
                     <p className="text-sm text-gray-500 mt-2 text-center">
-                        {nextLevel ? `${nextLevel.xpRequired - user.currentXP} XP until ${nextLevel.title}` : 'Max Level Reached! 🎉'}
+                        {nextLevel ? `${nextLevel.xpRequired - user.totalPoints} Points until ${nextLevel.title}` : 'Max Level Reached! 🎉'}
                     </p>
                 </div>
 
-                {/* Stats Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-white rounded-xl p-4 text-center shadow-sm">
                         <p className="text-3xl font-bold text-indigo-600">{user.totalPoints}</p>
                         <p className="text-sm text-gray-500">Total Points</p>
                     </div>
                     <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-                        <p className="text-3xl font-bold text-green-600">{user._count.submissions}</p>
+                        <p className="text-3xl font-bold text-green-600">{submissionCount}</p>
                         <p className="text-sm text-gray-500">Submissions</p>
                     </div>
                     <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-                        <p className="text-3xl font-bold text-purple-600">{user._count.practiceSessions}</p>
+                        <p className="text-3xl font-bold text-purple-600">{practiceCount}</p>
                         <p className="text-sm text-gray-500">Practice Sessions</p>
                     </div>
                     <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-                        <p className="text-3xl font-bold text-orange-600">{user.achievements.length}</p>
+                        <p className="text-3xl font-bold text-orange-600">{badgeCount}</p>
                         <p className="text-sm text-gray-500">Badges</p>
                     </div>
                 </div>
 
-                {/* Badges Showcase */}
                 <div className="bg-white rounded-xl p-6 shadow-sm">
                     <h2 className="text-xl font-bold mb-4">🏅 Badges</h2>
-                    {user.achievements.length > 0 ? (
+                    {user.badges.length > 0 ? (
                         <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
-                            {user.achievements.map((achievement) => (
+                            {user.badges.map((userBadge) => (
                                 <div
-                                    key={achievement.id}
+                                    key={`${userBadge.userId}-${userBadge.badgeId}`}
                                     className="flex flex-col items-center p-3 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg"
                                 >
                                     <span className="text-3xl">🏅</span>
                                     <p className="text-sm font-medium text-center mt-2">
-                                        {achievement.badge.nameThai}
+                                        {userBadge.badge.nameThai}
                                     </p>
                                     <p className="text-xs text-gray-500">
-                                        +{achievement.badge.bonusXP} XP
+                                        {userBadge.badge.description}
                                     </p>
                                 </div>
                             ))}
@@ -145,7 +171,6 @@ export default async function UserDashboard({ params }: DashboardProps) {
                     )}
                 </div>
 
-                {/* Streak Calendar */}
                 <div className="bg-white rounded-xl p-6 shadow-sm">
                     <h2 className="text-xl font-bold mb-4">📅 Activity Calendar (30 days)</h2>
                     <div className="grid grid-cols-7 gap-2">
@@ -171,35 +196,38 @@ export default async function UserDashboard({ params }: DashboardProps) {
                     </div>
                 </div>
 
-                {/* Recent Activity */}
                 <div className="bg-white rounded-xl p-6 shadow-sm">
                     <h2 className="text-xl font-bold mb-4">⚡ Recent Activity</h2>
                     <div className="space-y-3">
-                        {recentActivity.map((activity) => (
-                            <div
-                                key={activity.id}
-                                className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
-                            >
-                                <div>
-                                    <p className="font-medium">{activity.description || activity.source}</p>
-                                    <p className="text-xs text-gray-500">
-                                        {new Date(activity.earnedAt).toLocaleDateString('th-TH', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        })}
-                                    </p>
-                                </div>
-                                <span
-                                    className={`font-bold ${activity.points > 0 ? 'text-green-600' : 'text-red-600'
-                                        }`}
+                        {recentActivity.length > 0 ? (
+                            recentActivity.map((activity) => (
+                                <div
+                                    key={activity.id}
+                                    className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
                                 >
-                                    {activity.points > 0 ? '+' : ''}
-                                    {activity.points} XP
-                                </span>
-                            </div>
-                        ))}
+                                    <div>
+                                        <p className="font-medium">{activity.description}</p>
+                                        <p className="text-xs text-gray-500">
+                                            {new Date(activity.earnedAt).toLocaleDateString('th-TH', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            })}
+                                        </p>
+                                    </div>
+                                    <span
+                                        className={`font-bold ${activity.points > 0 ? 'text-green-600' : 'text-red-600'
+                                            }`}
+                                    >
+                                        {activity.points > 0 ? '+' : ''}
+                                        {activity.points} Points
+                                    </span>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-gray-500 text-center py-4">ยังไม่มีกิจกรรม</p>
+                        )}
                     </div>
                 </div>
             </main>

@@ -40,7 +40,7 @@ export async function GET() {
 
 export async function DELETE() {
     try {
-        await lineClient.deleteDefaultRichMenu();
+        await lineClient.cancelDefaultRichMenu();
         return NextResponse.json({
             success: true,
             message: "Default rich menu removed",

@@ -1,5 +1,5 @@
-import { prisma } from '@/lib/prisma'
-import { GameStatus } from '@prisma/client'
+import prisma from '@/lib/db/prisma'
+import { GameType } from '@prisma/client'
 
 // ==================== GAME TYPES ====================
 
@@ -35,7 +35,7 @@ export type GameTypeId = keyof typeof GAME_TYPES
 export interface GameSessionData {
     id: string
     gameType: string
-    status: GameStatus
+    status: string
     currentQuestion: number
     totalQuestions: number
     correctCount: number
@@ -50,36 +50,40 @@ export async function createGameSession(
     totalQuestions: number,
     savedState?: Record<string, unknown>
 ): Promise<GameSessionData> {
-    const session = await prisma.gameSession.create({
+    const session = await prisma.languageGameSession.create({
         data: {
-            userId,
-            gameType,
-            totalQuestions,
-            answeredQuestions: [],
-            savedState: (savedState || {}) as object,
+            odUserId: userId,
+            gameType: gameType as GameType,
+            questions: [],
+            answers: [],
+            currentIndex: 0,
+            isCompleted: false,
+            correctCount: 0,
+            totalCount: totalQuestions,
+            pointsEarned: 0,
         },
     })
 
     return {
         id: session.id,
         gameType: session.gameType,
-        status: session.status,
-        currentQuestion: session.currentQuestion,
-        totalQuestions: session.totalQuestions,
+        status: session.isCompleted ? 'COMPLETED' : 'ACTIVE',
+        currentQuestion: session.currentIndex,
+        totalQuestions: session.totalCount,
         correctCount: session.correctCount,
         pointsEarned: session.pointsEarned,
         startedAt: session.startedAt,
-        lastActivityAt: session.lastActivityAt,
+        lastActivityAt: session.startedAt,
     }
 }
 
 export async function getActiveSession(userId: string): Promise<GameSessionData | null> {
-    const session = await prisma.gameSession.findFirst({
+    const session = await prisma.languageGameSession.findFirst({
         where: {
-            userId,
-            status: { in: ['ACTIVE', 'PAUSED'] },
+            odUserId: userId,
+            isCompleted: false,
         },
-        orderBy: { lastActivityAt: 'desc' },
+        orderBy: { startedAt: 'desc' },
     })
 
     if (!session) return null
@@ -87,13 +91,13 @@ export async function getActiveSession(userId: string): Promise<GameSessionData 
     return {
         id: session.id,
         gameType: session.gameType,
-        status: session.status,
-        currentQuestion: session.currentQuestion,
-        totalQuestions: session.totalQuestions,
+        status: session.isCompleted ? 'COMPLETED' : 'ACTIVE',
+        currentQuestion: session.currentIndex,
+        totalQuestions: session.totalCount,
         correctCount: session.correctCount,
         pointsEarned: session.pointsEarned,
         startedAt: session.startedAt,
-        lastActivityAt: session.lastActivityAt,
+        lastActivityAt: session.startedAt,
     }
 }
 
@@ -103,32 +107,30 @@ export async function updateGameSession(
         currentQuestion?: number
         correctCount?: number
         pointsEarned?: number
-        status?: GameStatus
+        status?: string
         savedState?: Record<string, unknown>
         answeredQuestion?: { questionIndex: number; answer: string; correct: boolean }
     }
 ): Promise<GameSessionData> {
-    const session = await prisma.gameSession.findUnique({
+    const session = await prisma.languageGameSession.findUnique({
         where: { id: sessionId },
     })
 
     if (!session) throw new Error('Session not found')
 
-    const answeredQuestions = session.answeredQuestions as unknown[]
+    const answers = session.answers as string[]
     if (data.answeredQuestion) {
-        answeredQuestions.push(data.answeredQuestion)
+        answers.push(data.answeredQuestion.answer)
     }
 
-    const updated = await prisma.gameSession.update({
+    const updated = await prisma.languageGameSession.update({
         where: { id: sessionId },
         data: {
-            currentQuestion: data.currentQuestion ?? session.currentQuestion,
+            currentIndex: data.currentQuestion ?? session.currentIndex,
             correctCount: data.correctCount ?? session.correctCount,
             pointsEarned: data.pointsEarned ?? session.pointsEarned,
-            status: data.status ?? session.status,
-            savedState: (data.savedState ?? session.savedState ?? {}) as object,
-            answeredQuestions: answeredQuestions as object[],
-            lastActivityAt: new Date(),
+            isCompleted: data.status === 'COMPLETED' ? true : session.isCompleted,
+            answers: answers,
             ...(data.status === 'COMPLETED' && { completedAt: new Date() }),
         },
     })
@@ -136,77 +138,58 @@ export async function updateGameSession(
     return {
         id: updated.id,
         gameType: updated.gameType,
-        status: updated.status,
-        currentQuestion: updated.currentQuestion,
-        totalQuestions: updated.totalQuestions,
+        status: updated.isCompleted ? 'COMPLETED' : 'ACTIVE',
+        currentQuestion: updated.currentIndex,
+        totalQuestions: updated.totalCount,
         correctCount: updated.correctCount,
         pointsEarned: updated.pointsEarned,
         startedAt: updated.startedAt,
-        lastActivityAt: updated.lastActivityAt,
+        lastActivityAt: updated.startedAt,
     }
 }
 
 export async function pauseSession(sessionId: string): Promise<void> {
-    await prisma.gameSession.update({
-        where: { id: sessionId },
-        data: {
-            status: 'PAUSED',
-            pausedAt: new Date(),
-        },
-    })
+    // LanguageGameSession doesn't have pause functionality
+    // This is a stub for compatibility
+    console.log('Pause session called for:', sessionId)
 }
 
 export async function resumeSession(sessionId: string): Promise<GameSessionData> {
-    const session = await prisma.gameSession.findUnique({
+    const session = await prisma.languageGameSession.findUnique({
         where: { id: sessionId },
     })
 
-    if (!session || session.status !== 'PAUSED') {
+    if (!session || session.isCompleted) {
         throw new Error('Cannot resume session')
     }
 
-    // Calculate paused time
-    const pausedDuration = session.pausedAt
-        ? Math.floor((new Date().getTime() - session.pausedAt.getTime()) / 1000)
-        : 0
-
-    const updated = await prisma.gameSession.update({
-        where: { id: sessionId },
-        data: {
-            status: 'ACTIVE',
-            pausedAt: null,
-            totalPausedSec: session.totalPausedSec + pausedDuration,
-            lastActivityAt: new Date(),
-        },
-    })
-
     return {
-        id: updated.id,
-        gameType: updated.gameType,
-        status: updated.status,
-        currentQuestion: updated.currentQuestion,
-        totalQuestions: updated.totalQuestions,
-        correctCount: updated.correctCount,
-        pointsEarned: updated.pointsEarned,
-        startedAt: updated.startedAt,
-        lastActivityAt: updated.lastActivityAt,
+        id: session.id,
+        gameType: session.gameType,
+        status: session.isCompleted ? 'COMPLETED' : 'ACTIVE',
+        currentQuestion: session.currentIndex,
+        totalQuestions: session.totalCount,
+        correctCount: session.correctCount,
+        pointsEarned: session.pointsEarned,
+        startedAt: session.startedAt,
+        lastActivityAt: session.startedAt,
     }
 }
 
 export async function abandonSession(sessionId: string): Promise<void> {
-    await prisma.gameSession.update({
+    await prisma.languageGameSession.update({
         where: { id: sessionId },
-        data: { status: 'ABANDONED' },
+        data: { isCompleted: true, completedAt: new Date() },
     })
 }
 
 export async function abandonActiveSessions(userId: string): Promise<void> {
-    await prisma.gameSession.updateMany({
+    await prisma.languageGameSession.updateMany({
         where: {
-            userId,
-            status: { in: ['ACTIVE', 'PAUSED'] }
+            odUserId: userId,
+            isCompleted: false,
         },
-        data: { status: 'ABANDONED' }
+        data: { isCompleted: true, completedAt: new Date() },
     })
 }
 
@@ -223,42 +206,11 @@ export async function checkSessionTimeouts(): Promise<{
     toRemind: string[]
     toAbandon: string[]
 }> {
-    const now = new Date()
-    const pauseThreshold = new Date(now.getTime() - TIMEOUT_CONFIG.inactiveMinutes * 60 * 1000)
-    const remindThreshold = new Date(now.getTime() - TIMEOUT_CONFIG.reminderMinutes * 60 * 1000)
-    const abandonThreshold = new Date(now.getTime() - TIMEOUT_CONFIG.abandonHours * 60 * 60 * 1000)
-
-    // Find sessions to pause
-    const toPause = await prisma.gameSession.findMany({
-        where: {
-            status: 'ACTIVE',
-            lastActivityAt: { lt: pauseThreshold },
-        },
-        select: { id: true },
-    })
-
-    // Find sessions to remind
-    const toRemind = await prisma.gameSession.findMany({
-        where: {
-            status: 'PAUSED',
-            pausedAt: { lt: remindThreshold },
-        },
-        select: { id: true },
-    })
-
-    // Find sessions to abandon
-    const toAbandon = await prisma.gameSession.findMany({
-        where: {
-            status: 'PAUSED',
-            pausedAt: { lt: abandonThreshold },
-        },
-        select: { id: true },
-    })
-
+    // Stub implementation - LanguageGameSession doesn't have pause/timeout features
     return {
-        toPause: toPause.map((s) => s.id),
-        toRemind: toRemind.map((s) => s.id),
-        toAbandon: toAbandon.map((s) => s.id),
+        toPause: [],
+        toRemind: [],
+        toAbandon: [],
     }
 }
 

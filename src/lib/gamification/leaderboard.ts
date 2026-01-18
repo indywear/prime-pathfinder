@@ -1,6 +1,4 @@
-import { prisma } from '@/lib/prisma'
-
-// ==================== LEADERBOARD TYPES ====================
+import prisma from '@/lib/db/prisma'
 
 export type LeaderboardType = 'WEEKLY' | 'MONTHLY' | 'ALL_TIME' | 'CLASS' | 'FRIENDS'
 
@@ -10,112 +8,15 @@ export interface LeaderboardEntry {
     userName: string
     points: number
     level: number
-    streak: number
-    avatar?: string
 }
-
-// ==================== LEADERBOARD FUNCTIONS ====================
 
 export async function getLeaderboard(
     type: LeaderboardType,
     limit: number = 10,
-    userId?: string,
-    classId?: string
+    userId?: string
 ): Promise<{ entries: LeaderboardEntry[]; userRank?: LeaderboardEntry }> {
-    let dateFilter: Date | undefined
-    const now = new Date()
-
-    // Set date filter based on type
-    switch (type) {
-        case 'WEEKLY':
-            dateFilter = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-            break
-        case 'MONTHLY':
-            dateFilter = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-            break
-        case 'ALL_TIME':
-        default:
-            dateFilter = undefined
-    }
-
-    // For weekly/monthly, we sum points from pointLogs
-    if (dateFilter) {
-        const pointsByUser = await prisma.pointLog.groupBy({
-            by: ['userId'],
-            _sum: { points: true },
-            where: {
-                earnedAt: { gte: dateFilter },
-            },
-            orderBy: { _sum: { points: 'desc' } },
-            take: limit,
-        })
-
-        const userIds = pointsByUser.map((p) => p.userId)
-        const users = await prisma.user.findMany({
-            where: { id: { in: userIds } },
-            select: {
-                id: true,
-                thaiName: true,
-                currentLevel: true,
-                streak: true,
-            },
-        })
-
-        const userMap = new Map(users.map((u) => [u.id, u]))
-
-        const entries: LeaderboardEntry[] = pointsByUser.map((p, index) => {
-            const user = userMap.get(p.userId)
-            return {
-                rank: index + 1,
-                userId: p.userId,
-                userName: user?.thaiName || 'Unknown',
-                points: p._sum.points || 0,
-                level: user?.currentLevel || 1,
-                streak: user?.streak || 0,
-            }
-        })
-
-        // Get user's rank if not in top
-        let userRank: LeaderboardEntry | undefined
-        if (userId && !entries.some((e) => e.userId === userId)) {
-            const userPoints = await prisma.pointLog.aggregate({
-                _sum: { points: true },
-                where: {
-                    userId,
-                    earnedAt: { gte: dateFilter },
-                },
-            })
-
-            const higherCount = await prisma.$queryRaw<{ count: bigint }[]>`
-        SELECT COUNT(DISTINCT "userId") as count
-        FROM "PointLog"
-        WHERE "earnedAt" >= ${dateFilter}
-        GROUP BY "userId"
-        HAVING SUM(points) > ${userPoints._sum.points || 0}
-      `
-
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: { thaiName: true, currentLevel: true, streak: true },
-            })
-
-            if (user) {
-                userRank = {
-                    rank: Number(higherCount[0]?.count || 0) + 1,
-                    userId,
-                    userName: user.thaiName || 'You',
-                    points: userPoints._sum.points || 0,
-                    level: user.currentLevel,
-                    streak: user.streak,
-                }
-            }
-        }
-
-        return { entries, userRank }
-    }
-
-    // For ALL_TIME, use totalPoints
     const topUsers = await prisma.user.findMany({
+        where: { isRegistered: true },
         orderBy: { totalPoints: 'desc' },
         take: limit,
         select: {
@@ -123,7 +24,6 @@ export async function getLeaderboard(
             thaiName: true,
             totalPoints: true,
             currentLevel: true,
-            streak: true,
         },
     })
 
@@ -133,20 +33,21 @@ export async function getLeaderboard(
         userName: user.thaiName || 'Unknown',
         points: user.totalPoints,
         level: user.currentLevel,
-        streak: user.streak,
     }))
 
-    // Get user's rank
     let userRank: LeaderboardEntry | undefined
     if (userId && !entries.some((e) => e.userId === userId)) {
         const user = await prisma.user.findUnique({
             where: { id: userId },
-            select: { thaiName: true, totalPoints: true, currentLevel: true, streak: true },
+            select: { thaiName: true, totalPoints: true, currentLevel: true },
         })
 
         if (user) {
             const higherCount = await prisma.user.count({
-                where: { totalPoints: { gt: user.totalPoints } },
+                where: { 
+                    isRegistered: true,
+                    totalPoints: { gt: user.totalPoints } 
+                },
             })
 
             userRank = {
@@ -155,15 +56,12 @@ export async function getLeaderboard(
                 userName: user.thaiName || 'You',
                 points: user.totalPoints,
                 level: user.currentLevel,
-                streak: user.streak,
             }
         }
     }
 
     return { entries, userRank }
 }
-
-// ==================== LEADERBOARD FLEX MESSAGE ====================
 
 export function createLeaderboardFlex(
     type: LeaderboardType,
@@ -215,7 +113,7 @@ export function createLeaderboardFlex(
         margin: 'md' as const,
     }))
 
-    const contents: any = {
+    const contents: Record<string, unknown> = {
         type: 'bubble' as const,
         header: {
             type: 'box' as const,
@@ -239,7 +137,6 @@ export function createLeaderboardFlex(
         },
     }
 
-    // Add user's rank if not in top 10
     if (userRank && userRank.rank > 10) {
         contents.footer = {
             type: 'box' as const,

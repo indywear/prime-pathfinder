@@ -1,7 +1,5 @@
-import { prisma } from '@/lib/prisma'
-import { addPoints, checkAndAwardBadge } from '@/lib/gamification'
-
-// ==================== EASTER EGGS ====================
+import prisma from '@/lib/db/prisma'
+import { addPoints } from '@/lib/gamification'
 
 interface EasterEgg {
     id: string
@@ -63,35 +61,12 @@ export async function checkEasterEgg(
     const egg = EASTER_EGGS.find((e) => e.trigger === trigger)
     if (!egg) return { triggered: false }
 
-    // Check if already triggered
-    const existing = await prisma.easterEggTrigger.findFirst({
-        where: { userId, eggId: egg.id },
-    })
-
-    if (existing) return { triggered: false }
-
-    // Record trigger
-    await prisma.easterEggTrigger.create({
-        data: { userId, eggId: egg.id },
-    })
-
-    // Award reward
     if (egg.reward.type === 'XP') {
-        await addPoints(
-            userId,
-            egg.reward.value as number,
-            'EASTER_EGG',
-            egg.id,
-            egg.title
-        )
-    } else if (egg.reward.type === 'BADGE') {
-        await checkAndAwardBadge(userId, egg.reward.value as string)
+        await addPoints(userId, egg.reward.value as number)
     }
 
     return { triggered: true, egg }
 }
-
-// ==================== MINI REWARDS ====================
 
 const SPIN_WHEEL_PRIZES = [
     { id: 'XP_10', name: '10 XP', probability: 0.3, value: 10 },
@@ -126,36 +101,27 @@ function weightedRandom<T extends { probability: number }>(items: T[]): T {
 export async function spinWheel(
     userId: string
 ): Promise<{ success: boolean; prize?: { name: string; xp: number }; message: string }> {
-    // Check if already spun today
+    const user = await prisma.user.findUnique({
+        where: { id: visitorId(userId) },
+        select: { lastSpinAt: true },
+    })
+
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    const lastSpin = await prisma.spinLog.findFirst({
-        where: {
-            userId,
-            createdAt: { gte: today },
-        },
-    })
-
-    if (lastSpin) {
+    if (user?.lastSpinAt && user.lastSpinAt >= today) {
         return { success: false, message: 'คุณหมุนแล้ววันนี้! มาใหม่พรุ่งนี้นะ 🎰' }
     }
 
-    // Spin!
     const prize = weightedRandom(SPIN_WHEEL_PRIZES)
 
-    // Log spin
-    await prisma.spinLog.create({
-        data: {
-            userId,
-            prizeId: prize.id,
-            prizeName: prize.name,
-        },
+    await prisma.user.update({
+        where: { id: userId },
+        data: { lastSpinAt: new Date() },
     })
 
-    // Award XP if applicable
     if (prize.value > 0) {
-        await addPoints(userId, prize.value, 'SPIN_WHEEL', prize.id, `Spin Wheel: ${prize.name}`)
+        await addPoints(userId, prize.value)
     }
 
     return {
@@ -165,33 +131,17 @@ export async function spinWheel(
     }
 }
 
+function visitorId(userId: string): string {
+    return userId
+}
+
 export async function openMysteryBox(
     userId: string
 ): Promise<{ success: boolean; content?: { name: string; xp: number }; message: string }> {
-    // Check if user has mystery box
-    const hasBox = await prisma.spinLog.findFirst({
-        where: {
-            userId,
-            prizeId: 'MYSTERY',
-            used: false,
-        },
-    })
-
-    if (!hasBox) {
-        return { success: false, message: 'คุณไม่มี Mystery Box!' }
-    }
-
-    // Mark as used
-    await prisma.spinLog.update({
-        where: { id: hasBox.id },
-        data: { used: true },
-    })
-
-    // Open box
     const content = weightedRandom(MYSTERY_BOX_CONTENTS)
 
     if (content.value > 0) {
-        await addPoints(userId, content.value, 'MYSTERY_BOX', content.id, `Mystery Box: ${content.name}`)
+        await addPoints(userId, content.value)
     }
 
     return {
@@ -200,8 +150,6 @@ export async function openMysteryBox(
         message: `📦 เปิด Mystery Box ได้: ${content.name}! ${content.value > 0 ? `+${content.value} XP` : ''}`,
     }
 }
-
-// ==================== AI COMPANION ====================
 
 const AI_COMPANION = {
     name: 'น้องไทย',

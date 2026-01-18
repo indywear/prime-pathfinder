@@ -1,7 +1,6 @@
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/db/prisma'
 
 export default async function AnalyticsPage() {
-    // Fetch comprehensive analytics
     const [
         totalUsers,
         activeUsers7days,
@@ -12,12 +11,13 @@ export default async function AnalyticsPage() {
         thaiLevelDistribution,
         recentSubmissions,
         topPerformers,
-        engagementMetrics,
+        feedbackCount,
+        practiceCount,
     ] = await Promise.all([
         prisma.user.count(),
         prisma.user.count({
             where: {
-                lastActiveAt: {
+                updatedAt: {
                     gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
                 },
             },
@@ -58,14 +58,9 @@ export default async function AnalyticsPage() {
                 _count: { select: { submissions: true } },
             },
         }),
-        Promise.all([
-            prisma.feedbackRequest.count(),
-            prisma.practiceSession.count(),
-            prisma.pointLog.count(),
-        ]),
+        prisma.feedbackRequest.count(),
+        prisma.practiceSession.count(),
     ])
-
-    const [feedbackCount, practiceCount, pointLogCount] = engagementMetrics
 
     return (
         <div className="space-y-8">
@@ -74,7 +69,6 @@ export default async function AnalyticsPage() {
                 <p className="mt-2 text-gray-600">Comprehensive learning metrics for research</p>
             </div>
 
-            {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="bg-white rounded-xl p-6 border border-gray-200">
                     <p className="text-sm font-medium text-gray-600">Total Users</p>
@@ -106,13 +100,11 @@ export default async function AnalyticsPage() {
                 </div>
             </div>
 
-            {/* Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Nationality Distribution */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <h2 className="text-xl font-bold text-gray-900 mb-4">Nationality Distribution</h2>
                     <div className="space-y-3">
-                        {nationalityDistribution.map((item) => (
+                        {nationalityDistribution.map((item: { nationality: string | null; _count: { nationality: number } }) => (
                             <div key={item.nationality || 'unknown'} className="flex items-center gap-4">
                                 <span className="text-sm font-medium text-gray-600 w-24">
                                     {item.nationality || 'Unknown'}
@@ -135,11 +127,10 @@ export default async function AnalyticsPage() {
                     </div>
                 </div>
 
-                {/* Level Distribution */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <h2 className="text-xl font-bold text-gray-900 mb-4">Level Distribution</h2>
                     <div className="space-y-3">
-                        {levelDistribution.map((item) => (
+                        {levelDistribution.map((item: { currentLevel: number; _count: { currentLevel: number } }) => (
                             <div key={item.currentLevel} className="flex items-center gap-4">
                                 <span className="text-sm font-medium text-gray-600 w-16">
                                     Level {item.currentLevel}
@@ -162,11 +153,10 @@ export default async function AnalyticsPage() {
                     </div>
                 </div>
 
-                {/* Thai Level Distribution */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <h2 className="text-xl font-bold text-gray-900 mb-4">Initial Thai Level</h2>
                     <div className="space-y-3">
-                        {thaiLevelDistribution.map((item) => (
+                        {thaiLevelDistribution.map((item: { thaiLevel: string; _count: { thaiLevel: number } }) => (
                             <div key={item.thaiLevel} className="flex items-center gap-4">
                                 <span className="text-sm font-medium text-gray-600 w-32">
                                     {item.thaiLevel}
@@ -189,11 +179,10 @@ export default async function AnalyticsPage() {
                     </div>
                 </div>
 
-                {/* Top Performers */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <h2 className="text-xl font-bold text-gray-900 mb-4">Top Performers</h2>
                     <div className="space-y-3">
-                        {topPerformers.map((user, index) => (
+                        {topPerformers.map((user: { id: string; thaiName: string | null; nationality: string | null; currentLevel: number; totalPoints: number; _count: { submissions: number } }, index: number) => (
                             <div
                                 key={user.id}
                                 className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
@@ -203,7 +192,7 @@ export default async function AnalyticsPage() {
                                     <div>
                                         <p className="font-medium text-gray-900">{user.thaiName}</p>
                                         <p className="text-xs text-gray-500">
-                                            {user.nationality} • Level {user.currentLevel}
+                                            {user.nationality} - Level {user.currentLevel}
                                         </p>
                                     </div>
                                 </div>
@@ -217,7 +206,6 @@ export default async function AnalyticsPage() {
                 </div>
             </div>
 
-            {/* Recent Activity */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Submissions</h2>
                 <div className="overflow-x-auto">
@@ -239,7 +227,7 @@ export default async function AnalyticsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {recentSubmissions.map((submission) => (
+                            {recentSubmissions.map((submission: { id: string; user: { thaiName: string | null }; task: { title: string }; totalScore: number; submittedAt: Date }) => (
                                 <tr key={submission.id}>
                                     <td className="px-4 py-3 text-sm">{submission.user.thaiName}</td>
                                     <td className="px-4 py-3 text-sm">{submission.task.title}</td>

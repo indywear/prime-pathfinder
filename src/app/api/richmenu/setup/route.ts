@@ -50,7 +50,8 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
-        const richMenuId = await lineClient.createRichMenu(RICH_MENU_TEMPLATE);
+        const richMenuResult = await lineClient.createRichMenu(RICH_MENU_TEMPLATE);
+        const richMenuId = richMenuResult.richMenuId;
         console.log("Created Rich Menu:", richMenuId);
 
         const imageResponse = await fetch(imageUrl);

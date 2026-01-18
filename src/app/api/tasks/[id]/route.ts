@@ -10,14 +10,12 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     try {
         const { id } = await params
 
-        const task = await prisma.weeklyTask.findUnique({
+        const task = await prisma.task.findUnique({
             where: { id },
             include: {
                 _count: {
                     select: {
                         submissions: true,
-                        feedbackRequests: true,
-                        readingSessions: true,
                     },
                 },
             },
@@ -40,18 +38,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         const { id } = await params
         const data = await request.json()
 
-        const task = await prisma.weeklyTask.update({
+        const task = await prisma.task.update({
             where: { id },
             data: {
                 ...(data.title && { title: data.title }),
                 ...(data.description && { description: data.description }),
-                ...(data.contentHtml && { contentHtml: data.contentHtml }),
+                ...(data.contentUrl && { contentUrl: data.contentUrl }),
                 ...(data.minWords && { minWords: data.minWords }),
                 ...(data.maxWords && { maxWords: data.maxWords }),
-                ...(data.startDate && { startDate: new Date(data.startDate) }),
                 ...(data.deadline && { deadline: new Date(data.deadline) }),
                 ...(data.isActive !== undefined && { isActive: data.isActive }),
-                ...(data.rubrics && { rubrics: data.rubrics }),
+                ...(data.rubric && { rubric: data.rubric }),
             },
         })
 
@@ -68,7 +65,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
         const { id } = await params
 
         // Soft delete by setting isActive to false
-        const task = await prisma.weeklyTask.update({
+        const task = await prisma.task.update({
             where: { id },
             data: { isActive: false },
         })

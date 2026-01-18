@@ -1,22 +1,20 @@
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/db/prisma'
 
 export default async function AdminDashboard() {
-    // Get statistics
     const [userCount, taskCount, submissionCount, avgScore, activeToday] = await Promise.all([
         prisma.user.count(),
-        prisma.weeklyTask.count({ where: { isActive: true } }),
+        prisma.task.count({ where: { isActive: true } }),
         prisma.submission.count(),
         prisma.submission.aggregate({ _avg: { totalScore: true } }),
         prisma.user.count({
             where: {
-                lastActiveAt: {
+                updatedAt: {
                     gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
                 },
             },
         }),
     ])
 
-    // Get recent submissions
     const recentSubmissions = await prisma.submission.findMany({
         take: 5,
         orderBy: { submittedAt: 'desc' },
@@ -26,7 +24,6 @@ export default async function AdminDashboard() {
         },
     })
 
-    // Get level distribution
     const levelDistribution = await prisma.user.groupBy({
         by: ['currentLevel'],
         _count: { currentLevel: true },
@@ -40,7 +37,6 @@ export default async function AdminDashboard() {
                 <p className="mt-2 text-gray-600">Research metrics and system status</p>
             </div>
 
-            {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="bg-white rounded-xl p-6 border border-gray-200">
                     <div className="flex items-center justify-between">
@@ -94,7 +90,6 @@ export default async function AdminDashboard() {
                 </div>
             </div>
 
-            {/* Recent Activity */}
             <div className="bg-white rounded-xl border border-gray-200">
                 <div className="p-6 border-b border-gray-200">
                     <h2 className="text-xl font-bold text-gray-900">Recent Submissions</h2>
@@ -119,7 +114,6 @@ export default async function AdminDashboard() {
                 </div>
             </div>
 
-            {/* Level Distribution */}
             <div className="bg-white rounded-xl border border-gray-200">
                 <div className="p-6 border-b border-gray-200">
                     <h2 className="text-xl font-bold text-gray-900">Level Distribution</h2>
