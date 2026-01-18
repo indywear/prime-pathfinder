@@ -1,0 +1,116 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+
+interface GameConfig {
+    id: string
+    gameType: string
+    displayName: string
+    isEnabled: boolean
+    difficulty: number
+    pointMultiplier: number
+}
+
+export default function AdminGamesClient() {
+    const [games, setGames] = useState<GameConfig[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetchGames()
+    }, [])
+
+    const fetchGames = async () => {
+        try {
+            const res = await fetch('/api/admin/games')
+            const data = await res.json()
+            setGames(data.games || [])
+        } catch (error) {
+            console.error('Failed to fetch games:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const toggleGame = async (gameType: string, currentState: boolean) => {
+        try {
+            const res = await fetch('/api/admin/games', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gameType, isEnabled: !currentState })
+            })
+
+            if (res.ok) {
+                setGames(games.map(g =>
+                    g.gameType === gameType ? { ...g, isEnabled: !currentState } : g
+                ))
+            }
+        } catch (error) {
+            console.error('Failed to toggle game:', error)
+        }
+    }
+
+    if (loading) {
+        return <div className="text-center py-8 text-gray-500">Loading...</div>
+    }
+
+    return (
+        <div className="space-y-8">
+            <div>
+                <h1 className="text-3xl font-bold text-gray-900">Game Management</h1>
+                <p className="mt-2 text-gray-600">เปิด/ปิดเกมแต่ละประเภท</p>
+            </div>
+
+            {/* Game Configs */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="p-6 border-b border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-900">เกมทั้งหมด</h2>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                                <th className="px-6 py-3 text-sm font-semibold text-gray-900">ชื่อเกม</th>
+                                <th className="px-6 py-3 text-sm font-semibold text-gray-900">ประเภท</th>
+                                <th className="px-6 py-3 text-sm font-semibold text-gray-900">ระดับความยาก</th>
+                                <th className="px-6 py-3 text-sm font-semibold text-gray-900">คูณแต้ม</th>
+                                <th className="px-6 py-3 text-sm font-semibold text-gray-900">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {games.map((game) => (
+                                <tr key={game.gameType} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 text-sm text-gray-900 font-medium">{game.displayName}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-600 font-mono">{game.gameType}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${game.difficulty === 1 ? 'bg-green-100 text-green-800' :
+                                                game.difficulty === 2 ? 'bg-yellow-100 text-yellow-800' :
+                                                    'bg-red-100 text-red-800'
+                                            }`}>
+                                            {game.difficulty === 1 ? 'ง่าย' : game.difficulty === 2 ? 'กลาง' : 'ยาก'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">x{game.pointMultiplier}</td>
+                                    <td className="px-6 py-4">
+                                        <button
+                                            onClick={() => toggleGame(game.gameType, game.isEnabled)}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${game.isEnabled ? 'bg-indigo-600' : 'bg-gray-200'
+                                                }`}
+                                        >
+                                            <span
+                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${game.isEnabled ? 'translate-x-6' : 'translate-x-1'
+                                                    }`}
+                                            />
+                                        </button>
+                                        <span className={`ml-3 text-sm font-medium ${game.isEnabled ? 'text-green-600' : 'text-gray-400'}`}>
+                                            {game.isEnabled ? 'เปิด' : 'ปิด'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    )
+}
