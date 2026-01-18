@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2500 1686">
+  <defs>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4CAF50;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2E7D32;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="2500" height="1686" fill="#F5F5F5"/>
+  
+  <!-- Grid lines -->
+  <line x1="833" y1="0" x2="833" y2="1686" stroke="#E0E0E0" stroke-width="2"/>
+  <line x1="1667" y1="0" x2="1667" y2="1686" stroke="#E0E0E0" stroke-width="2"/>
+  <line x1="0" y1="843" x2="2500" y2="843" stroke="#E0E0E0" stroke-width="2"/>
+  
+  <!-- Box 1: ส่งงาน -->
+  <rect x="50" y="50" width="733" height="743" rx="40" fill="url(#greenGrad)"/>
+  <text x="416" y="380" text-anchor="middle" fill="white" font-size="120" font-weight="bold" font-family="sans-serif">📝</text>
+  <text x="416" y="520" text-anchor="middle" fill="white" font-size="80" font-weight="bold" font-family="sans-serif">ส่งงาน</text>
+  <text x="416" y="620" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="48" font-family="sans-serif">Submit</text>
+  
+  <!-- Box 2: ขอผลป้อนกลับ -->
+  <rect x="883" y="50" width="733" height="743" rx="40" fill="#2196F3"/>
+  <text x="1250" y="380" text-anchor="middle" fill="white" font-size="120" font-weight="bold" font-family="sans-serif">💬</text>
+  <text x="1250" y="520" text-anchor="middle" fill="white" font-size="70" font-weight="bold" font-family="sans-serif">ผลป้อนกลับ</text>
+  <text x="1250" y="620" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="48" font-family="sans-serif">Feedback</text>
+  
+  <!-- Box 3: เกม -->
+  <rect x="1717" y="50" width="733" height="743" rx="40" fill="#FF9800"/>
+  <text x="2083" y="380" text-anchor="middle" fill="white" font-size="120" font-weight="bold" font-family="sans-serif">🎮</text>
+  <text x="2083" y="520" text-anchor="middle" fill="white" font-size="80" font-weight="bold" font-family="sans-serif">เกม</text>
+  <text x="2083" y="620" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="48" font-family="sans-serif">Games</text>
+  
+  <!-- Box 4: แดชบอร์ด -->
+  <rect x="50" y="893" width="733" height="743" rx="40" fill="#9C27B0"/>
+  <text x="416" y="1223" text-anchor="middle" fill="white" font-size="120" font-weight="bold" font-family="sans-serif">📊</text>
+  <text x="416" y="1363" text-anchor="middle" fill="white" font-size="70" font-weight="bold" font-family="sans-serif">แดชบอร์ด</text>
+  <text x="416" y="1463" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="48" font-family="sans-serif">Dashboard</text>
+  
+  <!-- Box 5: ข้อมูลส่วนตัว -->
+  <rect x="883" y="893" width="733" height="743" rx="40" fill="#607D8B"/>
+  <text x="1250" y="1223" text-anchor="middle" fill="white" font-size="120" font-weight="bold" font-family="sans-serif">👤</text>
+  <text x="1250" y="1363" text-anchor="middle" fill="white" font-size="60" font-weight="bold" font-family="sans-serif">ข้อมูลส่วนตัว</text>
+  <text x="1250" y="1463" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="48" font-family="sans-serif">Profile</text>
+  
+  <!-- Box 6: เมนู -->
+  <rect x="1717" y="893" width="733" height="743" rx="40" fill="#795548"/>
+  <text x="2083" y="1223" text-anchor="middle" fill="white" font-size="120" font-weight="bold" font-family="sans-serif">📌</text>
+  <text x="2083" y="1363" text-anchor="middle" fill="white" font-size="80" font-weight="bold" font-family="sans-serif">เมนู</text>
+  <text x="2083" y="1463" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="48" font-family="sans-serif">Help</text>
+</svg>
