@@ -67,6 +67,7 @@ const MENU_KEYWORDS = {
     FILL_BLANK_GAME: ["เติมคำ", "fill blank", "fillblank", "เติมช่องว่าง"],
     WORD_ORDER_GAME: ["เรียงคำ", "word order", "เรียงประโยค"],
     SENTENCE_GAME: ["แต่งประโยค", "sentence", "แต่ง"],
+    SHOW_ANSWER: ["เฉลย", "ดูเฉลย", "คำตอบ", "answer"],
 };
 
 function detectMenuAction(text: string): string | null {
@@ -154,6 +155,9 @@ export async function handleTextMessage(
                 break;
             case "SENTENCE_GAME":
                 await handleSentenceGameStart(event.replyToken, userId);
+                break;
+            case "SHOW_ANSWER":
+                await handleShowAnswer(event.replyToken, userId);
                 break;
         }
         return;
@@ -441,6 +445,11 @@ async function handleVocabGameStart(replyToken: string, userId: string) {
         return;
     }
 
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: { currentGameType: "VOCAB", currentQuestionId: question.id },
+    });
+
     const vocabFlex = createVocabGameFlex({
         chineseWord: question.chineseWord,
         category: question.category || "ทั่วไป",
@@ -471,6 +480,11 @@ async function handleFillBlankGameStart(replyToken: string, userId: string) {
         return;
     }
 
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: { currentGameType: "FILL_BLANK", currentQuestionId: question.id },
+    });
+
     const fillBlankFlex = createFillBlankGameFlex({
         sentence: question.sentence,
         questionNumber: randomIndex + 1,
@@ -499,6 +513,11 @@ async function handleWordOrderGameStart(replyToken: string, userId: string) {
         await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
         return;
     }
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: { currentGameType: "WORD_ORDER", currentQuestionId: question.id },
+    });
 
     const words = question.shuffledWords as { number: number; word: string }[];
     const wordOrderFlex = createWordOrderGameFlex({
@@ -529,6 +548,11 @@ async function handleSentenceGameStart(replyToken: string, userId: string) {
         await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
         return;
     }
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: { currentGameType: "SENTENCE", currentQuestionId: pair.id },
+    });
 
     const sentenceFlex = createSentenceGameFlex({
         word1: pair.word1,
@@ -655,4 +679,53 @@ async function handleSpinWheel(replyToken: string, userId: string) {
         replyToken,
         messages: [spinFlex] as any,
     });
+}
+
+async function handleShowAnswer(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.currentGameType || !user?.currentQuestionId) {
+        await replyText(replyToken, "กรุณาเริ่มเล่นเกมก่อนครับ\n\nพิมพ์ \"เกม\" เพื่อเลือกเกม");
+        return;
+    }
+
+    let answerText = "";
+
+    switch (user.currentGameType) {
+        case "VOCAB":
+            const vocab = await prisma.chineseVocabulary.findUnique({
+                where: { id: user.currentQuestionId },
+            });
+            if (vocab) {
+                answerText = `💡 เฉลย\n\n${vocab.chineseWord} = ${vocab.thaiMeaning}`;
+            }
+            break;
+
+        case "FILL_BLANK":
+            const fillBlank = await prisma.fillBlankQuestion.findUnique({
+                where: { id: user.currentQuestionId },
+            });
+            if (fillBlank) {
+                answerText = `💡 เฉลย\n\nคำตอบ: ${fillBlank.answer}`;
+            }
+            break;
+
+        case "WORD_ORDER":
+            const wordOrder = await prisma.wordOrderQuestion.findUnique({
+                where: { id: user.currentQuestionId },
+            });
+            if (wordOrder) {
+                answerText = `💡 เฉลย\n\nประโยคที่ถูกต้อง:\n${wordOrder.correctAnswer}`;
+            }
+            break;
+
+        case "SENTENCE":
+            answerText = "💡 เกมแต่งประโยค\n\nเกมนี้ไม่มีคำตอบที่ตายตัว\nลองแต่งประโยคของคุณเองโดยใช้คำทั้ง 2 คำที่กำหนดให้ครับ";
+            break;
+
+        default:
+            answerText = "ไม่พบข้อมูลเกมครับ";
+    }
+
+    await replyText(replyToken, answerText || "ไม่พบคำตอบครับ");
 }
