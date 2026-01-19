@@ -5,6 +5,14 @@ import {
     replyWithQuickReply,
     createDashboardFlex,
     createProfileFlex,
+    createMenuFlex,
+    createGameMenuFlex,
+    createLeaderboardFlex,
+    createVocabGameFlex,
+    createFillBlankGameFlex,
+    createWordOrderGameFlex,
+    createSentenceGameFlex,
+    createSpinWheelResultFlex,
     lineClient,
 } from "@/lib/line/client";
 import { generateWritingFeedback, generateConversationResponse, generateSimpleFeedback } from "@/lib/ai/feedback";
@@ -368,29 +376,14 @@ async function handleProfile(replyToken: string, userId: string) {
 async function handleHelp(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
-    const helpMessage = user?.isRegistered
-        ? `สวัสดีครับ คุณ${user.thaiName}! 👋
-
-📌 คำสั่งที่ใช้ได้:
-
-📝 การเรียน:
-• "ส่งงาน" - ส่งภาระงานประจำสัปดาห์
-• "ขอผลป้อนกลับ" - ขอให้ AI ตรวจร่างงานเขียน
-• "ฝึกฝน" - ฝึกคำศัพท์
-
-🎮 เกม:
-• "เกม" - ดูเกมทั้งหมด
-• "คำศัพท์" - เกมคำศัพท์จีน-ไทย
-• "เติมคำ" - เกมเติมคำในช่องว่าง
-• "เรียงคำ" - เกมเรียงคำ
-• "แต่งประโยค" - เกมแต่งประโยค
-
-📊 อื่นๆ:
-• "แดชบอร์ด" - ดูความก้าวหน้า
-• "ข้อมูลส่วนตัว" - ดูข้อมูลของคุณ
-• "อันดับ" - ดู Leaderboard
-• "หมุนวงล้อ" - หมุนวงล้อลุ้นรางวัล`
-        : `ยินดีต้อนรับสู่ ProficienThAI! 👋
+    if (user?.isRegistered) {
+        const menuFlex = createMenuFlex();
+        await lineClient.replyMessage({
+            replyToken,
+            messages: [menuFlex] as any,
+        });
+    } else {
+        await replyText(replyToken, `ยินดีต้อนรับสู่ ProficienThAI! 👋
 
 📌 คำสั่งสำหรับผู้ใช้ใหม่:
 • "ลงทะเบียน" - เริ่มลงทะเบียนใช้งาน
@@ -399,9 +392,8 @@ async function handleHelp(replyToken: string, userId: string) {
 ✅ ส่งงานเขียน
 ✅ ขอผลป้อนกลับจาก AI
 ✅ เล่นเกมฝึกภาษา
-✅ สะสมแต้มและ Badge`;
-
-    await replyText(replyToken, helpMessage);
+✅ สะสมแต้มและ Badge`);
+    }
 }
 
 async function handleGeneralConversation(replyToken: string, userId: string, text: string) {
@@ -424,103 +416,130 @@ async function handleGeneralConversation(replyToken: string, userId: string, tex
 }
 
 async function handleGameMenu(replyToken: string, userId: string) {
-    const menuMessage = `🎮 เลือกเกมที่ต้องการเล่น:
-
-1️⃣ คำศัพท์จีน-ไทย - พิมพ์ "คำศัพท์"
-2️⃣ เติมคำในช่องว่าง - พิมพ์ "เติมคำ"
-3️⃣ เรียงคำเป็นประโยค - พิมพ์ "เรียงคำ"
-4️⃣ แต่งประโยคจากคำที่กำหนด - พิมพ์ "แต่งประโยค"
-
-เลือกเกมได้เลยครับ! 🎯`;
-
-    await replyText(replyToken, menuMessage);
+    const gameMenuFlex = createGameMenuFlex();
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [gameMenuFlex] as any,
+    });
 }
 
 async function handleVocabGameStart(replyToken: string, userId: string) {
-    const vocabs = await prisma.chineseVocabulary.findMany({
-        take: 5,
-        orderBy: { id: 'asc' },
-    });
+    const count = await prisma.chineseVocabulary.count();
 
-    if (vocabs.length === 0) {
-        await replyText(replyToken, "ขออภัย ยังไม่มีคำศัพท์ในระบบ");
+    if (count === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำศัพท์ในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
 
-    const question = vocabs[0];
-    await replyText(replyToken, `🇨🇳 เกมคำศัพท์จีน-ไทย
+    const randomIndex = Math.floor(Math.random() * count);
+    const question = await prisma.chineseVocabulary.findFirst({
+        skip: randomIndex,
+    });
 
-"${question.chineseWord}" ภาษาไทยว่าอะไร?
+    if (!question) {
+        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
+        return;
+    }
 
-💡 เฉลย: ${question.thaiMeaning}
+    const vocabFlex = createVocabGameFlex({
+        chineseWord: question.chineseWord,
+        category: question.category || "ทั่วไป",
+        questionNumber: randomIndex + 1,
+    });
 
-พิมพ์ "คำศัพท์" เพื่อดูคำถัดไป`);
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [vocabFlex] as any,
+    });
 }
 
 async function handleFillBlankGameStart(replyToken: string, userId: string) {
-    const questions = await prisma.fillBlankQuestion.findMany({
-        take: 5,
-        orderBy: { id: 'asc' },
-    });
+    const count = await prisma.fillBlankQuestion.count();
 
-    if (questions.length === 0) {
-        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ");
+    if (count === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
 
-    const question = questions[0];
-    await replyText(replyToken, `📝 เกมเติมคำในช่องว่าง
+    const randomIndex = Math.floor(Math.random() * count);
+    const question = await prisma.fillBlankQuestion.findFirst({
+        skip: randomIndex,
+    });
 
-${question.sentence}
+    if (!question) {
+        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
+        return;
+    }
 
-💡 เฉลย: ${question.answer}
+    const fillBlankFlex = createFillBlankGameFlex({
+        sentence: question.sentence,
+        questionNumber: randomIndex + 1,
+    });
 
-พิมพ์ "เติมคำ" เพื่อดูคำถัดไป`);
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [fillBlankFlex] as any,
+    });
 }
 
 async function handleWordOrderGameStart(replyToken: string, userId: string) {
-    const questions = await prisma.wordOrderQuestion.findMany({
-        take: 5,
-        orderBy: { id: 'asc' },
-    });
+    const count = await prisma.wordOrderQuestion.count();
 
-    if (questions.length === 0) {
-        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ");
+    if (count === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
 
-    const question = questions[0];
+    const randomIndex = Math.floor(Math.random() * count);
+    const question = await prisma.wordOrderQuestion.findFirst({
+        skip: randomIndex,
+    });
+
+    if (!question) {
+        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
+        return;
+    }
+
     const words = question.shuffledWords as { number: number; word: string }[];
-    const wordsDisplay = words.map(w => `${w.number}.${w.word}`).join(' ');
+    const wordOrderFlex = createWordOrderGameFlex({
+        words,
+        questionNumber: randomIndex + 1,
+    });
 
-    await replyText(replyToken, `🔤 เกมเรียงคำ
-
-${wordsDisplay}
-
-💡 เฉลย: ${question.correctAnswer}
-
-พิมพ์ "เรียงคำ" เพื่อดูคำถัดไป`);
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [wordOrderFlex] as any,
+    });
 }
 
 async function handleSentenceGameStart(replyToken: string, userId: string) {
-    const pairs = await prisma.sentenceConstructionPair.findMany({
-        take: 5,
-        orderBy: { id: 'asc' },
-    });
+    const count = await prisma.sentenceConstructionPair.count();
 
-    if (pairs.length === 0) {
-        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ");
+    if (count === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
 
-    const pair = pairs[0];
-    await replyText(replyToken, `✍️ เกมแต่งประโยค
+    const randomIndex = Math.floor(Math.random() * count);
+    const pair = await prisma.sentenceConstructionPair.findFirst({
+        skip: randomIndex,
+    });
 
-แต่งประโยคโดยใช้คำว่า:
-• "${pair.word1}"
-• "${pair.word2}"
+    if (!pair) {
+        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
+        return;
+    }
 
-พิมพ์ "แต่งประโยค" เพื่อดูคำถัดไป`);
+    const sentenceFlex = createSentenceGameFlex({
+        word1: pair.word1,
+        word2: pair.word2,
+        questionNumber: randomIndex + 1,
+    });
+
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [sentenceFlex] as any,
+    });
 }
 
 async function handleLeaderboard(replyToken: string, userId: string) {
@@ -555,22 +574,21 @@ async function handleLeaderboard(replyToken: string, userId: string) {
     });
     const myRank = userRank + 1;
 
-    const medals = ["🥇", "🥈", "🥉"];
-    const leaderboardLines = topUsers.map((u, i) => {
-        const medal = i < 3 ? medals[i] : `${i + 1}.`;
-        const isMe = u.thaiName === user.thaiName ? " (คุณ)" : "";
-        return `${medal} ${u.thaiName}${isMe} - Lv.${u.currentLevel} (${u.totalPoints} pts)`;
+    const leaderboardFlex = createLeaderboardFlex({
+        topUsers: topUsers.map(u => ({
+            thaiName: u.thaiName || "Unknown",
+            totalPoints: u.totalPoints,
+            currentLevel: u.currentLevel,
+        })),
+        myRank,
+        myPoints: user.totalPoints,
+        myLevel: user.currentLevel,
     });
 
-    const leaderboardMessage = `🏆 อันดับนักเรียน Top 10
-
-${leaderboardLines.join("\n")}
-
-📊 อันดับของคุณ: #${myRank}
-⭐ คะแนนของคุณ: ${user.totalPoints} pts
-🎯 Level: ${user.currentLevel}`;
-
-    await replyText(replyToken, leaderboardMessage);
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [leaderboardFlex] as any,
+    });
 }
 
 const SPIN_WHEEL_REWARDS = [
@@ -599,9 +617,7 @@ async function handleSpinWheel(replyToken: string, userId: string) {
         const hoursSinceLastSpin = (now.getTime() - lastSpin.getTime()) / (1000 * 60 * 60);
         if (hoursSinceLastSpin < SPIN_COOLDOWN_HOURS) {
             const hoursRemaining = Math.ceil(SPIN_COOLDOWN_HOURS - hoursSinceLastSpin);
-            await replyText(replyToken, `🎡 หมุนวงล้อได้วันละ 1 ครั้ง
-
-⏰ กรุณารออีก ${hoursRemaining} ชั่วโมง`);
+            await replyText(replyToken, `🎡 หมุนวงล้อได้วันละ 1 ครั้ง\n\n⏰ กรุณารออีก ${hoursRemaining} ชั่วโมง`);
             return;
         }
     }
@@ -626,19 +642,17 @@ async function handleSpinWheel(replyToken: string, userId: string) {
         },
     });
 
-    if (reward.points > 0) {
-        const newTotal = user.totalPoints + reward.points;
-        await replyText(replyToken, `🎡 หมุนวงล้อ... ✨
+    const newTotal = user.totalPoints + reward.points;
 
-🎉 ยินดีด้วย! คุณได้รับ ${reward.name}!
+    const spinFlex = createSpinWheelResultFlex({
+        reward: reward.name,
+        points: reward.points,
+        totalPoints: newTotal,
+        isWin: reward.points > 0,
+    });
 
-💰 คะแนนรวม: ${newTotal} pts
-⏰ หมุนครั้งต่อไปได้ใน ${SPIN_COOLDOWN_HOURS} ชั่วโมง`);
-    } else {
-        await replyText(replyToken, `🎡 หมุนวงล้อ... ✨
-
-😅 ${reward.name}
-
-💪 อย่าเพิ่งท้อนะครับ! โชคดีครั้งหน้า!`);
-    }
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [spinFlex] as any,
+    });
 }

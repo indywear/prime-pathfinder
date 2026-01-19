@@ -303,6 +303,879 @@ function createProfileRow(label: string, value: string) {
     };
 }
 
+export function createMenuFlex(): FlexMessage {
+    return {
+        type: "flex",
+        altText: "เมนูหลัก",
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "ProficienThAI",
+                        weight: "bold",
+                        size: "xl",
+                        color: "#FFFFFF",
+                    },
+                    {
+                        type: "text",
+                        text: "เมนูหลัก",
+                        size: "sm",
+                        color: "#FFFFFF",
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: "#1DB446",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "การเรียน",
+                        weight: "bold",
+                        size: "md",
+                        color: "#1DB446",
+                    },
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            {
+                                type: "button",
+                                action: { type: "message", label: "ส่งงาน", text: "ส่งงาน" },
+                                style: "primary",
+                                color: "#1DB446",
+                                height: "sm",
+                            },
+                            {
+                                type: "button",
+                                action: { type: "message", label: "ขอ Feedback", text: "ขอผลป้อนกลับ" },
+                                style: "secondary",
+                                height: "sm",
+                            },
+                        ],
+                        spacing: "sm",
+                        margin: "md",
+                    },
+                    {
+                        type: "separator",
+                        margin: "xl",
+                    },
+                    {
+                        type: "text",
+                        text: "เกม",
+                        weight: "bold",
+                        size: "md",
+                        color: "#FF6B35",
+                        margin: "xl",
+                    },
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            {
+                                type: "button",
+                                action: { type: "message", label: "คำศัพท์", text: "คำศัพท์" },
+                                style: "primary",
+                                color: "#FF6B35",
+                                height: "sm",
+                            },
+                            {
+                                type: "button",
+                                action: { type: "message", label: "เติมคำ", text: "เติมคำ" },
+                                style: "primary",
+                                color: "#FF6B35",
+                                height: "sm",
+                            },
+                        ],
+                        spacing: "sm",
+                        margin: "md",
+                    },
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            {
+                                type: "button",
+                                action: { type: "message", label: "เรียงคำ", text: "เรียงคำ" },
+                                style: "primary",
+                                color: "#FF6B35",
+                                height: "sm",
+                            },
+                            {
+                                type: "button",
+                                action: { type: "message", label: "แต่งประโยค", text: "แต่งประโยค" },
+                                style: "primary",
+                                color: "#FF6B35",
+                                height: "sm",
+                            },
+                        ],
+                        spacing: "sm",
+                        margin: "sm",
+                    },
+                    {
+                        type: "separator",
+                        margin: "xl",
+                    },
+                    {
+                        type: "text",
+                        text: "อื่นๆ",
+                        weight: "bold",
+                        size: "md",
+                        color: "#5B5BFF",
+                        margin: "xl",
+                    },
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            {
+                                type: "button",
+                                action: { type: "message", label: "แดชบอร์ด", text: "แดชบอร์ด" },
+                                style: "primary",
+                                color: "#5B5BFF",
+                                height: "sm",
+                            },
+                            {
+                                type: "button",
+                                action: { type: "message", label: "อันดับ", text: "อันดับ" },
+                                style: "primary",
+                                color: "#5B5BFF",
+                                height: "sm",
+                            },
+                        ],
+                        spacing: "sm",
+                        margin: "md",
+                    },
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            {
+                                type: "button",
+                                action: { type: "message", label: "ข้อมูลส่วนตัว", text: "ข้อมูลส่วนตัว" },
+                                style: "secondary",
+                                height: "sm",
+                            },
+                            {
+                                type: "button",
+                                action: { type: "message", label: "หมุนวงล้อ", text: "หมุนวงล้อ" },
+                                style: "secondary",
+                                height: "sm",
+                            },
+                        ],
+                        spacing: "sm",
+                        margin: "sm",
+                    },
+                ],
+                paddingAll: "20px",
+            },
+        } as FlexBubble,
+    };
+}
+
+export function createGameMenuFlex(): FlexMessage {
+    return {
+        type: "flex",
+        altText: "เมนูเกม",
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "เกมฝึกภาษา",
+                        weight: "bold",
+                        size: "xl",
+                        color: "#FFFFFF",
+                    },
+                    {
+                        type: "text",
+                        text: "เลือกเกมที่ต้องการเล่น",
+                        size: "sm",
+                        color: "#FFFFFF",
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: "#FF6B35",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    createGameButton("คำศัพท์จีน-ไทย", "ทดสอบความรู้คำศัพท์", "คำศัพท์", "#E74C3C"),
+                    createGameButton("เติมคำในช่องว่าง", "ฝึกไวยากรณ์และคำศัพท์", "เติมคำ", "#3498DB"),
+                    createGameButton("เรียงคำเป็นประโยค", "ฝึกโครงสร้างประโยค", "เรียงคำ", "#9B59B6"),
+                    createGameButton("แต่งประโยค", "ฝึกเขียนประโยคอิสระ", "แต่งประโยค", "#1ABC9C"),
+                ],
+                paddingAll: "20px",
+                spacing: "md",
+            },
+            footer: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "button",
+                        action: { type: "message", label: "กลับเมนูหลัก", text: "เมนู" },
+                        style: "secondary",
+                        height: "sm",
+                    },
+                ],
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+function createGameButton(title: string, desc: string, command: string, color: string) {
+    return {
+        type: "box" as const,
+        layout: "horizontal" as const,
+        contents: [
+            {
+                type: "box" as const,
+                layout: "vertical" as const,
+                contents: [
+                    { type: "text" as const, text: title, weight: "bold" as const, size: "md" as const },
+                    { type: "text" as const, text: desc, size: "xs" as const, color: "#999999" },
+                ],
+                flex: 3,
+            },
+            {
+                type: "button" as const,
+                action: { type: "message" as const, label: "เล่น", text: command },
+                style: "primary" as const,
+                color: color,
+                height: "sm" as const,
+                flex: 1,
+            },
+        ],
+        spacing: "md" as const,
+        alignItems: "center" as const,
+    };
+}
+
+export function createLeaderboardFlex(data: {
+    topUsers: { thaiName: string; totalPoints: number; currentLevel: number }[];
+    myRank: number;
+    myPoints: number;
+    myLevel: number;
+}): FlexMessage {
+    const medals = ["🥇", "🥈", "🥉"];
+    
+    return {
+        type: "flex",
+        altText: "Leaderboard",
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "🏆 Leaderboard",
+                        weight: "bold",
+                        size: "xl",
+                        color: "#FFFFFF",
+                    },
+                    {
+                        type: "text",
+                        text: "Top 10 นักเรียน",
+                        size: "sm",
+                        color: "#FFFFFF",
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: "#F39C12",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    ...data.topUsers.slice(0, 5).map((user, i) => ({
+                        type: "box" as const,
+                        layout: "horizontal" as const,
+                        contents: [
+                            {
+                                type: "text" as const,
+                                text: i < 3 ? medals[i] : `${i + 1}.`,
+                                flex: 1,
+                                size: "lg" as const,
+                            },
+                            {
+                                type: "text" as const,
+                                text: user.thaiName || "Unknown",
+                                flex: 4,
+                                size: "sm" as const,
+                                weight: "bold" as const,
+                            },
+                            {
+                                type: "text" as const,
+                                text: `Lv.${user.currentLevel}`,
+                                flex: 2,
+                                size: "xs" as const,
+                                color: "#999999",
+                                align: "end" as const,
+                            },
+                            {
+                                type: "text" as const,
+                                text: `${user.totalPoints}`,
+                                flex: 2,
+                                size: "sm" as const,
+                                align: "end" as const,
+                                weight: "bold" as const,
+                                color: "#F39C12",
+                            },
+                        ],
+                        margin: "md" as const,
+                    })),
+                    {
+                        type: "separator",
+                        margin: "xl",
+                    },
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            {
+                                type: "text",
+                                text: `#${data.myRank}`,
+                                flex: 1,
+                                size: "lg",
+                                weight: "bold",
+                                color: "#1DB446",
+                            },
+                            {
+                                type: "text",
+                                text: "คุณ",
+                                flex: 4,
+                                size: "sm",
+                                weight: "bold",
+                            },
+                            {
+                                type: "text",
+                                text: `Lv.${data.myLevel}`,
+                                flex: 2,
+                                size: "xs",
+                                color: "#999999",
+                                align: "end",
+                            },
+                            {
+                                type: "text",
+                                text: `${data.myPoints}`,
+                                flex: 2,
+                                size: "sm",
+                                align: "end",
+                                weight: "bold",
+                                color: "#1DB446",
+                            },
+                        ],
+                        margin: "xl",
+                        backgroundColor: "#E8F5E9",
+                        paddingAll: "10px",
+                        cornerRadius: "md",
+                    },
+                ],
+                paddingAll: "20px",
+            },
+        } as FlexBubble,
+    };
+}
+
+export function createVocabGameFlex(data: {
+    chineseWord: string;
+    category: string;
+    questionNumber: number;
+}): FlexMessage {
+    return {
+        type: "flex",
+        altText: "เกมคำศัพท์",
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    {
+                        type: "text",
+                        text: "🇨🇳 คำศัพท์จีน-ไทย",
+                        weight: "bold",
+                        size: "lg",
+                        color: "#FFFFFF",
+                        flex: 4,
+                    },
+                    {
+                        type: "text",
+                        text: `#${data.questionNumber}`,
+                        size: "sm",
+                        color: "#FFFFFF",
+                        align: "end",
+                        flex: 1,
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: "#E74C3C",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: data.chineseWord,
+                        weight: "bold",
+                        size: "3xl",
+                        align: "center",
+                        margin: "xl",
+                    },
+                    {
+                        type: "text",
+                        text: `หมวด: ${data.category || "ทั่วไป"}`,
+                        size: "sm",
+                        color: "#999999",
+                        align: "center",
+                        margin: "lg",
+                    },
+                    {
+                        type: "text",
+                        text: "คำนี้แปลว่าอะไร?",
+                        size: "md",
+                        align: "center",
+                        margin: "xl",
+                        color: "#666666",
+                    },
+                ],
+                paddingAll: "20px",
+            },
+            footer: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ดูเฉลย", text: "เฉลย" },
+                        style: "primary",
+                        color: "#E74C3C",
+                    },
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ข้อถัดไป", text: "คำศัพท์" },
+                        style: "secondary",
+                    },
+                ],
+                spacing: "sm",
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+export function createFillBlankGameFlex(data: {
+    sentence: string;
+    questionNumber: number;
+}): FlexMessage {
+    return {
+        type: "flex",
+        altText: "เกมเติมคำ",
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    {
+                        type: "text",
+                        text: "📝 เติมคำในช่องว่าง",
+                        weight: "bold",
+                        size: "lg",
+                        color: "#FFFFFF",
+                        flex: 4,
+                    },
+                    {
+                        type: "text",
+                        text: `#${data.questionNumber}`,
+                        size: "sm",
+                        color: "#FFFFFF",
+                        align: "end",
+                        flex: 1,
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: "#3498DB",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: data.sentence,
+                        wrap: true,
+                        size: "md",
+                        align: "center",
+                        margin: "lg",
+                    },
+                    {
+                        type: "text",
+                        text: "พิมพ์คำตอบของคุณ",
+                        size: "sm",
+                        color: "#999999",
+                        align: "center",
+                        margin: "xl",
+                    },
+                ],
+                paddingAll: "20px",
+            },
+            footer: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ดูเฉลย", text: "เฉลยเติมคำ" },
+                        style: "primary",
+                        color: "#3498DB",
+                    },
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ข้อถัดไป", text: "เติมคำ" },
+                        style: "secondary",
+                    },
+                ],
+                spacing: "sm",
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+export function createWordOrderGameFlex(data: {
+    words: { number: number; word: string }[];
+    questionNumber: number;
+}): FlexMessage {
+    const wordsText = data.words.map(w => `${w.number}.${w.word}`).join("  ");
+    
+    return {
+        type: "flex",
+        altText: "เกมเรียงคำ",
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    {
+                        type: "text",
+                        text: "🔤 เรียงคำเป็นประโยค",
+                        weight: "bold",
+                        size: "lg",
+                        color: "#FFFFFF",
+                        flex: 4,
+                    },
+                    {
+                        type: "text",
+                        text: `#${data.questionNumber}`,
+                        size: "sm",
+                        color: "#FFFFFF",
+                        align: "end",
+                        flex: 1,
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: "#9B59B6",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "เรียงคำต่อไปนี้ให้เป็นประโยค",
+                        size: "sm",
+                        color: "#666666",
+                        align: "center",
+                    },
+                    {
+                        type: "text",
+                        text: wordsText,
+                        wrap: true,
+                        size: "lg",
+                        weight: "bold",
+                        align: "center",
+                        margin: "xl",
+                    },
+                    {
+                        type: "text",
+                        text: "พิมพ์ลำดับตัวเลข เช่น 2134",
+                        size: "sm",
+                        color: "#999999",
+                        align: "center",
+                        margin: "xl",
+                    },
+                ],
+                paddingAll: "20px",
+            },
+            footer: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ดูเฉลย", text: "เฉลยเรียงคำ" },
+                        style: "primary",
+                        color: "#9B59B6",
+                    },
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ข้อถัดไป", text: "เรียงคำ" },
+                        style: "secondary",
+                    },
+                ],
+                spacing: "sm",
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+export function createSentenceGameFlex(data: {
+    word1: string;
+    word2: string;
+    questionNumber: number;
+}): FlexMessage {
+    return {
+        type: "flex",
+        altText: "เกมแต่งประโยค",
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    {
+                        type: "text",
+                        text: "✍️ แต่งประโยค",
+                        weight: "bold",
+                        size: "lg",
+                        color: "#FFFFFF",
+                        flex: 4,
+                    },
+                    {
+                        type: "text",
+                        text: `#${data.questionNumber}`,
+                        size: "sm",
+                        color: "#FFFFFF",
+                        align: "end",
+                        flex: 1,
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: "#1ABC9C",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "แต่งประโยคโดยใช้คำต่อไปนี้",
+                        size: "sm",
+                        color: "#666666",
+                        align: "center",
+                    },
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            {
+                                type: "box",
+                                layout: "vertical",
+                                contents: [
+                                    {
+                                        type: "text",
+                                        text: data.word1,
+                                        weight: "bold",
+                                        size: "xl",
+                                        align: "center",
+                                    },
+                                ],
+                                backgroundColor: "#E8F8F5",
+                                paddingAll: "15px",
+                                cornerRadius: "lg",
+                                flex: 1,
+                            },
+                            {
+                                type: "text",
+                                text: "+",
+                                size: "xl",
+                                align: "center",
+                                gravity: "center",
+                            },
+                            {
+                                type: "box",
+                                layout: "vertical",
+                                contents: [
+                                    {
+                                        type: "text",
+                                        text: data.word2,
+                                        weight: "bold",
+                                        size: "xl",
+                                        align: "center",
+                                    },
+                                ],
+                                backgroundColor: "#E8F8F5",
+                                paddingAll: "15px",
+                                cornerRadius: "lg",
+                                flex: 1,
+                            },
+                        ],
+                        margin: "xl",
+                        spacing: "md",
+                    },
+                    {
+                        type: "text",
+                        text: "พิมพ์ประโยคของคุณ",
+                        size: "sm",
+                        color: "#999999",
+                        align: "center",
+                        margin: "xl",
+                    },
+                ],
+                paddingAll: "20px",
+            },
+            footer: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ข้อถัดไป", text: "แต่งประโยค" },
+                        style: "primary",
+                        color: "#1ABC9C",
+                    },
+                    {
+                        type: "button",
+                        action: { type: "message", label: "กลับเมนู", text: "เกม" },
+                        style: "secondary",
+                    },
+                ],
+                spacing: "sm",
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+export function createSpinWheelResultFlex(data: {
+    reward: string;
+    points: number;
+    totalPoints: number;
+    isWin: boolean;
+}): FlexMessage {
+    return {
+        type: "flex",
+        altText: "ผลหมุนวงล้อ",
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "🎡 หมุนวงล้อ",
+                        weight: "bold",
+                        size: "xl",
+                        color: "#FFFFFF",
+                        align: "center",
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: data.isWin ? "#27AE60" : "#95A5A6",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: data.isWin ? "🎉 ยินดีด้วย!" : "😅 เสียใจด้วย",
+                        size: "xl",
+                        weight: "bold",
+                        align: "center",
+                    },
+                    {
+                        type: "text",
+                        text: data.reward,
+                        size: "xxl",
+                        weight: "bold",
+                        align: "center",
+                        margin: "lg",
+                        color: data.isWin ? "#27AE60" : "#95A5A6",
+                    },
+                    {
+                        type: "separator",
+                        margin: "xl",
+                    },
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            {
+                                type: "text",
+                                text: "คะแนนรวม",
+                                size: "sm",
+                                color: "#999999",
+                            },
+                            {
+                                type: "text",
+                                text: `${data.totalPoints} pts`,
+                                size: "lg",
+                                weight: "bold",
+                                align: "end",
+                                color: "#1DB446",
+                            },
+                        ],
+                        margin: "xl",
+                    },
+                ],
+                paddingAll: "20px",
+            },
+            footer: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "หมุนได้อีกครั้งใน 24 ชั่วโมง",
+                        size: "xs",
+                        color: "#999999",
+                        align: "center",
+                    },
+                ],
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
 // =====================
 // Reply Helpers
 // =====================
