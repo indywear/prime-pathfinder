@@ -174,14 +174,7 @@ export async function handleTextMessage(
         await handleGeneralConversation(event.replyToken, userId, text);
     } catch (error) {
         console.error(`[handleTextMessage] Error for user ${event.source.userId}:`, error);
-
-        const errorMessage = error instanceof Error ? error.message : "Unknown error";
-
-        // DEBUG: Reveal DB Host to check for mismatch
-        const dbUrl = process.env.DATABASE_URL || "NOT_SET";
-        const dbHost = dbUrl.split('@')[1]?.split('/')[0] || "UNKNOWN_HOST";
-
-        await replyText(event.replyToken, `ขออภัยครับ ระบบขัดข้อง (DEBUG INFO):\n\nDB Host: ${dbHost}\n\nError: ${errorMessage}\n\nกรุณาลองใหม่`);
+        await replyText(event.replyToken, "ขออภัยครับ ระบบขัดข้องในขณะนี้ กรุณาลองใหม่อีกครั้ง หรือพิมพ์ 'เมนู' เพื่อเริ่มใหม่");
     }
 }
 
