@@ -6,7 +6,6 @@ import {
     createDashboardFlex,
     createProfileFlex,
     lineClient,
-    createTextMessage,
 } from "@/lib/line/client";
 import { generateWritingFeedback, generateConversationResponse, generateSimpleFeedback } from "@/lib/ai/feedback";
 import {
@@ -15,10 +14,6 @@ import {
     getPointsForNextLevel,
     formatPointsMessage,
 } from "@/lib/gamification/points";
-
-// =====================
-// Registration Flow State
-// =====================
 
 const REGISTRATION_STEPS = [
     { field: "chineseName", question: "ชื่อ-นามสกุล (ภาษาจีน) ของคุณคืออะไรครับ?", type: "text" },
@@ -48,19 +43,15 @@ const REGISTRATION_STEPS = [
     },
 ];
 
-// =====================
-// Main Menu Keywords
-// =====================
-
 const MENU_KEYWORDS = {
     REGISTER: ["ลงทะเบียน", "register", "สมัคร"],
     FEEDBACK: ["ขอผลป้อนกลับ", "feedback", "ผลป้อนกลับ"],
     SUBMIT: ["ส่งงาน", "submit", "ส่ง", "submit task"],
     PRACTICE: ["ฝึกฝน", "practice", "ฝึก"],
-    DASHBOARD: ["แดชบอร์ด", "dashboard", "ความก้าวหน้า"],
+    DASHBOARD: ["แดชบอร์ด", "dashboard", "ความก้าวหน้า", "ดูความก้าวหน้า"],
     PROFILE: ["ข้อมูลส่วนตัว", "profile", "โปรไฟล์"],
     CANCEL: ["ยกเลิก", "cancel", "หยุด", "ออก"],
-    HELP: ["ช่วยเหลือ", "help", "วิธีใช้", "เมนู", "menu"],
+    HELP: ["ช่วยเหลือ", "help", "วิธีใช้", "เมนู", "menu", "รายการ"],
     LEADERBOARD: ["leaderboard", "อันดับ", "ลีดเดอร์บอร์ด", "ranking"],
     SPIN_WHEEL: ["spin wheel", "สปินวงล้อ", "วงล้อ", "spin", "หมุนวงล้อ"],
     GAME_MENU: ["เกม", "game", "games", "เล่นเกม"],
@@ -81,75 +72,32 @@ function detectMenuAction(text: string): string | null {
     return null;
 }
 
-// =====================
-// User Session State (In-Memory)
-// =====================
-
-interface UserSession {
-    currentAction?: string;
-    registrationStep?: number;
-    feedbackTaskId?: string;
-    submitTaskId?: string;
-    practiceSessionId?: string;
-    awaitingInput?: boolean;
-    // Game state
-    gameType?: string;
-    gameQuestions?: any[];
-    gameCurrentIndex?: number;
-    gameCorrectCount?: number;
-}
-
-const userSessions = new Map<string, UserSession>();
-
-function getSession(userId: string): UserSession {
-    if (!userSessions.has(userId)) {
-        userSessions.set(userId, {});
-    }
-    return userSessions.get(userId)!;
-}
-
-function clearSession(userId: string) {
-    userSessions.delete(userId);
-}
-
-// =====================
-// Message Handler
-// =====================
-
 export async function handleTextMessage(
     event: WebhookEvent & { type: "message"; message: { type: "text"; text: string } }
 ) {
     const userId = event.source.userId;
     if (!userId) return;
 
-    const text = event.message.text;
-    const session = getSession(userId);
+    const text = event.message.text.trim();
 
-    // Check if user is in registration flow
-    if (session.currentAction === "REGISTER" && session.registrationStep !== undefined) {
-        await handleRegistrationStep(event.replyToken, userId, text, session);
+    const user = await prisma.user.findUnique({
+        where: { lineUserId: userId },
+    });
+
+    if (user && !user.isRegistered && user.registrationStep >= 0 && user.registrationStep < REGISTRATION_STEPS.length) {
+        if (detectMenuAction(text) === "CANCEL") {
+            await prisma.user.update({
+                where: { lineUserId: userId },
+                data: { registrationStep: -1 },
+            });
+            await replyText(event.replyToken, `ยกเลิกการลงทะเบียนแล้วครับ\n\nพิมพ์ "ลงทะเบียน" เพื่อเริ่มใหม่`);
+            return;
+        }
+        
+        await handleRegistrationStep(event.replyToken, userId, text, user.registrationStep);
         return;
     }
 
-    // Check if user is awaiting feedback input
-    if (session.currentAction === "FEEDBACK" && session.awaitingInput) {
-        await handleFeedbackSubmission(event.replyToken, userId, text);
-        return;
-    }
-
-    // Check if user is awaiting submission input
-    if (session.currentAction === "SUBMIT" && session.awaitingInput) {
-        await handleWorkSubmission(event.replyToken, userId, text);
-        return;
-    }
-
-    // Check if user is playing a game
-    if (session.currentAction === "GAME" && session.gameQuestions && session.gameCurrentIndex !== undefined) {
-        await handleGameAnswer(event.replyToken, userId, text);
-        return;
-    }
-
-    // Detect menu action from text
     const menuAction = detectMenuAction(text);
 
     if (menuAction) {
@@ -173,7 +121,7 @@ export async function handleTextMessage(
                 await handleProfile(event.replyToken, userId);
                 break;
             case "CANCEL":
-                await handleCancel(event.replyToken, userId);
+                await replyText(event.replyToken, "ไม่มีการทำงานที่ต้องยกเลิกครับ");
                 break;
             case "HELP":
                 await handleHelp(event.replyToken, userId);
@@ -203,16 +151,10 @@ export async function handleTextMessage(
         return;
     }
 
-    // General conversation
     await handleGeneralConversation(event.replyToken, userId, text);
 }
 
-// =====================
-// Registration Handlers
-// =====================
-
 async function handleRegisterStart(replyToken: string, userId: string) {
-    // Check if already registered
     const existingUser = await prisma.user.findUnique({
         where: { lineUserId: userId },
     });
@@ -220,21 +162,16 @@ async function handleRegisterStart(replyToken: string, userId: string) {
     if (existingUser?.isRegistered) {
         await replyText(
             replyToken,
-            `สวัสดีครับ คุณ${existingUser.thaiName}! คุณลงทะเบียนแล้ว\n\nหากต้องการแก้ไขข้อมูล กรุณาเลือก "ข้อมูลส่วนตัว"`
+            `สวัสดีครับ คุณ${existingUser.thaiName}! คุณลงทะเบียนแล้ว\n\nพิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้า\nหรือ "ข้อมูลส่วนตัว" เพื่อดูข้อมูลของคุณ`
         );
         return;
     }
 
-    // Create or update user and start registration
     await prisma.user.upsert({
         where: { lineUserId: userId },
         update: { registrationStep: 0 },
         create: { lineUserId: userId, registrationStep: 0 },
     });
-
-    const session = getSession(userId);
-    session.currentAction = "REGISTER";
-    session.registrationStep = 0;
 
     const firstStep = REGISTRATION_STEPS[0];
 
@@ -248,29 +185,42 @@ async function handleRegistrationStep(
     replyToken: string,
     userId: string,
     answer: string,
-    session: UserSession
+    stepIndex: number
 ) {
-    const stepIndex = session.registrationStep!;
     const currentStep = REGISTRATION_STEPS[stepIndex];
 
-    // Validate and prepare value
     let value: string | boolean = answer;
 
     if (currentStep.field === "consent") {
-        value = answer.toUpperCase() === "YES";
+        value = answer.toUpperCase() === "YES" || answer === "ยินยอม";
     } else if (currentStep.field === "thaiLevel") {
-        if (!["BEGINNER", "INTERMEDIATE", "ADVANCED"].includes(answer.toUpperCase())) {
-            value = "INTERMEDIATE";
+        const upperAnswer = answer.toUpperCase();
+        if (["BEGINNER", "INTERMEDIATE", "ADVANCED"].includes(upperAnswer)) {
+            value = upperAnswer;
         } else {
-            value = answer.toUpperCase();
+            value = "INTERMEDIATE";
         }
     }
 
-    // Update user data
-    const updateData: Record<string, unknown> = { [currentStep.field]: value };
+    const updateData: Record<string, unknown> = { 
+        [currentStep.field]: value,
+        registrationStep: stepIndex + 1,
+    };
 
-    if (currentStep.field === "thaiLevel") {
-        updateData.thaiLevel = value as "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+    if (stepIndex >= REGISTRATION_STEPS.length - 1) {
+        updateData.isRegistered = true;
+        updateData.registrationStep = -1;
+
+        const user = await prisma.user.update({
+            where: { lineUserId: userId },
+            data: updateData,
+        });
+
+        await replyText(
+            replyToken,
+            `🎉 ลงทะเบียนเรียบร้อยครับ!\n\nยินดีต้อนรับ คุณ${user.thaiName}\n\nตอนนี้คุณสามารถ:\n• พิมพ์ "ส่งงาน" - ส่งภาระงาน\n• พิมพ์ "ขอผลป้อนกลับ" - ขอให้ AI ตรวจงาน\n• พิมพ์ "เกม" - เล่นเกมสะสมแต้ม\n• พิมพ์ "แดชบอร์ด" - ดูความก้าวหน้า\n\nหรือพิมพ์ "เมนู" เพื่อดูคำสั่งทั้งหมด`
+        );
+        return;
     }
 
     await prisma.user.update({
@@ -278,25 +228,6 @@ async function handleRegistrationStep(
         data: updateData,
     });
 
-    // Check if registration complete
-    if (stepIndex >= REGISTRATION_STEPS.length - 1) {
-        // Mark as registered
-        const user = await prisma.user.update({
-            where: { lineUserId: userId },
-            data: { isRegistered: true },
-        });
-
-        clearSession(userId);
-
-        await replyText(
-            replyToken,
-            `ลงทะเบียนเรียบร้อยครับ!\n\nยินดีต้อนรับ คุณ${user.thaiName}\n\nตอนนี้คุณสามารถ:\n- ส่งงาน\n- ขอผลป้อนกลับ\n- ฝึกฝน\n- ดูแดชบอร์ด\n\nเลือกเมนูด้านล่างเพื่อเริ่มต้นได้เลยครับ`
-        );
-        return;
-    }
-
-    // Move to next step
-    session.registrationStep = stepIndex + 1;
     const nextStep = REGISTRATION_STEPS[stepIndex + 1];
 
     if (nextStep.type === "quickReply" && nextStep.options) {
@@ -306,141 +237,28 @@ async function handleRegistrationStep(
     }
 }
 
-// =====================
-// Feedback Handlers
-// =====================
-
 async function handleFeedbackStart(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.isRegistered) {
-        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ");
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
         return;
     }
 
-    const activeTask = await prisma.task.findFirst({
-        where: { isActive: true },
-        orderBy: { weekNumber: "desc" },
-    });
-
-    const session = getSession(userId);
-    session.currentAction = "FEEDBACK";
-    session.awaitingInput = true;
-
-    if (activeTask) {
-        session.feedbackTaskId = activeTask.id;
-        await replyWithQuickReply(
-            replyToken,
-            `สวัสดีครับ คุณ${user.thaiName}!\n\n📌 ภาระงานปัจจุบัน: สัปดาห์ที่ ${activeTask.weekNumber}\n${activeTask.title}\n\nส่งฉบับร่างมาได้เลยครับ ผมจะช่วยตรวจและให้คะแนนเบื้องต้นตามเกณฑ์ 5 ข้อ`,
-            [
-                { label: "ขอดูโจทย์", text: `โจทย์สัปดาห์ ${activeTask.weekNumber}` },
-                { label: "ยกเลิก", text: "ยกเลิก" },
-            ]
-        );
-    } else {
-        session.feedbackTaskId = undefined;
-        await replyText(
-            replyToken,
-            `สวัสดีครับ คุณ${user.thaiName}!\n\nขณะนี้ยังไม่มีภาระงานที่เปิดรับ\n\nส่งข้อความภาษาไทยมาได้เลยครับ ผมจะช่วยตรวจและให้คำแนะนำทั่วไป`
-        );
-    }
+    await replyText(
+        replyToken,
+        `สวัสดีครับ คุณ${user.thaiName}!\n\n📝 ส่งข้อความภาษาไทยที่ต้องการให้ตรวจมาได้เลยครับ\n\nผมจะช่วยตรวจและให้คำแนะนำ`
+    );
 }
-
-async function handleFeedbackSubmission(replyToken: string, userId: string, content: string) {
-    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
-    if (!user) return;
-
-    const session = getSession(userId);
-    const isTaskFeedback = session.feedbackTaskId !== undefined;
-
-    let feedbackMessage: string;
-
-    if (isTaskFeedback) {
-        const task = await prisma.task.findUnique({ where: { id: session.feedbackTaskId } });
-        
-        const feedback = await generateWritingFeedback(
-            content,
-            task?.description || "งานเขียน",
-            false
-        );
-
-        await prisma.feedbackRequest.create({
-            data: {
-                userId: user.id,
-                taskId: task?.id,
-                draftContent: content,
-                aiFeedback: JSON.stringify(feedback),
-                pointsEarned: POINTS.REQUEST_FEEDBACK,
-            },
-        });
-
-        feedbackMessage = `📝 ผลป้อนกลับจาก ProficienThAI
-
-📊 คะแนนเบื้องต้น (เต็ม 20):
-- เนื้อหา: ${feedback.scores.content}/4
-- การลำดับความ: ${feedback.scores.organization}/4
-- ไวยากรณ์: ${feedback.scores.grammar}/4
-- คำศัพท์: ${feedback.scores.vocabulary}/4
-- อักขระวิธี: ${feedback.scores.mechanics}/4
-- รวม: ${feedback.scores.total}/20
-
-${feedback.feedback}
-
-💡 คำแนะนำ:
-${feedback.suggestions.map((s, i) => `${i + 1}. ${s}`).join("\n")}
-
-${feedback.encouragement}
-
-${formatPointsMessage(POINTS.REQUEST_FEEDBACK, "ขอผลป้อนกลับ")}
-
-📌 เมื่อแก้ไขเสร็จแล้ว พิมพ์ "ส่งงาน" เพื่อส่งงานจริง`;
-    } else {
-        const simpleFeedback = await generateSimpleFeedback(content);
-
-        await prisma.feedbackRequest.create({
-            data: {
-                userId: user.id,
-                draftContent: content,
-                aiFeedback: simpleFeedback,
-                pointsEarned: POINTS.REQUEST_FEEDBACK,
-            },
-        });
-
-        feedbackMessage = `📝 ผลป้อนกลับจาก ProficienThAI
-
-${simpleFeedback}
-
-${formatPointsMessage(POINTS.REQUEST_FEEDBACK, "ขอผลป้อนกลับ")}`;
-    }
-
-    const newTotalPoints = user.totalPoints + POINTS.REQUEST_FEEDBACK;
-    const newLevel = calculateLevel(newTotalPoints);
-
-    await prisma.user.update({
-        where: { id: user.id },
-        data: {
-            totalPoints: newTotalPoints,
-            currentLevel: newLevel,
-        },
-    });
-
-    clearSession(userId);
-    await replyText(replyToken, feedbackMessage);
-}
-
-// =====================
-// Submit Work Handlers
-// =====================
 
 async function handleSubmitStart(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.isRegistered) {
-        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ");
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
         return;
     }
 
-    // Get current active task
     const activeTask = await prisma.task.findFirst({
         where: { isActive: true },
         orderBy: { weekNumber: "desc" },
@@ -451,131 +269,24 @@ async function handleSubmitStart(replyToken: string, userId: string) {
         return;
     }
 
-    const session = getSession(userId);
-    session.currentAction = "SUBMIT";
-    session.submitTaskId = activeTask.id;
-    session.awaitingInput = true;
-
     await replyText(
         replyToken,
-        `ภาระงานสัปดาห์ที่ ${activeTask.weekNumber}\n\n${activeTask.title}\n\n${activeTask.description}\n\nอ่านเนื้อหา: ${activeTask.contentUrl}\n\nความยาว: ${activeTask.minWords}-${activeTask.maxWords} คำ\nกำหนดส่ง: ${activeTask.deadline.toLocaleDateString("th-TH")}\n\nพิมพ์งานเขียนของคุณได้เลยครับ`
+        `📌 ภาระงานสัปดาห์ที่ ${activeTask.weekNumber}\n\n${activeTask.title}\n\n${activeTask.description}\n\n📖 อ่านเนื้อหา: ${activeTask.contentUrl}\n\n✏️ ความยาว: ${activeTask.minWords}-${activeTask.maxWords} คำ\n📅 กำหนดส่ง: ${activeTask.deadline.toLocaleDateString("th-TH")}\n\nพิมพ์งานเขียนของคุณได้เลยครับ`
     );
 }
-
-async function handleWorkSubmission(replyToken: string, userId: string, content: string) {
-    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
-    if (!user) return;
-
-    const session = getSession(userId);
-    const taskId = session.submitTaskId;
-
-    const task = await prisma.task.findUnique({ where: { id: taskId } });
-    if (!task) {
-        clearSession(userId);
-        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งครับ");
-        return;
-    }
-
-    // Count words (Thai)
-    const wordCount = content.split(/\s+/).filter(Boolean).length;
-
-    // Check word count
-    if (wordCount < task.minWords) {
-        await replyText(
-            replyToken,
-            `งานเขียนของคุณมี ${wordCount} คำ\nกรุณาเขียนอย่างน้อย ${task.minWords} คำ\n\nพิมพ์งานใหม่ได้เลยครับ`
-        );
-        return;
-    }
-
-    // Check if on time or early
-    const now = new Date();
-    const isOnTime = now <= task.deadline;
-    const isEarly = now < new Date(task.deadline.getTime() - 24 * 60 * 60 * 1000); // 1 day early
-
-    // Generate AI feedback
-    const feedback = await generateWritingFeedback(content, task.description, true);
-
-    // Calculate points
-    let pointsEarned = isEarly ? POINTS.SUBMIT_EARLY : isOnTime ? POINTS.SUBMIT_ON_TIME : POINTS.SUBMIT_LATE;
-
-    // Save submission
-    await prisma.submission.create({
-        data: {
-            userId: user.id,
-            taskId: task.id,
-            content,
-            wordCount,
-            grammarScore: feedback.scores.grammar,
-            vocabularyScore: feedback.scores.vocabulary,
-            organizationScore: feedback.scores.organization,
-            taskFulfillmentScore: feedback.scores.content,
-            totalScore: feedback.scores.total,
-            aiFeedback: JSON.stringify(feedback),
-            pointsEarned,
-            onTime: isOnTime,
-            earlyBonus: isEarly,
-        },
-    });
-
-    // Update user points
-    const newTotalPoints = user.totalPoints + pointsEarned;
-    const newLevel = calculateLevel(newTotalPoints);
-
-    await prisma.user.update({
-        where: { id: user.id },
-        data: {
-            totalPoints: newTotalPoints,
-            currentLevel: newLevel,
-        },
-    });
-
-    clearSession(userId);
-
-    // Format submission confirmation
-    const statusText = isEarly ? "ส่งก่อนกำหนด" : isOnTime ? "ส่งตรงเวลา" : "ส่งหลังกำหนด";
-
-    const submissionMessage = `✅ ส่งงานสำเร็จ!
-
-📌 สถานะ: ${statusText}
-📝 จำนวนคำ: ${wordCount} คำ
-
-📊 คะแนน (เต็ม 20):
-- เนื้อหา: ${feedback.scores.content}/4
-- การลำดับความ: ${feedback.scores.organization}/4
-- ไวยากรณ์: ${feedback.scores.grammar}/4
-- คำศัพท์: ${feedback.scores.vocabulary}/4
-- อักขระวิธี: ${feedback.scores.mechanics}/4
-- รวม: ${feedback.scores.total}/20
-
-${feedback.feedback}
-
-${feedback.encouragement}
-
-${formatPointsMessage(pointsEarned, statusText)}
-
-📅 ภาระงานถัดไปจะเริ่มในเวลา 00:00 น.`;
-
-    await replyText(replyToken, submissionMessage);
-}
-
-// =====================
-// Practice Handlers
-// =====================
 
 async function handlePracticeStart(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.isRegistered) {
-        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ");
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
         return;
     }
 
-    // Get random vocabulary for practice
     const vocabularyCount = await prisma.vocabulary.count();
 
     if (vocabularyCount === 0) {
-        await replyText(replyToken, "ขณะนี้ยังไม่มีแบบฝึกหัดครับ กรุณารอการอัปเดต");
+        await replyText(replyToken, "ขณะนี้ยังไม่มีแบบฝึกหัดครับ กรุณารอการอัปเดต\n\nลองพิมพ์ \"เกม\" เพื่อเล่นเกมอื่นๆ");
         return;
     }
 
@@ -590,18 +301,14 @@ async function handlePracticeStart(replyToken: string, userId: string) {
 
     await replyWithQuickReply(
         replyToken,
-        `ฝึกคำศัพท์\n\nคำว่า "${randomVocab.word}" หมายความว่าอะไร?\n\n${randomVocab.exampleSentence ? `ตัวอย่าง: ${randomVocab.exampleSentence}` : ""}`,
+        `🔤 ฝึกคำศัพท์\n\nคำว่า "${randomVocab.word}" หมายความว่าอะไร?\n\n${randomVocab.exampleSentence ? `ตัวอย่าง: ${randomVocab.exampleSentence}` : ""}`,
         [
-            { label: "ดูคำตอบ", text: `คำตอบ:${randomVocab.meaning}` },
+            { label: "ดูคำตอบ", text: `คำตอบ: ${randomVocab.meaning}` },
             { label: "ข้อถัดไป", text: "ฝึกฝน" },
-            { label: "กลับเมนู", text: "แดชบอร์ด" },
+            { label: "กลับเมนู", text: "เมนู" },
         ]
     );
 }
-
-// =====================
-// Dashboard Handler
-// =====================
 
 async function handleDashboard(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({
@@ -613,7 +320,7 @@ async function handleDashboard(replyToken: string, userId: string) {
     });
 
     if (!user?.isRegistered) {
-        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ");
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
         return;
     }
 
@@ -635,15 +342,11 @@ async function handleDashboard(replyToken: string, userId: string) {
     });
 }
 
-// =====================
-// Profile Handler
-// =====================
-
 async function handleProfile(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.isRegistered) {
-        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ");
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
         return;
     }
 
@@ -662,26 +365,11 @@ async function handleProfile(replyToken: string, userId: string) {
     });
 }
 
-// =====================
-// Cancel Handler
-// =====================
-
-async function handleCancel(replyToken: string, userId: string) {
-    clearSession(userId);
-    await replyText(replyToken, `ยกเลิกการทำงานปัจจุบันแล้วครับ
-
-พิมพ์ "เมนู" เพื่อดูคำสั่งทั้งหมด`);
-}
-
-// =====================
-// Help Handler
-// =====================
-
 async function handleHelp(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     const helpMessage = user?.isRegistered
-        ? `สวัสดีครับ คุณ${user.thaiName}!
+        ? `สวัสดีครับ คุณ${user.thaiName}! 👋
 
 📌 คำสั่งที่ใช้ได้:
 
@@ -700,24 +388,21 @@ async function handleHelp(replyToken: string, userId: string) {
 📊 อื่นๆ:
 • "แดชบอร์ด" - ดูความก้าวหน้า
 • "ข้อมูลส่วนตัว" - ดูข้อมูลของคุณ
-• "ยกเลิก" - ยกเลิกการทำงานปัจจุบัน`
-        : `ยินดีต้อนรับสู่ ProficienThAI!
+• "อันดับ" - ดู Leaderboard
+• "หมุนวงล้อ" - หมุนวงล้อลุ้นรางวัล`
+        : `ยินดีต้อนรับสู่ ProficienThAI! 👋
 
 📌 คำสั่งสำหรับผู้ใช้ใหม่:
 • "ลงทะเบียน" - เริ่มลงทะเบียนใช้งาน
 
 เมื่อลงทะเบียนแล้วจะสามารถ:
-- ส่งงานเขียน
-- ขอผลป้อนกลับจาก AI
-- เล่นเกมฝึกภาษา
-- สะสมแต้มและ Badge`;
+✅ ส่งงานเขียน
+✅ ขอผลป้อนกลับจาก AI
+✅ เล่นเกมฝึกภาษา
+✅ สะสมแต้มและ Badge`;
 
     await replyText(replyToken, helpMessage);
 }
-
-// =====================
-// General Conversation
-// =====================
 
 async function handleGeneralConversation(replyToken: string, userId: string, text: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
@@ -728,7 +413,6 @@ async function handleGeneralConversation(replyToken: string, userId: string, tex
 
     const response = await generateConversationResponse(text, context);
 
-    // Award daily chat point (simple implementation)
     if (user?.isRegistered) {
         await prisma.user.update({
             where: { id: user.id },
@@ -738,10 +422,6 @@ async function handleGeneralConversation(replyToken: string, userId: string, tex
 
     await replyText(replyToken, response);
 }
-
-// =====================
-// Game Handlers
-// =====================
 
 async function handleGameMenu(replyToken: string, userId: string) {
     const menuMessage = `🎮 เลือกเกมที่ต้องการเล่น:
@@ -757,7 +437,6 @@ async function handleGameMenu(replyToken: string, userId: string) {
 }
 
 async function handleVocabGameStart(replyToken: string, userId: string) {
-    // Fetch random vocabulary questions
     const vocabs = await prisma.chineseVocabulary.findMany({
         take: 5,
         orderBy: { id: 'asc' },
@@ -768,19 +447,14 @@ async function handleVocabGameStart(replyToken: string, userId: string) {
         return;
     }
 
-    const session = getSession(userId);
-    session.currentAction = "GAME";
-    session.gameType = "VOCAB";
-    session.gameQuestions = vocabs;
-    session.gameCurrentIndex = 0;
-    session.gameCorrectCount = 0;
-
     const question = vocabs[0];
-    await replyText(replyToken, `🇨🇳 เกมคำศัพท์จีน-ไทย (ข้อ 1/${vocabs.length})
+    await replyText(replyToken, `🇨🇳 เกมคำศัพท์จีน-ไทย
 
-'${question.chineseWord}' ภาษาไทยว่าอะไร?
+"${question.chineseWord}" ภาษาไทยว่าอะไร?
 
-พิมพ์คำตอบเลยครับ`);
+💡 เฉลย: ${question.thaiMeaning}
+
+พิมพ์ "คำศัพท์" เพื่อดูคำถัดไป`);
 }
 
 async function handleFillBlankGameStart(replyToken: string, userId: string) {
@@ -794,19 +468,14 @@ async function handleFillBlankGameStart(replyToken: string, userId: string) {
         return;
     }
 
-    const session = getSession(userId);
-    session.currentAction = "GAME";
-    session.gameType = "FILL_BLANK";
-    session.gameQuestions = questions;
-    session.gameCurrentIndex = 0;
-    session.gameCorrectCount = 0;
-
     const question = questions[0];
-    await replyText(replyToken, `📝 เกมเติมคำในช่องว่าง (ข้อ 1/${questions.length})
+    await replyText(replyToken, `📝 เกมเติมคำในช่องว่าง
 
 ${question.sentence}
 
-พิมพ์คำที่ต้องใส่ในช่องว่าง`);
+💡 เฉลย: ${question.answer}
+
+พิมพ์ "เติมคำ" เพื่อดูคำถัดไป`);
 }
 
 async function handleWordOrderGameStart(replyToken: string, userId: string) {
@@ -820,22 +489,17 @@ async function handleWordOrderGameStart(replyToken: string, userId: string) {
         return;
     }
 
-    const session = getSession(userId);
-    session.currentAction = "GAME";
-    session.gameType = "WORD_ORDER";
-    session.gameQuestions = questions;
-    session.gameCurrentIndex = 0;
-    session.gameCorrectCount = 0;
-
     const question = questions[0];
     const words = question.shuffledWords as { number: number; word: string }[];
     const wordsDisplay = words.map(w => `${w.number}.${w.word}`).join(' ');
 
-    await replyText(replyToken, `🔤 เกมเรียงคำ (ข้อ 1/${questions.length})
+    await replyText(replyToken, `🔤 เกมเรียงคำ
 
 ${wordsDisplay}
 
-พิมพ์ประโยคที่เรียงแล้ว (ไม่ต้องใส่ตัวเลข)`);
+💡 เฉลย: ${question.correctAnswer}
+
+พิมพ์ "เรียงคำ" เพื่อดูคำถัดไป`);
 }
 
 async function handleSentenceGameStart(replyToken: string, userId: string) {
@@ -849,138 +513,21 @@ async function handleSentenceGameStart(replyToken: string, userId: string) {
         return;
     }
 
-    const session = getSession(userId);
-    session.currentAction = "GAME";
-    session.gameType = "SENTENCE";
-    session.gameQuestions = pairs;
-    session.gameCurrentIndex = 0;
-    session.gameCorrectCount = 0;
-
     const pair = pairs[0];
-    await replyText(replyToken, `✍️ เกมแต่งประโยค (ข้อ 1/${pairs.length})
+    await replyText(replyToken, `✍️ เกมแต่งประโยค
 
 แต่งประโยคโดยใช้คำว่า:
 • "${pair.word1}"
 • "${pair.word2}"
 
-พิมพ์ประโยคที่แต่งเลยครับ`);
+พิมพ์ "แต่งประโยค" เพื่อดูคำถัดไป`);
 }
-
-async function handleGameAnswer(replyToken: string, userId: string, answer: string) {
-    const session = getSession(userId);
-    const currentIndex = session.gameCurrentIndex ?? 0;
-    const questions = session.gameQuestions ?? [];
-    const question = questions[currentIndex];
-    let isCorrect = false;
-    let correctAnswer = "";
-
-    // Check answer based on game type
-    switch (session.gameType) {
-        case "VOCAB":
-            correctAnswer = question.thaiMeaning;
-            isCorrect = answer.trim() === correctAnswer;
-            break;
-        case "FILL_BLANK":
-            correctAnswer = question.answer;
-            isCorrect = answer.trim() === correctAnswer;
-            break;
-        case "WORD_ORDER":
-            correctAnswer = question.correctAnswer;
-            isCorrect = answer.trim().replace(/\s+/g, '') === correctAnswer.replace(/\s+/g, '');
-            break;
-        case "SENTENCE":
-            // For sentence construction, check if both words are used
-            const usesWord1 = answer.includes(question.word1);
-            const usesWord2 = answer.includes(question.word2);
-            isCorrect = usesWord1 && usesWord2 && answer.length >= 10;
-            correctAnswer = `${question.word1} + ${question.word2}`;
-            break;
-    }
-
-    if (isCorrect) {
-        session.gameCorrectCount = (session.gameCorrectCount ?? 0) + 1;
-    }
-
-    // Move to next question or finish
-    const nextIndex = currentIndex + 1;
-
-    if (nextIndex >= questions.length) {
-        // Game finished
-        const correctCount = session.gameCorrectCount ?? 0;
-        const totalCount = questions.length;
-        const pointsEarned = correctCount * 10;
-        const percentage = Math.round((correctCount / totalCount) * 100);
-
-        // Update user points
-        const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
-        if (user) {
-            await prisma.user.update({
-                where: { id: user.id },
-                data: { totalPoints: { increment: pointsEarned } },
-            });
-        }
-
-        clearSession(userId);
-
-        const resultEmoji = percentage >= 80 ? "🎉" : percentage >= 50 ? "👍" : "💪";
-        const resultMessage = percentage >= 80 ? "ยอดเยี่ยม!" : percentage >= 50 ? "ดีมาก!" : "พยายามอีกนิด!";
-
-        await replyText(replyToken, `${isCorrect ? "✅ ถูกต้อง!" : `❌ ไม่ถูกต้อง\nคำตอบคือ: ${correctAnswer}`}
-
-${resultEmoji} จบเกมแล้ว! ${resultMessage}
-
-📊 ผลคะแนน:
-✅ ถูก: ${correctCount}/${totalCount} ข้อ
-📈 ได้คะแนน: +${pointsEarned} แต้ม
-🎯 อัตราถูก: ${percentage}%
-
-พิมพ์ "เกม" เพื่อเล่นเกมอื่นๆ`);
-    } else {
-        // Next question
-        session.gameCurrentIndex = nextIndex;
-        const nextQuestion = questions[nextIndex];
-        let nextQuestionText = "";
-
-        switch (session.gameType) {
-            case "VOCAB":
-                nextQuestionText = `🇨🇳 เกมคำศัพท์ (ข้อ ${nextIndex + 1}/${questions.length})
-
-'${nextQuestion.chineseWord}' ภาษาไทยว่าอะไร?`;
-                break;
-            case "FILL_BLANK":
-                nextQuestionText = `📝 เกมเติมคำ (ข้อ ${nextIndex + 1}/${questions.length})
-
-${nextQuestion.sentence}`;
-                break;
-            case "WORD_ORDER":
-                const words = nextQuestion.shuffledWords as { number: number; word: string }[];
-                const wordsDisplay = words.map(w => `${w.number}.${w.word}`).join(' ');
-                nextQuestionText = `🔤 เกมเรียงคำ (ข้อ ${nextIndex + 1}/${questions.length})
-
-${wordsDisplay}`;
-                break;
-            case "SENTENCE":
-                nextQuestionText = `✍️ เกมแต่งประโยค (ข้อ ${nextIndex + 1}/${questions.length})
-
-ใช้คำ: "${nextQuestion.word1}" และ "${nextQuestion.word2}"`;
-                break;
-        }
-
-        await replyText(replyToken, `${isCorrect ? "✅ ถูกต้อง! +10 คะแนน" : `❌ ไม่ถูกต้อง\nคำตอบคือ: ${correctAnswer}`}
-
-${nextQuestionText}`);
-    }
-}
-
-// =====================
-// Leaderboard Handler
-// =====================
 
 async function handleLeaderboard(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.isRegistered) {
-        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ");
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
         return;
     }
 
@@ -1021,16 +568,10 @@ ${leaderboardLines.join("\n")}
 
 📊 อันดับของคุณ: #${myRank}
 ⭐ คะแนนของคุณ: ${user.totalPoints} pts
-🎯 Level: ${user.currentLevel}
-
-พิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้าทั้งหมด`;
+🎯 Level: ${user.currentLevel}`;
 
     await replyText(replyToken, leaderboardMessage);
 }
-
-// =====================
-// Spin Wheel Handler
-// =====================
 
 const SPIN_WHEEL_REWARDS = [
     { name: "5 แต้ม", points: 5, probability: 0.30 },
@@ -1047,7 +588,7 @@ async function handleSpinWheel(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.isRegistered) {
-        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ");
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
         return;
     }
 
@@ -1060,12 +601,7 @@ async function handleSpinWheel(replyToken: string, userId: string) {
             const hoursRemaining = Math.ceil(SPIN_COOLDOWN_HOURS - hoursSinceLastSpin);
             await replyText(replyToken, `🎡 หมุนวงล้อได้วันละ 1 ครั้ง
 
-⏰ กรุณารออีก ${hoursRemaining} ชั่วโมง
-
-💡 ระหว่างรอ คุณสามารถ:
-• "ส่งงาน" - ส่งภาระงานประจำสัปดาห์
-• "ฝึกฝน" - ฝึกคำศัพท์
-• "เกม" - เล่นเกมสะสมแต้ม`);
+⏰ กรุณารออีก ${hoursRemaining} ชั่วโมง`);
             return;
         }
     }
@@ -1090,29 +626,19 @@ async function handleSpinWheel(replyToken: string, userId: string) {
         },
     });
 
-    const spinAnimation = ["🎰", "🎡", "🎲", "🎯", "✨"];
-    const randomEmoji = spinAnimation[Math.floor(Math.random() * spinAnimation.length)];
-
     if (reward.points > 0) {
         const newTotal = user.totalPoints + reward.points;
-        await replyText(replyToken, `${randomEmoji} หมุนวงล้อ... ${randomEmoji}
+        await replyText(replyToken, `🎡 หมุนวงล้อ... ✨
 
 🎉 ยินดีด้วย! คุณได้รับ ${reward.name}!
 
 💰 คะแนนรวม: ${newTotal} pts
-⏰ หมุนครั้งต่อไปได้ใน ${SPIN_COOLDOWN_HOURS} ชั่วโมง
-
-พิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้าของคุณ`);
+⏰ หมุนครั้งต่อไปได้ใน ${SPIN_COOLDOWN_HOURS} ชั่วโมง`);
     } else {
-        await replyText(replyToken, `${randomEmoji} หมุนวงล้อ... ${randomEmoji}
+        await replyText(replyToken, `🎡 หมุนวงล้อ... ✨
 
 😅 ${reward.name}
 
-💪 อย่าเพิ่งท้อนะครับ! โชคดีครั้งหน้า!
-⏰ หมุนครั้งต่อไปได้ใน ${SPIN_COOLDOWN_HOURS} ชั่วโมง
-
-💡 ทำกิจกรรมอื่นเพื่อสะสมแต้ม:
-• "ส่งงาน" - ส่งภาระงาน
-• "เกม" - เล่นเกมสะสมแต้ม`);
+💪 อย่าเพิ่งท้อนะครับ! โชคดีครั้งหน้า!`);
     }
 }
