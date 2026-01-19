@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
-import { Pool } from "@neondatabase/serverless";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+
+neonConfig.fetchConnectionCache = true;
 
 const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;

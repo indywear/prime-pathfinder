@@ -32,10 +32,6 @@ model User {
   currentLevel    Int       @default(1)
   lastSpinAt      DateTime?
   
-  // Current Game State
-  currentGameType    String?
-  currentQuestionId  String?
-  
   // Timestamps
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @default(now()) @updatedAt
