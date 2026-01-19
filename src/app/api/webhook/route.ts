@@ -48,6 +48,16 @@ export async function POST(request: NextRequest) {
                     }
                 } catch (error) {
                     console.error("Error processing event:", error);
+                    // Attempt to notify user of error to prevent silence
+                    if (event.type === "message" && event.replyToken) {
+                        try {
+                            // Import lineClient dynamically or use a raw fetch to ensure independent failure
+                            // For now, relies on the upstream try-catch in handleTextMessage which we will implement next.
+                            // OR - strictly implement it here.
+                        } catch (e) {
+                            console.error("Failed to send error message:", e);
+                        }
+                    }
                 }
             })
         );

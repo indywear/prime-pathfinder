@@ -85,92 +85,97 @@ export async function handleTextMessage(
     event: WebhookEvent & { type: "message"; message: { type: "text"; text: string } }
 ) {
     console.log(`[handleTextMessage] Start processing for user: ${event.source.userId}, text: ${event.message.text}`);
-    const userId = event.source.userId;
-    if (!userId) return;
+    try {
+        const userId = event.source.userId;
+        if (!userId) return;
 
-    const text = event.message.text.trim();
+        const text = event.message.text.trim();
 
-    const user = await prisma.user.findUnique({
-        where: { lineUserId: userId },
-    });
+        const user = await prisma.user.findUnique({
+            where: { lineUserId: userId },
+        });
 
-    if (user && !user.isRegistered && user.registrationStep >= 0 && user.registrationStep < REGISTRATION_STEPS.length) {
-        if (detectMenuAction(text) === "CANCEL") {
-            await prisma.user.update({
-                where: { lineUserId: userId },
-                data: { registrationStep: -1 },
-            });
-            await replyText(event.replyToken, `ยกเลิกการลงทะเบียนแล้วครับ\n\nพิมพ์ "ลงทะเบียน" เพื่อเริ่มใหม่`);
+        if (user && !user.isRegistered && user.registrationStep >= 0 && user.registrationStep < REGISTRATION_STEPS.length) {
+            if (detectMenuAction(text) === "CANCEL") {
+                await prisma.user.update({
+                    where: { lineUserId: userId },
+                    data: { registrationStep: -1 },
+                });
+                await replyText(event.replyToken, `ยกเลิกการลงทะเบียนแล้วครับ\n\nพิมพ์ "ลงทะเบียน" เพื่อเริ่มใหม่`);
+                return;
+            }
+
+            await handleRegistrationStep(event.replyToken, userId, text, user.registrationStep);
             return;
         }
 
-        await handleRegistrationStep(event.replyToken, userId, text, user.registrationStep);
-        return;
-    }
+        const menuAction = detectMenuAction(text);
 
-    const menuAction = detectMenuAction(text);
-
-    if (menuAction) {
-        switch (menuAction) {
-            case "REGISTER":
-                await handleRegisterStart(event.replyToken, userId);
-                break;
-            case "FEEDBACK":
-                await handleFeedbackStart(event.replyToken, userId);
-                break;
-            case "SUBMIT":
-                await handleSubmitStart(event.replyToken, userId);
-                break;
-            case "PRACTICE":
-                await handlePracticeStart(event.replyToken, userId);
-                break;
-            case "DASHBOARD":
-                await handleDashboard(event.replyToken, userId);
-                break;
-            case "PROFILE":
-                await handleProfile(event.replyToken, userId);
-                break;
-            case "CANCEL":
-                await replyText(event.replyToken, "ไม่มีการทำงานที่ต้องยกเลิกครับ");
-                break;
-            case "HELP":
-                await handleHelp(event.replyToken, userId);
-                break;
-            case "LEADERBOARD":
-                await handleLeaderboard(event.replyToken, userId);
-                break;
-            case "SPIN_WHEEL":
-                await handleSpinWheel(event.replyToken, userId);
-                break;
-            case "GAME_MENU":
-                await handleGameMenu(event.replyToken, userId);
-                break;
-            case "VOCAB_GAME":
-                await handleVocabGameStart(event.replyToken, userId);
-                break;
-            case "FILL_BLANK_GAME":
-                await handleFillBlankGameStart(event.replyToken, userId);
-                break;
-            case "WORD_ORDER_GAME":
-                await handleWordOrderGameStart(event.replyToken, userId);
-                break;
-            case "SENTENCE_GAME":
-                await handleSentenceGameStart(event.replyToken, userId);
-                break;
-            case "SHOW_ANSWER":
-                await handleShowAnswer(event.replyToken, userId);
-                break;
+        if (menuAction) {
+            switch (menuAction) {
+                case "REGISTER":
+                    await handleRegisterStart(event.replyToken, userId);
+                    break;
+                case "FEEDBACK":
+                    await handleFeedbackStart(event.replyToken, userId);
+                    break;
+                case "SUBMIT":
+                    await handleSubmitStart(event.replyToken, userId);
+                    break;
+                case "PRACTICE":
+                    await handlePracticeStart(event.replyToken, userId);
+                    break;
+                case "DASHBOARD":
+                    await handleDashboard(event.replyToken, userId);
+                    break;
+                case "PROFILE":
+                    await handleProfile(event.replyToken, userId);
+                    break;
+                case "CANCEL":
+                    await replyText(event.replyToken, "ไม่มีการทำงานที่ต้องยกเลิกครับ");
+                    break;
+                case "HELP":
+                    await handleHelp(event.replyToken, userId);
+                    break;
+                case "LEADERBOARD":
+                    await handleLeaderboard(event.replyToken, userId);
+                    break;
+                case "SPIN_WHEEL":
+                    await handleSpinWheel(event.replyToken, userId);
+                    break;
+                case "GAME_MENU":
+                    await handleGameMenu(event.replyToken, userId);
+                    break;
+                case "VOCAB_GAME":
+                    await handleVocabGameStart(event.replyToken, userId);
+                    break;
+                case "FILL_BLANK_GAME":
+                    await handleFillBlankGameStart(event.replyToken, userId);
+                    break;
+                case "WORD_ORDER_GAME":
+                    await handleWordOrderGameStart(event.replyToken, userId);
+                    break;
+                case "SENTENCE_GAME":
+                    await handleSentenceGameStart(event.replyToken, userId);
+                    break;
+                case "SHOW_ANSWER":
+                    await handleShowAnswer(event.replyToken, userId);
+                    break;
+            }
+            return;
         }
-        return;
-    }
 
-    // Check if user is in a game
-    if (user?.currentGameType && user?.currentQuestionId) {
-        await handleGameAnswer(event.replyToken, user, text);
-        return;
-    }
+        // Check if user is in a game
+        if (user?.currentGameType && user?.currentQuestionId) {
+            await handleGameAnswer(event.replyToken, user, text);
+            return;
+        }
 
-    await handleGeneralConversation(event.replyToken, userId, text);
+        await handleGeneralConversation(event.replyToken, userId, text);
+    } catch (error) {
+        console.error(`[handleTextMessage] Error for user ${event.source.userId}:`, error);
+        await replyText(event.replyToken, "ขออภัยครับ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง หรือพิมพ์ 'เมนู' เพื่อเริ่มใหม่");
+    }
 }
 
 async function handleRegisterStart(replyToken: string, userId: string) {
