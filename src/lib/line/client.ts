@@ -194,12 +194,22 @@ export function createDashboardFlex(data: {
                     {
                         type: "button",
                         action: {
-                            type: "uri",
-                            label: "View Full Dashboard",
-                            uri: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
+                            type: "message",
+                            label: "ดูข้อมูลส่วนตัว",
+                            text: "ข้อมูลส่วนตัว",
                         },
                         style: "primary",
                         color: "#1DB446",
+                    },
+                    {
+                        type: "button",
+                        action: {
+                            type: "message",
+                            label: "หมุนวงล้อ",
+                            text: "หมุนวงล้อ",
+                        },
+                        style: "secondary",
+                        margin: "sm",
                     },
                 ],
                 paddingAll: "20px",
