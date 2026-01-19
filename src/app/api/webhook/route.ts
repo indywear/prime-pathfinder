@@ -28,10 +28,12 @@ export async function POST(request: NextRequest) {
                 try {
                     // Handle text messages
                     if (event.type === "message" && event.message.type === "text") {
+                        console.log(`[Webhook] Processing text message from ${event.source.userId}: ${event.message.text}`);
                         await handleTextMessage(event as WebhookEvent & {
                             type: "message";
                             message: { type: "text"; text: string }
                         });
+                        console.log(`[Webhook] Finished processing message from ${event.source.userId}`);
                     }
 
                     // Handle follow event (new friend)

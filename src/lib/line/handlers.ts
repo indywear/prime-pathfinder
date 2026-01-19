@@ -84,6 +84,7 @@ function detectMenuAction(text: string): string | null {
 export async function handleTextMessage(
     event: WebhookEvent & { type: "message"; message: { type: "text"; text: string } }
 ) {
+    console.log(`[handleTextMessage] Start processing for user: ${event.source.userId}, text: ${event.message.text}`);
     const userId = event.source.userId;
     if (!userId) return;
 
