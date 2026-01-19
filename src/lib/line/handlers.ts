@@ -84,14 +84,20 @@ function detectMenuAction(text: string): string | null {
 export async function handleTextMessage(
     event: WebhookEvent & { type: "message"; message: { type: "text"; text: string } }
 ) {
+    console.log('[Handlers] handleTextMessage started')
     const userId = event.source.userId;
-    if (!userId) return;
+    if (!userId) {
+        console.log('[Handlers] No userId, returning')
+        return;
+    }
 
     const text = event.message.text.trim();
+    console.log('[Handlers] Processing text:', text, 'from user:', userId)
 
     const user = await prisma.user.findUnique({
         where: { lineUserId: userId },
     });
+    console.log('[Handlers] User found:', user ? 'yes' : 'no', user?.isRegistered ? 'registered' : 'not registered')
 
     if (user && !user.isRegistered && user.registrationStep >= 0 && user.registrationStep < REGISTRATION_STEPS.length) {
         if (detectMenuAction(text) === "CANCEL") {
