@@ -174,7 +174,8 @@ export async function handleTextMessage(
         await handleGeneralConversation(event.replyToken, userId, text);
     } catch (error) {
         console.error(`[handleTextMessage] Error for user ${event.source.userId}:`, error);
-        await replyText(event.replyToken, "ขออภัยครับ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง หรือพิมพ์ 'เมนู' เพื่อเริ่มใหม่");
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        await replyText(event.replyToken, `ขออภัยครับ ระบบขัดข้อง (DEBUG INFO):\n\n${errorMessage}\n\nกรุณาลองใหม่`);
     }
 }
 
