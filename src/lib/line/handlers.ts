@@ -67,6 +67,7 @@ const MENU_KEYWORDS = {
     FILL_BLANK_GAME: ["เติมคำ", "fill blank", "fillblank", "เติมช่องว่าง"],
     WORD_ORDER_GAME: ["เรียงคำ", "word order", "เรียงประโยค"],
     SENTENCE_GAME: ["แต่งประโยค", "sentence", "แต่ง"],
+    SHOW_ANSWER: ["เฉลย", "ดูเฉลย", "คำตอบ", "answer"],
 };
 
 function detectMenuAction(text: string): string | null {
@@ -101,7 +102,7 @@ export async function handleTextMessage(
             await replyText(event.replyToken, `ยกเลิกการลงทะเบียนแล้วครับ\n\nพิมพ์ "ลงทะเบียน" เพื่อเริ่มใหม่`);
             return;
         }
-        
+
         await handleRegistrationStep(event.replyToken, userId, text, user.registrationStep);
         return;
     }
@@ -155,7 +156,16 @@ export async function handleTextMessage(
             case "SENTENCE_GAME":
                 await handleSentenceGameStart(event.replyToken, userId);
                 break;
+            case "SHOW_ANSWER":
+                await handleShowAnswer(event.replyToken, userId);
+                break;
         }
+        return;
+    }
+
+    // Check if user is in a game
+    if (user?.currentGameType && user?.currentQuestionId) {
+        await handleGameAnswer(event.replyToken, user, text);
         return;
     }
 
@@ -210,7 +220,7 @@ async function handleRegistrationStep(
         }
     }
 
-    const updateData: Record<string, unknown> = { 
+    const updateData: Record<string, unknown> = {
         [currentStep.field]: value,
         registrationStep: stepIndex + 1,
     };
@@ -441,6 +451,11 @@ async function handleVocabGameStart(replyToken: string, userId: string) {
         return;
     }
 
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: { currentGameType: "VOCAB", currentQuestionId: question.id },
+    });
+
     const vocabFlex = createVocabGameFlex({
         chineseWord: question.chineseWord,
         category: question.category || "ทั่วไป",
@@ -471,6 +486,11 @@ async function handleFillBlankGameStart(replyToken: string, userId: string) {
         return;
     }
 
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: { currentGameType: "FILL_BLANK", currentQuestionId: question.id },
+    });
+
     const fillBlankFlex = createFillBlankGameFlex({
         sentence: question.sentence,
         questionNumber: randomIndex + 1,
@@ -499,6 +519,11 @@ async function handleWordOrderGameStart(replyToken: string, userId: string) {
         await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
         return;
     }
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: { currentGameType: "WORD_ORDER", currentQuestionId: question.id },
+    });
 
     const words = question.shuffledWords as { number: number; word: string }[];
     const wordOrderFlex = createWordOrderGameFlex({
@@ -529,6 +554,11 @@ async function handleSentenceGameStart(replyToken: string, userId: string) {
         await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
         return;
     }
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: { currentGameType: "SENTENCE", currentQuestionId: pair.id },
+    });
 
     const sentenceFlex = createSentenceGameFlex({
         word1: pair.word1,
@@ -612,7 +642,7 @@ async function handleSpinWheel(replyToken: string, userId: string) {
 
     const now = new Date();
     const lastSpin = user.lastSpinAt;
-    
+
     if (lastSpin) {
         const hoursSinceLastSpin = (now.getTime() - lastSpin.getTime()) / (1000 * 60 * 60);
         if (hoursSinceLastSpin < SPIN_COOLDOWN_HOURS) {
@@ -655,4 +685,156 @@ async function handleSpinWheel(replyToken: string, userId: string) {
         replyToken,
         messages: [spinFlex] as any,
     });
+}
+
+async function handleShowAnswer(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.currentGameType || !user?.currentQuestionId) {
+        await replyText(replyToken, "กรุณาเริ่มเล่นเกมก่อนครับ พิมพ์ \"เกม\" เพื่อเลือกเกม");
+        return;
+    }
+
+    let answerText = "";
+
+    if (user.currentGameType === "VOCAB") {
+        const vocab = await prisma.chineseVocabulary.findUnique({
+            where: { id: user.currentQuestionId },
+        });
+        if (vocab) {
+            answerText = `เฉลย: ${vocab.chineseWord} = ${vocab.thaiMeaning}`;
+        }
+    } else if (user.currentGameType === "FILL_BLANK") {
+        const fillBlank = await prisma.fillBlankQuestion.findUnique({
+            where: { id: user.currentQuestionId },
+        });
+        if (fillBlank) {
+            answerText = `เฉลย: ${fillBlank.answer}`;
+        }
+    } else if (user.currentGameType === "WORD_ORDER") {
+        const wordOrder = await prisma.wordOrderQuestion.findUnique({
+            where: { id: user.currentQuestionId },
+        });
+        if (wordOrder) {
+            answerText = `เฉลย: ${wordOrder.correctAnswer}`;
+        }
+    } else if (user.currentGameType === "SENTENCE") {
+        const pair = await prisma.sentenceConstructionPair.findUnique({
+            where: { id: user.currentQuestionId },
+        });
+        if (pair) {
+            answerText = `ตัวอย่างประโยค: ${pair.word1} และ ${pair.word2} สามารถแต่งประโยคได้หลากหลาย ลองแต่งดูนะครับ`;
+        } else {
+            answerText = "เกมแต่งประโยคไม่มีคำตอบตายตัวครับ";
+        }
+    }
+
+    // Reset game state after showing answer
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: { currentGameType: null, currentQuestionId: null },
+    });
+
+    await replyText(replyToken, answerText || "ไม่พบคำตอบครับ (จบเกมแล้ว)");
+}
+
+async function handleGameAnswer(replyToken: string, user: any, text: string) {
+    let isCorrect = false;
+    let points = 0;
+    let correctAnswer = "";
+    let message = "";
+
+    // Check Answer Logic
+    if (user.currentGameType === "VOCAB") {
+        const question = await prisma.chineseVocabulary.findUnique({ where: { id: user.currentQuestionId } });
+        if (!question) {
+            await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+            return;
+        }
+        correctAnswer = question.thaiMeaning;
+        if (text.includes(question.thaiMeaning)) {
+            isCorrect = true;
+            points = 5;
+        }
+    } else if (user.currentGameType === "FILL_BLANK") {
+        const question = await prisma.fillBlankQuestion.findUnique({ where: { id: user.currentQuestionId } });
+        if (!question) {
+            await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+            return;
+        }
+        correctAnswer = question.answer;
+        if (text.trim() === question.answer.trim()) {
+            isCorrect = true;
+            points = 10;
+        }
+    } else if (user.currentGameType === "WORD_ORDER") {
+        const question = await prisma.wordOrderQuestion.findUnique({ where: { id: user.currentQuestionId } });
+        if (!question) {
+            await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+            return;
+        }
+        correctAnswer = question.correctAnswer;
+        // Basic normalization (remove spaces) for checking
+        if (text.replace(/\s/g, "") === question.correctAnswer.replace(/\s/g, "")) {
+            isCorrect = true;
+            points = 15;
+        }
+    } else if (user.currentGameType === "SENTENCE") {
+        const question = await prisma.sentenceConstructionPair.findUnique({ where: { id: user.currentQuestionId } });
+        if (!question) {
+            await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+            return;
+        }
+        // Check if both words are present
+        if (text.includes(question.word1) && text.includes(question.word2) && text.length > 20) {
+            isCorrect = true;
+            points = 20;
+            message = `แต่งประโยคได้ดีมากครับ! มีคำว่า "${question.word1}" และ "${question.word2}" ครบถ้วน`;
+        } else {
+            message = `ลองแต่งประโยคให้ยาวกว่านี้และมีคำว่า "${question.word1}" และ "${question.word2}" นะครับ`;
+        }
+    }
+
+    if (isCorrect) {
+        // Update Points and Reset Game State
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                totalPoints: { increment: points },
+                currentGameType: null,
+                currentQuestionId: null
+            }
+        });
+
+        const successMsg = message || `ถูกต้องนะคร้าบ! 🎉\n\nรับไปเลย ${points} คะแนน\n\n(เฉลย: ${correctAnswer})`;
+
+        await replyWithQuickReply(
+            replyToken,
+            successMsg,
+            [
+                { label: "เล่นต่อ", text: getGameStartCommand(user.currentGameType) },
+                { label: "เมนูหลัก", text: "เมนู" }
+            ]
+        );
+    } else {
+        // Wrong Answer: Give user a chance to try again or give up
+        await replyWithQuickReply(
+            replyToken,
+            `ยังไม่ถูกครับ 😅\n\nลองใหม่อีกครั้ง หรือพิมพ์ "เฉลย" เพื่อดูคำตอบครับ`,
+            [
+                { label: "เฉลย", text: "เฉลย" },
+                { label: "เมนูหลัก", text: "เมนู" }
+            ]
+        );
+    }
+}
+
+function getGameStartCommand(gameType: string): string {
+    switch (gameType) {
+        case "VOCAB": return "คำศัพท์";
+        case "FILL_BLANK": return "เติมคำ";
+        case "WORD_ORDER": return "เรียงคำ";
+        case "SENTENCE": return "แต่งประโยค";
+        default: return "เกม";
+    }
 }
