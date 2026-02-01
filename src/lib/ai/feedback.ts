@@ -1,8 +1,8 @@
 import axios, { AxiosError } from "axios";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
-// Use Claude 3.5 Sonnet - the correct model ID for OpenRouter
-const MODEL = "anthropic/claude-3.5-sonnet";
+// Use Claude Haiku 4.5 - fast and cost-effective for chat responses
+const MODEL = "anthropic/claude-haiku-4.5";
 
 // Helper to log API errors with details
 function logApiError(context: string, error: unknown) {
