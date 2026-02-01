@@ -4,6 +4,11 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 // Use Claude Haiku 4.5 - fast and cost-effective for chat responses
 const MODEL = "anthropic/claude-haiku-4.5";
 
+// Get API key with trimming to remove accidental whitespace/newlines
+function getApiKey(): string | undefined {
+    return process.env.OPENROUTER_API_KEY?.trim();
+}
+
 // Helper to log API errors with details
 function logApiError(context: string, error: unknown) {
     console.error(`[AI/${context}] Error occurred`);
@@ -63,7 +68,7 @@ Always respond in Thai language.`;
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    Authorization: `Bearer ${getApiKey()}`,
                     "Content-Type": "application/json",
                     "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
                     "X-Title": "ProficienThAI",
@@ -175,7 +180,7 @@ ${content}
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    Authorization: `Bearer ${getApiKey()}`,
                     "Content-Type": "application/json",
                     "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
                     "X-Title": "ProficienThAI",
@@ -278,7 +283,7 @@ Give a short hint in Thai:`;
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    Authorization: `Bearer ${getApiKey()}`,
                     "Content-Type": "application/json",
                     "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
                     "X-Title": "ProficienThAI",
@@ -297,7 +302,7 @@ export async function generateConversationResponse(
     userMessage: string,
     context: string
 ): Promise<string> {
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = getApiKey();
 
     // Check if API key is configured
     if (!apiKey) {

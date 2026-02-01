@@ -9,7 +9,8 @@ export async function GET(request: NextRequest) {
     const testAI = searchParams.get("testAI") === "true";
 
     const dbUrl = process.env.DATABASE_URL;
-    const openRouterKey = process.env.OPENROUTER_API_KEY;
+    // Trim to remove any accidental whitespace/newlines
+    const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
 
     const envStatus = {
         DATABASE_URL: dbUrl ? `Set (length: ${dbUrl.length}, starts: ${dbUrl.substring(0, 25)}...)` : "NOT SET",
