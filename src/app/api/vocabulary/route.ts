@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db/prisma";
+import { verifyAdminAuth, unauthorizedResponse } from "@/lib/auth";
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -46,8 +47,12 @@ export async function GET(request: NextRequest) {
     }
 }
 
-// POST /api/vocabulary - Add vocabulary (admin)
+// POST /api/vocabulary - Add vocabulary (admin only)
 export async function POST(request: NextRequest) {
+    if (!verifyAdminAuth(request)) {
+        return unauthorizedResponse();
+    }
+
     try {
         const body = await request.json();
 

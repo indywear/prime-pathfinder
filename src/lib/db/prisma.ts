@@ -21,18 +21,13 @@ function parseConnectionString(connStr: string) {
 }
 
 function createPrismaClient(): PrismaClient {
-    // FORCE FIX: Hardcode the correct DB Request by User
-    // Vercel Env Vars are stuck on old DB
-    const connectionString = "postgresql://neondb_owner:npg_F2GtcmHiRgV0@ep-long-sky-a1iwoau6-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
+    const connectionString = process.env.DATABASE_URL;
 
-    // if (!connectionString) {
-    //     throw new Error("DATABASE_URL is required");
-    // }
-
-    console.log("[Prisma] Creating client with URL length:", connectionString.length);
+    if (!connectionString) {
+        throw new Error("DATABASE_URL environment variable is required");
+    }
 
     const config = parseConnectionString(connectionString);
-    console.log("[Prisma] Parsed config - host:", config.host, "user:", config.user, "db:", config.database);
 
     const pool = new Pool({
         host: config.host,

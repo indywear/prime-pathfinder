@@ -22,6 +22,7 @@ import {
     getPointsForNextLevel,
     formatPointsMessage,
 } from "@/lib/gamification/points";
+import { SPIN_WHEEL_PRIZES } from "@/lib/gamification/rewards";
 
 const REGISTRATION_STEPS = [
     { field: "chineseName", question: "ชื่อ-นามสกุล (ภาษาจีน) ของคุณคืออะไรครับ?", type: "text" },
@@ -627,15 +628,6 @@ async function handleLeaderboard(replyToken: string, userId: string) {
     });
 }
 
-const SPIN_WHEEL_REWARDS = [
-    { name: "5 แต้ม", points: 5, probability: 0.30 },
-    { name: "10 แต้ม", points: 10, probability: 0.25 },
-    { name: "20 แต้ม", points: 20, probability: 0.20 },
-    { name: "50 แต้ม", points: 50, probability: 0.10 },
-    { name: "100 แต้ม", points: 100, probability: 0.05 },
-    { name: "เสียใจด้วย ไม่ได้รางวัล", points: 0, probability: 0.10 },
-];
-
 const SPIN_COOLDOWN_HOURS = 24;
 
 async function handleSpinWheel(replyToken: string, userId: string) {
@@ -660,9 +652,9 @@ async function handleSpinWheel(replyToken: string, userId: string) {
 
     const random = Math.random();
     let cumulativeProbability = 0;
-    let reward = SPIN_WHEEL_REWARDS[SPIN_WHEEL_REWARDS.length - 1];
+    let reward = SPIN_WHEEL_PRIZES[SPIN_WHEEL_PRIZES.length - 1];
 
-    for (const r of SPIN_WHEEL_REWARDS) {
+    for (const r of SPIN_WHEEL_PRIZES) {
         cumulativeProbability += r.probability;
         if (random < cumulativeProbability) {
             reward = r;
@@ -673,18 +665,18 @@ async function handleSpinWheel(replyToken: string, userId: string) {
     await prisma.user.update({
         where: { id: user.id },
         data: {
-            totalPoints: { increment: reward.points },
+            totalPoints: { increment: reward.value },
             lastSpinAt: now,
         },
     });
 
-    const newTotal = user.totalPoints + reward.points;
+    const newTotal = user.totalPoints + reward.value;
 
     const spinFlex = createSpinWheelResultFlex({
         reward: reward.name,
-        points: reward.points,
+        points: reward.value,
         totalPoints: newTotal,
-        isWin: reward.points > 0,
+        isWin: reward.value > 0,
     });
 
     await lineClient.replyMessage({
@@ -745,13 +737,14 @@ async function handleShowAnswer(replyToken: string, userId: string) {
 }
 
 async function handleGameAnswer(replyToken: string, user: any, text: string) {
-    let isCorrect = false;
-    let points = 0;
-    let correctAnswer = "";
-    let message = "";
+    try {
+        let isCorrect = false;
+        let points = 0;
+        let correctAnswer = "";
+        let message = "";
 
-    // Check Answer Logic
-    if (user.currentGameType === "VOCAB") {
+        // Check Answer Logic
+        if (user.currentGameType === "VOCAB") {
         const question = await prisma.chineseVocabulary.findUnique({ where: { id: user.currentQuestionId } });
         if (!question) {
             await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
@@ -832,6 +825,10 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                 { label: "เมนูหลัก", text: "เมนู" }
             ]
         );
+    }
+    } catch (error) {
+        console.error("handleGameAnswer error:", error);
+        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งครับ 🙏");
     }
 }
 

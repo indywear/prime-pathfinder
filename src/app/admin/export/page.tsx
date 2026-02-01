@@ -3,16 +3,37 @@
 import { useState } from 'react'
 
 export default function ExportPage() {
-    const [exporting, setExporting] = useState(false)
-    const [format, setFormat] = useState<'csv' | 'json' | 'excel'>('csv')
+    const [exporting, setExporting] = useState<string | null>(null)
+    const [format, setFormat] = useState<'csv' | 'json'>('csv')
 
     const handleExport = async (dataType: string) => {
-        setExporting(true)
-        // In real implementation, this would call an API endpoint
-        // For now, just simulate download
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        setExporting(false)
-        alert(`Exported ${dataType} as ${format.toUpperCase()}`)
+        setExporting(dataType)
+        try {
+            const response = await fetch(`/api/admin/export?type=${dataType}&format=${format}`)
+
+            if (!response.ok) {
+                throw new Error('Export failed')
+            }
+
+            const contentDisposition = response.headers.get('Content-Disposition')
+            const filenameMatch = contentDisposition?.match(/filename="(.+)"/)
+            const filename = filenameMatch ? filenameMatch[1] : `export_${dataType}.${format}`
+
+            const blob = await response.blob()
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = filename
+            document.body.appendChild(a)
+            a.click()
+            window.URL.revokeObjectURL(url)
+            document.body.removeChild(a)
+        } catch (error) {
+            console.error('Export error:', error)
+            alert('Export failed. Please try again.')
+        } finally {
+            setExporting(null)
+        }
     }
 
     return (
@@ -28,7 +49,7 @@ export default function ExportPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 className="text-lg font-bold text-gray-900 mb-4">Select Export Format</h2>
                 <div className="flex gap-4">
-                    {(['csv', 'json', 'excel'] as const).map((fmt) => (
+                    {(['csv', 'json'] as const).map((fmt) => (
                         <button
                             key={fmt}
                             onClick={() => setFormat(fmt)}
@@ -58,10 +79,10 @@ export default function ExportPage() {
                     </ul>
                     <button
                         onClick={() => handleExport('users')}
-                        disabled={exporting}
+                        disabled={exporting !== null}
                         className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                     >
-                        {exporting ? 'Exporting...' : 'Export Users'}
+                        {exporting === 'users' ? 'Exporting...' : 'Export Users'}
                     </button>
                 </div>
 
@@ -78,10 +99,10 @@ export default function ExportPage() {
                     </ul>
                     <button
                         onClick={() => handleExport('submissions')}
-                        disabled={exporting}
+                        disabled={exporting !== null}
                         className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                     >
-                        {exporting ? 'Exporting...' : 'Export Submissions'}
+                        {exporting === 'submissions' ? 'Exporting...' : 'Export Submissions'}
                     </button>
                 </div>
 
@@ -98,10 +119,10 @@ export default function ExportPage() {
                     </ul>
                     <button
                         onClick={() => handleExport('feedback')}
-                        disabled={exporting}
+                        disabled={exporting !== null}
                         className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                     >
-                        {exporting ? 'Exporting...' : 'Export Feedback'}
+                        {exporting === 'feedback' ? 'Exporting...' : 'Export Feedback'}
                     </button>
                 </div>
 
@@ -118,30 +139,10 @@ export default function ExportPage() {
                     </ul>
                     <button
                         onClick={() => handleExport('practice')}
-                        disabled={exporting}
+                        disabled={exporting !== null}
                         className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                     >
-                        {exporting ? 'Exporting...' : 'Export Practice'}
-                    </button>
-                </div>
-
-                {/* Reading Sessions */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">📚 Reading Tracker</h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                        Export reading behavior data
-                    </p>
-                    <ul className="text-sm text-gray-700 space-y-1 mb-4">
-                        <li>• Time spent & scroll depth</li>
-                        <li>• Focus metrics</li>
-                        <li>• Suspicious behavior flags</li>
-                    </ul>
-                    <button
-                        onClick={() => handleExport('reading')}
-                        disabled={exporting}
-                        className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                        {exporting ? 'Exporting...' : 'Export Reading'}
+                        {exporting === 'practice' ? 'Exporting...' : 'Export Practice'}
                     </button>
                 </div>
 
@@ -158,10 +159,10 @@ export default function ExportPage() {
                     </ul>
                     <button
                         onClick={() => handleExport('complete')}
-                        disabled={exporting}
+                        disabled={exporting !== null}
                         className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
                     >
-                        {exporting ? 'Exporting...' : 'Export Complete Dataset'}
+                        {exporting === 'complete' ? 'Exporting...' : 'Export Complete Dataset'}
                     </button>
                 </div>
             </div>
@@ -172,7 +173,7 @@ export default function ExportPage() {
                 <p className="text-sm text-yellow-800">
                     All exported data is anonymized to protect user privacy. Personal identifiable
                     information (PII) such as names, emails, and LINE User IDs are removed or hashed.
-                    Exported data should be handled according to your institution's research ethics
+                    Exported data should be handled according to your institution&apos;s research ethics
                     guidelines and PDPA regulations.
                 </p>
             </div>

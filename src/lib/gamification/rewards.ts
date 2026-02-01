@@ -68,14 +68,13 @@ export async function checkEasterEgg(
     return { triggered: true, egg }
 }
 
-const SPIN_WHEEL_PRIZES = [
-    { id: 'XP_10', name: '10 XP', probability: 0.3, value: 10 },
-    { id: 'XP_25', name: '25 XP', probability: 0.25, value: 25 },
-    { id: 'XP_50', name: '50 XP', probability: 0.15, value: 50 },
-    { id: 'XP_100', name: '100 XP', probability: 0.05, value: 100 },
-    { id: 'DOUBLE_XP', name: 'Double XP (1hr)', probability: 0.1, value: 0 },
-    { id: 'MYSTERY', name: 'Mystery Box', probability: 0.1, value: 0 },
-    { id: 'HINT', name: 'Hint Token', probability: 0.05, value: 0 },
+export const SPIN_WHEEL_PRIZES = [
+    { id: 'XP_5', name: '5 แต้ม', probability: 0.30, value: 5 },
+    { id: 'XP_10', name: '10 แต้ม', probability: 0.25, value: 10 },
+    { id: 'XP_20', name: '20 แต้ม', probability: 0.20, value: 20 },
+    { id: 'XP_50', name: '50 แต้ม', probability: 0.10, value: 50 },
+    { id: 'XP_100', name: '100 แต้ม', probability: 0.05, value: 100 },
+    { id: 'NOTHING', name: 'เสียใจด้วย ไม่ได้รางวัล', probability: 0.10, value: 0 },
 ]
 
 const MYSTERY_BOX_CONTENTS = [
@@ -102,7 +101,7 @@ export async function spinWheel(
     userId: string
 ): Promise<{ success: boolean; prize?: { name: string; xp: number }; message: string }> {
     const user = await prisma.user.findUnique({
-        where: { id: visitorId(userId) },
+        where: { id: userId },
         select: { lastSpinAt: true },
     })
 
@@ -129,10 +128,6 @@ export async function spinWheel(
         prize: { name: prize.name, xp: prize.value },
         message: `🎰 ได้รับ ${prize.name}! ${prize.value > 0 ? `+${prize.value} XP` : ''}`,
     }
-}
-
-function visitorId(userId: string): string {
-    return userId
 }
 
 export async function openMysteryBox(

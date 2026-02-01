@@ -49,6 +49,16 @@ interface DashboardData {
         earnedAt: string;
     }>;
     feedbackRequests: number;
+    streak: number;
+    dailyChallenge: {
+        id: string;
+        title: string;
+        description: string;
+        target: number;
+        progress: number;
+        reward: number;
+        completed: boolean;
+    };
 }
 
 function DashboardContent() {
@@ -184,6 +194,47 @@ function DashboardContent() {
                 }}>
                     อีก {data.user.pointsToNextLevel} แต้ม ถึง Level {data.user.level + 1}
                 </p>
+            </div>
+
+            {/* Streak & Daily Challenge */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px" }}>
+                {/* Streak Card */}
+                <div className="card" style={{ textAlign: "center", padding: "20px" }}>
+                    <div style={{ fontSize: "3rem", marginBottom: "8px" }}>🔥</div>
+                    <div style={{ fontSize: "2rem", fontWeight: "700", color: "#FF5722" }}>
+                        {data.streak}
+                    </div>
+                    <div style={{ color: "#666", fontSize: "0.875rem" }}>
+                        {data.streak === 1 ? "วัน Streak" : "วัน Streak ติดต่อกัน"}
+                    </div>
+                </div>
+
+                {/* Daily Challenge Card */}
+                <div className="card" style={{ padding: "20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                        <span style={{ fontSize: "1.5rem" }}>🎯</span>
+                        <span style={{ fontWeight: "600" }}>Challenge วันนี้</span>
+                        {data.dailyChallenge.completed && (
+                            <span style={{ marginLeft: "auto", color: "#4CAF50", fontSize: "0.875rem" }}>✓ สำเร็จ!</span>
+                        )}
+                    </div>
+                    <div style={{ fontSize: "0.875rem", color: "#333", marginBottom: "8px" }}>
+                        {data.dailyChallenge.title}: {data.dailyChallenge.description}
+                    </div>
+                    <div className="progress-bar" style={{ marginBottom: "8px" }}>
+                        <div
+                            className="progress-bar-fill"
+                            style={{
+                                width: `${Math.min((data.dailyChallenge.progress / data.dailyChallenge.target) * 100, 100)}%`,
+                                background: data.dailyChallenge.completed ? "#4CAF50" : "#FF9800"
+                            }}
+                        />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "#666" }}>
+                        <span>{data.dailyChallenge.progress}/{data.dailyChallenge.target}</span>
+                        <span>รางวัล: +{data.dailyChallenge.reward} แต้ม</span>
+                    </div>
+                </div>
             </div>
 
             {/* Stats Grid */}

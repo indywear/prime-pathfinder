@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db/prisma";
 import { BADGE_TYPES } from "@/lib/gamification/points";
+import { verifyAdminAuth, unauthorizedResponse } from "@/lib/auth";
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -22,8 +23,12 @@ export async function GET() {
     }
 }
 
-// POST /api/badges/seed - Seed default badges
-export async function POST() {
+// POST /api/badges/seed - Seed default badges (admin only)
+export async function POST(request: NextRequest) {
+    if (!verifyAdminAuth(request)) {
+        return unauthorizedResponse();
+    }
+
     try {
         const badges = Object.values(BADGE_TYPES);
 

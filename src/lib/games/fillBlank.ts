@@ -1,4 +1,5 @@
 import prisma from "@/lib/db/prisma";
+import { shuffle } from "@/lib/utils/shuffle";
 
 export interface FillBlankQuestion {
     id: string;
@@ -18,8 +19,8 @@ export async function getRandomFillBlankQuestions(count: number = 5): Promise<Fi
         return [];
     }
 
-    // Shuffle and pick
-    const shuffled = allQuestions.sort(() => Math.random() - 0.5);
+    // Shuffle and pick using Fisher-Yates
+    const shuffled = shuffle(allQuestions);
 
     return shuffled.slice(0, count).map(q => ({
         id: q.id,

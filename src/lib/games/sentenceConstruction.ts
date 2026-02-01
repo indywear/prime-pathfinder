@@ -1,4 +1,5 @@
 import prisma from "@/lib/db/prisma";
+import { shuffle } from "@/lib/utils/shuffle";
 
 export interface SentenceConstructionPair {
     id: string;
@@ -26,8 +27,8 @@ export async function getRandomSentencePairs(count: number = 5): Promise<Sentenc
         return [];
     }
 
-    // Shuffle and pick
-    const shuffled = allPairs.sort(() => Math.random() - 0.5);
+    // Shuffle and pick using Fisher-Yates
+    const shuffled = shuffle(allPairs);
 
     return shuffled.slice(0, count).map(p => ({
         id: p.id,

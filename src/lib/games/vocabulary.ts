@@ -1,4 +1,5 @@
 import prisma from "@/lib/db/prisma";
+import { shuffle } from "@/lib/utils/shuffle";
 
 export interface VocabularyQuestion {
     id: string;
@@ -30,8 +31,8 @@ export async function getRandomVocabularyQuestions(count: number = 5): Promise<V
         take: Math.min(count * 3, totalCount), // Get more than needed for randomness
     });
 
-    // Shuffle and pick
-    const shuffled = allVocab.sort(() => Math.random() - 0.5);
+    // Shuffle and pick using Fisher-Yates
+    const shuffled = shuffle(allVocab);
 
     for (const vocab of shuffled) {
         if (questions.length >= count) break;

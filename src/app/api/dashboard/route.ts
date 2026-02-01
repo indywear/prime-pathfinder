@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db/prisma";
 import { getPointsForNextLevel, getProgressToNextLevel } from "@/lib/gamification/points";
+import { updateStreak, getDailyChallenge } from "@/lib/gamification";
 
 // Force dynamic rendering - don't prerender at build time
 export const dynamic = 'force-dynamic';
@@ -71,6 +72,10 @@ export async function GET(request: NextRequest) {
         const practiceAccuracy =
             practiceTotal > 0 ? Math.round((practiceCorrect / practiceTotal) * 100) : 0;
 
+        // Get streak and daily challenge
+        const streakData = await updateStreak(user.id);
+        const dailyChallenge = await getDailyChallenge(user.id);
+
         // Prepare response
         const dashboardData = {
             user: {
@@ -122,6 +127,16 @@ export async function GET(request: NextRequest) {
                 earnedAt: ub.earnedAt,
             })),
             feedbackRequests: user.feedbackRequests.length,
+            streak: streakData.streak,
+            dailyChallenge: {
+                id: dailyChallenge.challenge.id,
+                title: dailyChallenge.challenge.title,
+                description: dailyChallenge.challenge.description,
+                target: dailyChallenge.challenge.target,
+                progress: dailyChallenge.progress,
+                reward: dailyChallenge.challenge.reward,
+                completed: dailyChallenge.completed,
+            },
         };
 
         return NextResponse.json(dashboardData);
