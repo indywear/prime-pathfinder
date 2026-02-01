@@ -203,7 +203,9 @@ export async function GET(request: NextRequest) {
 
         if (format === "csv" && Array.isArray(data)) {
             const csvContent = convertToCSV(data as Record<string, unknown>[]);
-            return new NextResponse(csvContent, {
+            // Add UTF-8 BOM for Excel to properly recognize Thai characters
+            const BOM = '\uFEFF';
+            return new NextResponse(BOM + csvContent, {
                 headers: {
                     "Content-Type": "text/csv; charset=utf-8",
                     "Content-Disposition": `attachment; filename="${filename}.csv"`,

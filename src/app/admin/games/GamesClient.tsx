@@ -6,6 +6,7 @@ interface GameConfig {
     id: string
     gameType: string
     displayName: string
+    category: string
     isEnabled: boolean
     difficulty: number
     pointMultiplier: number
@@ -79,8 +80,20 @@ export default function AdminGamesClient() {
                         <tbody className="divide-y divide-gray-200">
                             {games.map((game) => (
                                 <tr key={game.gameType} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-sm text-gray-900 font-medium">{game.displayName}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600 font-mono">{game.gameType}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                                        {game.displayName}
+                                        <div className="text-xs text-gray-400 font-mono">{game.gameType}</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            game.category === 'คำศัพท์' ? 'bg-blue-100 text-blue-800' :
+                                            game.category === 'ไวยากรณ์' ? 'bg-purple-100 text-purple-800' :
+                                            game.category === 'อ่าน-เขียน' ? 'bg-orange-100 text-orange-800' :
+                                            'bg-pink-100 text-pink-800'
+                                        }`}>
+                                            {game.category}
+                                        </span>
+                                    </td>
                                     <td className="px-6 py-4 text-sm text-gray-600">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${game.difficulty === 1 ? 'bg-green-100 text-green-800' :
                                                 game.difficulty === 2 ? 'bg-yellow-100 text-yellow-800' :
