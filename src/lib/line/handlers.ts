@@ -156,7 +156,14 @@ const MENU_KEYWORDS = {
     REGISTER: ["ลงทะเบียน", "register", "สมัคร"],
     FEEDBACK: ["ขอผลป้อนกลับ", "feedback", "ผลป้อนกลับ"],
     SUBMIT: ["ส่งงาน", "submit", "ส่ง", "submit task"],
-    PRACTICE: ["ฝึกฝน", "practice", "ฝึก", "เกม", "game", "games", "เล่นเกม"],
+
+    // === Game Category Menus (ต้องอยู่ก่อน PRACTICE เพราะมีคำ "เกม" ซ้ำกัน) ===
+    VOCAB_GAMES: ["เกมคำศัพท์", "vocab games"],
+    GRAMMAR_GAMES: ["เกมไวยากรณ์", "grammar games"],
+    READING_GAMES: ["เกมอ่าน", "เกมอ่านเขียน", "reading games"],
+    FUN_GAMES: ["เกมสนุก", "fun games"],
+
+    PRACTICE: ["ฝึกฝน", "practice", "ฝึก", "เล่นเกม"],
     DASHBOARD: ["แดชบอร์ด", "dashboard", "ความก้าวหน้า", "ดูความก้าวหน้า"],
     PROFILE: ["ข้อมูลส่วนตัว", "profile", "โปรไฟล์"],
     EDIT_PROFILE: ["แก้ไขข้อมูล", "แก้ไขชื่อ", "เปลี่ยนชื่อ", "edit profile", "แก้ไข"],
@@ -167,12 +174,6 @@ const MENU_KEYWORDS = {
     MY_TASK: ["ภาระงาน", "task", "การบ้าน", "งานประจำสัปดาห์", "งานอาจารย์"],
     SHOW_ANSWER: ["เฉลย", "ดูเฉลย", "คำตอบ", "answer"],
     SKIP_QUESTION: ["ข้าม", "skip"],
-
-    // === Game Category Menus ===
-    VOCAB_GAMES: ["เกมคำศัพท์", "vocab games", "คำศัพท์"],
-    GRAMMAR_GAMES: ["เกมไวยากรณ์", "grammar games", "ไวยากรณ์"],
-    READING_GAMES: ["เกมอ่าน", "reading games", "อ่านเขียน"],
-    FUN_GAMES: ["เกมสนุก", "fun games", "สนุก"],
 
     // === Vocabulary Games (4 เกม) ===
     VOCAB_MATCH_GAME: ["จับคู่คำ", "vocab match", "จับคู่"],
