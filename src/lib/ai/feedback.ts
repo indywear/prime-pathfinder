@@ -1,7 +1,21 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "anthropic/claude-sonnet-4";
+// Use Claude 3.5 Sonnet - the correct model ID for OpenRouter
+const MODEL = "anthropic/claude-3.5-sonnet";
+
+// Helper to log API errors with details
+function logApiError(context: string, error: unknown) {
+    console.error(`[AI/${context}] Error occurred`);
+    if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError;
+        console.error(`[AI/${context}] Status:`, axiosError.response?.status);
+        console.error(`[AI/${context}] Data:`, JSON.stringify(axiosError.response?.data));
+        console.error(`[AI/${context}] Message:`, axiosError.message);
+    } else {
+        console.error(`[AI/${context}] Unknown error:`, error);
+    }
+}
 
 // New 5-Criteria Rubric Scores (1-4 each, total 20)
 interface RubricScores {
@@ -59,7 +73,7 @@ Always respond in Thai language.`;
 
         return response.data.choices[0]?.message?.content || "ขอบคุณที่ส่งงานมาครับ!";
     } catch (error) {
-        console.error("Simple Feedback Error:", error);
+        logApiError("SimpleFeedback", error);
         return "ขอบคุณที่ส่งงานมาครับ! ลองตรวจสอบการสะกดคำและการเว้นวรรคอีกครั้งนะครับ";
     }
 }
@@ -205,7 +219,7 @@ ${content}
             },
         };
     } catch (error) {
-        console.error("AI Feedback Error:", error);
+        logApiError("WritingFeedback", error);
 
         // Return default feedback on error
         return {
@@ -274,7 +288,7 @@ Give a short hint in Thai:`;
 
         return response.data.choices[0]?.message?.content || "ลองอีกครั้งนะครับ!";
     } catch (error) {
-        console.error("Practice Hint Error:", error);
+        logApiError("PracticeHint", error);
         return "ลองอีกครั้งนะครับ!";
     }
 }
@@ -283,6 +297,18 @@ export async function generateConversationResponse(
     userMessage: string,
     context: string
 ): Promise<string> {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+
+    // Check if API key is configured
+    if (!apiKey) {
+        console.error("[AI/ConversationResponse] OPENROUTER_API_KEY not configured");
+        return "ขอโทษครับ ระบบ AI ยังไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบครับ";
+    }
+
+    console.log("[AI/ConversationResponse] Processing message:", userMessage.substring(0, 50));
+    console.log("[AI/ConversationResponse] API Key exists:", !!apiKey);
+    console.log("[AI/ConversationResponse] Using model:", MODEL);
+
     const systemPrompt = `You are ProficienThAI, a friendly Thai language learning chatbot.
 You help students improve their Thai reading and writing skills.
 Respond naturally in Thai, keeping messages concise and helpful.
@@ -305,17 +331,18 @@ Context: ${context}`;
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    Authorization: `Bearer ${apiKey}`,
                     "Content-Type": "application/json",
-                    "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+                    "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://proficienthai.vercel.app",
                     "X-Title": "ProficienThAI",
                 },
             }
         );
 
+        console.log("[AI/ConversationResponse] Success, response received");
         return response.data.choices[0]?.message?.content || "ขอโทษครับ ไม่เข้าใจ ลองพิมพ์ใหม่อีกครั้งได้ไหมครับ?";
     } catch (error) {
-        console.error("Conversation Error:", error);
+        logApiError("ConversationResponse", error);
         return "ขอโทษครับ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งนะครับ";
     }
 }
