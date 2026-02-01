@@ -2,30 +2,136 @@ import prisma from '@/lib/db/prisma'
 import { GameType } from '@prisma/client'
 
 // ==================== GAME TYPES ====================
+// 15 ประเภทเกม แบ่งเป็น 4 หมวด
 
 export const GAME_TYPES = {
-    // Vocabulary Games
-    VOCAB_MATCH: { id: 'vocab_match', name: 'จับคู่คำ', difficulty: 1, timeLimit: 60, points: 10 },
-    VOCAB_MEANING: { id: 'vocab_meaning', name: 'ความหมายคำศัพท์', difficulty: 1, timeLimit: 45, points: 10 },
-    VOCAB_OPPOSITE: { id: 'vocab_opposite', name: 'คำตรงข้าม', difficulty: 2, timeLimit: 45, points: 15 },
-    VOCAB_SYNONYM: { id: 'vocab_synonym', name: 'คำพ้องความหมาย', difficulty: 3, timeLimit: 45, points: 20 },
+    // ========== Vocabulary Games (4) ==========
+    VOCAB_MATCH: {
+        id: 'VOCAB_MATCH',
+        name: 'จับคู่คำ',
+        description: 'จับคู่คำกับความหมายที่ถูกต้อง',
+        points: 10,
+        questionsPerRound: 5,
+        category: 'vocabulary',
+    },
+    VOCAB_MEANING: {
+        id: 'VOCAB_MEANING',
+        name: 'ความหมายคำศัพท์',
+        description: 'พิมพ์ความหมายของคำที่กำหนด',
+        points: 10,
+        questionsPerRound: 5,
+        category: 'vocabulary',
+    },
+    VOCAB_OPPOSITE: {
+        id: 'VOCAB_OPPOSITE',
+        name: 'คำตรงข้าม',
+        description: 'เลือกคำตรงข้ามจาก 4 ตัวเลือก',
+        points: 10,
+        questionsPerRound: 5,
+        category: 'vocabulary',
+    },
+    VOCAB_SYNONYM: {
+        id: 'VOCAB_SYNONYM',
+        name: 'คำพ้องความหมาย',
+        description: 'เลือกคำพ้องความหมายจาก 4 ตัวเลือก',
+        points: 10,
+        questionsPerRound: 5,
+        category: 'vocabulary',
+    },
 
-    // Grammar Games
-    FILL_BLANK: { id: 'fill_blank', name: 'เติมคำในช่องว่าง', difficulty: 1, timeLimit: 60, points: 10 },
-    FIX_SENTENCE: { id: 'fix_sentence', name: 'แก้ไขประโยค', difficulty: 2, timeLimit: 90, points: 15 },
-    ARRANGE_SENTENCE: { id: 'arrange_sentence', name: 'เรียงประโยค', difficulty: 2, timeLimit: 60, points: 15 },
-    SPEED_GRAMMAR: { id: 'speed_grammar', name: 'Speed Grammar', difficulty: 3, timeLimit: 120, points: 25 },
+    // ========== Grammar Games (4) ==========
+    FILL_BLANK: {
+        id: 'FILL_BLANK',
+        name: 'เติมคำ',
+        description: 'เติมคำลงในช่องว่างให้ถูกต้อง',
+        points: 10,
+        questionsPerRound: 5,
+        category: 'grammar',
+    },
+    FIX_SENTENCE: {
+        id: 'FIX_SENTENCE',
+        name: 'แก้ไขประโยค',
+        description: 'แก้ไขประโยคที่ผิดให้ถูกต้อง',
+        points: 12,
+        questionsPerRound: 5,
+        category: 'grammar',
+    },
+    ARRANGE_SENTENCE: {
+        id: 'ARRANGE_SENTENCE',
+        name: 'เรียงประโยค',
+        description: 'เรียงคำให้เป็นประโยคที่ถูกต้อง',
+        points: 12,
+        questionsPerRound: 5,
+        category: 'grammar',
+    },
+    SPEED_GRAMMAR: {
+        id: 'SPEED_GRAMMAR',
+        name: 'Speed Grammar',
+        description: 'ตอบคำถามไวยากรณ์ให้เร็วที่สุด',
+        points: 15,
+        questionsPerRound: 5,
+        category: 'grammar',
+    },
 
-    // Reading & Writing Games
-    READ_ANSWER: { id: 'read_answer', name: 'อ่านแล้วตอบ', difficulty: 2, timeLimit: 180, points: 20 },
-    COMPOSE_SENTENCE: { id: 'compose_sentence', name: 'แต่งประโยค', difficulty: 2, timeLimit: 120, points: 20 },
-    SUMMARIZE: { id: 'summarize', name: 'สรุปเรื่อง', difficulty: 3, timeLimit: 300, points: 30 },
-    CONTINUE_STORY: { id: 'continue_story', name: 'เขียนต่อเรื่อง', difficulty: 3, timeLimit: 300, points: 30 },
+    // ========== Reading & Writing Games (4) ==========
+    READ_ANSWER: {
+        id: 'READ_ANSWER',
+        name: 'อ่านแล้วตอบ',
+        description: 'อ่านเนื้อเรื่องแล้วตอบคำถาม',
+        points: 15,
+        questionsPerRound: 3,
+        category: 'reading',
+    },
+    COMPOSE_SENTENCE: {
+        id: 'COMPOSE_SENTENCE',
+        name: 'แต่งประโยค',
+        description: 'แต่งประโยคโดยใช้คำที่กำหนด',
+        points: 15,
+        questionsPerRound: 3,
+        category: 'reading',
+    },
+    SUMMARIZE: {
+        id: 'SUMMARIZE',
+        name: 'สรุปเรื่อง',
+        description: 'อ่านเนื้อเรื่องแล้วเขียนสรุป',
+        points: 20,
+        questionsPerRound: 3,
+        category: 'reading',
+    },
+    CONTINUE_STORY: {
+        id: 'CONTINUE_STORY',
+        name: 'เขียนต่อเรื่อง',
+        description: 'อ่านเนื้อเรื่องแล้วเขียนต่อ',
+        points: 20,
+        questionsPerRound: 3,
+        category: 'reading',
+    },
 
-    // Fun Games
-    DAILY_VOCAB: { id: 'daily_vocab', name: 'คำศัพท์รายวัน', difficulty: 1, timeLimit: null, points: 5 },
-    RACE_CLOCK: { id: 'race_clock', name: 'แข่งกับเวลา', difficulty: 2, timeLimit: 60, points: 25 },
-    VOCAB_GACHA: { id: 'vocab_gacha', name: 'กาชาคำศัพท์', difficulty: 1, timeLimit: null, points: 3 },
+    // ========== Fun Games (3) ==========
+    DAILY_VOCAB: {
+        id: 'DAILY_VOCAB',
+        name: 'คำศัพท์รายวัน',
+        description: 'เรียนรู้คำศัพท์ใหม่ทุกวัน',
+        points: 5,
+        questionsPerRound: 1,
+        category: 'fun',
+    },
+    RACE_CLOCK: {
+        id: 'RACE_CLOCK',
+        name: 'แข่งกับเวลา',
+        description: 'ตอบคำถามให้เร็วที่สุด',
+        points: 10,
+        questionsPerRound: 10,
+        category: 'fun',
+    },
+    VOCAB_GACHA: {
+        id: 'VOCAB_GACHA',
+        name: 'กาชาคำศัพท์',
+        description: 'สุ่มได้คำศัพท์ใหม่มาสะสม',
+        points: 5,
+        questionsPerRound: 1,
+        category: 'fun',
+    },
 } as const
 
 export type GameTypeId = keyof typeof GAME_TYPES

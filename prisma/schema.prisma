@@ -35,6 +35,7 @@ model User {
   // Current Game State
   currentGameType    String?
   currentQuestionId  String?
+  gameData           String?   @db.Text  // JSON data for game state
   
   // Timestamps
   createdAt       DateTime  @default(now())
@@ -172,13 +173,28 @@ model PracticeSession {
 }
 
 enum ActivityType {
-  VOCABULARY
-  FILL_BLANK
-  SENTENCE_ORDER
-  FREE_WRITING
-  CHINESE_VOCAB
-  WORD_ORDER
-  SENTENCE_CONSTRUCTION
+  // Vocabulary Games
+  VOCAB_MATCH          // จับคู่คำ
+  VOCAB_MEANING        // ความหมายคำศัพท์
+  VOCAB_OPPOSITE       // คำตรงข้าม
+  VOCAB_SYNONYM        // คำพ้องความหมาย
+
+  // Grammar Games
+  FILL_BLANK           // เติมคำ
+  FIX_SENTENCE         // แก้ไขประโยค
+  ARRANGE_SENTENCE     // เรียงประโยค
+  SPEED_GRAMMAR        // Speed Grammar
+
+  // Reading & Writing Games
+  READ_ANSWER          // อ่านแล้วตอบ
+  COMPOSE_SENTENCE     // แต่งประโยค
+  SUMMARIZE            // สรุปเรื่อง
+  CONTINUE_STORY       // เขียนต่อเรื่อง
+
+  // Fun Games
+  DAILY_VOCAB          // คำศัพท์รายวัน
+  RACE_CLOCK           // แข่งกับเวลา
+  VOCAB_GACHA          // กาชาคำศัพท์
 }
 
 // =====================
@@ -295,18 +311,24 @@ model FillBlankQuestion {
 }
 
 // =====================
-// Word Order Questions
+// Multiple Choice Questions
 // =====================
 
-model WordOrderQuestion {
+model MultipleChoiceQuestion {
   id             String   @id @default(cuid())
-  shuffledWords  Json     // Array of numbered words
-  correctAnswer  String   @db.Text
+  question       String   @db.Text
+  optionA        String
+  optionB        String
+  optionC        String
+  optionD        String
+  correctAnswer  String   // A, B, C, or D
   category       String?
-  
+  difficulty     Difficulty @default(MEDIUM)
+
   createdAt      DateTime @default(now())
-  
+
   @@index([category])
+  @@index([difficulty])
 }
 
 // =====================
@@ -377,14 +399,238 @@ model WritingSubmission {
 }
 
 // =====================
+// Vocabulary Match Questions
+// =====================
+
+model VocabMatchQuestion {
+  id          String     @id @default(cuid())
+  word        String
+  meaning     String     // คำตอบถูก
+  wrongA      String
+  wrongB      String
+  wrongC      String
+  difficulty  Difficulty @default(MEDIUM)
+
+  createdAt   DateTime   @default(now())
+
+  @@index([difficulty])
+}
+
+// =====================
+// Vocabulary Opposite Questions
+// =====================
+
+model VocabOppositeQuestion {
+  id          String     @id @default(cuid())
+  word        String
+  opposite    String     // คำตอบถูก
+  wrongA      String
+  wrongB      String
+  wrongC      String
+  difficulty  Difficulty @default(MEDIUM)
+
+  createdAt   DateTime   @default(now())
+
+  @@index([difficulty])
+}
+
+// =====================
+// Vocabulary Synonym Questions
+// =====================
+
+model VocabSynonymQuestion {
+  id          String     @id @default(cuid())
+  word        String
+  synonym     String     // คำตอบถูก
+  wrongA      String
+  wrongB      String
+  wrongC      String
+  difficulty  Difficulty @default(MEDIUM)
+
+  createdAt   DateTime   @default(now())
+
+  @@index([difficulty])
+}
+
+// =====================
+// Fix Sentence Questions
+// =====================
+
+model FixSentenceQuestion {
+  id              String   @id @default(cuid())
+  wrongSentence   String   @db.Text
+  correctSentence String   @db.Text
+  hint            String?
+  difficulty      Difficulty @default(MEDIUM)
+
+  createdAt       DateTime @default(now())
+
+  @@index([difficulty])
+}
+
+// =====================
+// Arrange Sentence Questions
+// =====================
+
+model ArrangeSentenceQuestion {
+  id              String   @id @default(cuid())
+  shuffledWords   String   @db.Text  // คำที่สลับ คั่นด้วย |
+  correctSentence String   @db.Text
+  difficulty      Difficulty @default(MEDIUM)
+
+  createdAt       DateTime @default(now())
+
+  @@index([difficulty])
+}
+
+// =====================
+// Speed Grammar Questions
+// =====================
+
+model SpeedGrammarQuestion {
+  id             String   @id @default(cuid())
+  question       String   @db.Text
+  optionA        String
+  optionB        String
+  optionC        String
+  optionD        String
+  correctAnswer  String   // A, B, C, D
+  timeLimit      Int      @default(30)  // seconds
+  difficulty     Difficulty @default(MEDIUM)
+
+  createdAt      DateTime @default(now())
+
+  @@index([difficulty])
+}
+
+// =====================
+// Read & Answer Questions
+// =====================
+
+model ReadAnswerQuestion {
+  id            String   @id @default(cuid())
+  passage       String   @db.Text
+  question      String   @db.Text
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctAnswer String   // A, B, C, D
+  difficulty    Difficulty @default(MEDIUM)
+
+  createdAt     DateTime @default(now())
+
+  @@index([difficulty])
+}
+
+// =====================
+// Summarize Questions
+// =====================
+
+model SummarizeQuestion {
+  id            String   @id @default(cuid())
+  passage       String   @db.Text
+  sampleSummary String   @db.Text
+  keywords      String   // คำสำคัญที่ควรมี คั่นด้วย |
+  difficulty    Difficulty @default(MEDIUM)
+
+  createdAt     DateTime @default(now())
+
+  @@index([difficulty])
+}
+
+// =====================
+// Continue Story Questions
+// =====================
+
+model ContinueStoryQuestion {
+  id            String   @id @default(cuid())
+  storyStart    String   @db.Text
+  keywords      String   // คำสำคัญที่ควรมี คั่นด้วย |
+  minLength     Int      @default(50)
+  difficulty    Difficulty @default(MEDIUM)
+
+  createdAt     DateTime @default(now())
+
+  @@index([difficulty])
+}
+
+// =====================
+// Daily Vocabulary
+// =====================
+
+model DailyVocab {
+  id          String   @id @default(cuid())
+  word        String
+  meaning     String
+  example     String   @db.Text
+  forDate     DateTime @unique
+
+  createdAt   DateTime @default(now())
+
+  @@index([forDate])
+}
+
+// =====================
+// User Vocab Collection (Gacha)
+// =====================
+
+model UserVocabCollection {
+  id          String   @id @default(cuid())
+  odUserId    String   @map("userId")
+  word        String
+  meaning     String
+  example     String?  @db.Text
+  rarity      String   @default("COMMON")  // COMMON, RARE, EPIC, LEGENDARY
+
+  collectedAt DateTime @default(now())
+
+  @@unique([odUserId, word])
+  @@index([odUserId])
+}
+
+// =====================
+// Gacha Vocabulary Pool
+// =====================
+
+model GachaVocab {
+  id          String   @id @default(cuid())
+  word        String   @unique
+  meaning     String
+  rarity      String   @default("COMMON")  // COMMON, RARE, EPIC, LEGENDARY
+
+  createdAt   DateTime @default(now())
+
+  @@index([rarity])
+}
+
+// =====================
 // Game Sessions
 // =====================
 
 enum GameType {
-  CHINESE_VOCAB
-  FILL_BLANK
-  WORD_ORDER
-  SENTENCE_CONSTRUCTION
+  // Vocabulary Games
+  VOCAB_MATCH          // จับคู่คำ
+  VOCAB_MEANING        // ความหมายคำศัพท์
+  VOCAB_OPPOSITE       // คำตรงข้าม
+  VOCAB_SYNONYM        // คำพ้องความหมาย
+
+  // Grammar Games
+  FILL_BLANK           // เติมคำ
+  FIX_SENTENCE         // แก้ไขประโยค
+  ARRANGE_SENTENCE     // เรียงประโยค
+  SPEED_GRAMMAR        // Speed Grammar
+
+  // Reading & Writing Games
+  READ_ANSWER          // อ่านแล้วตอบ
+  COMPOSE_SENTENCE     // แต่งประโยค
+  SUMMARIZE            // สรุปเรื่อง
+  CONTINUE_STORY       // เขียนต่อเรื่อง
+
+  // Fun Games
+  DAILY_VOCAB          // คำศัพท์รายวัน
+  RACE_CLOCK           // แข่งกับเวลา
+  VOCAB_GACHA          // กาชาคำศัพท์
 }
 
 model LanguageGameSession {

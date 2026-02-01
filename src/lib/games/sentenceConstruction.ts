@@ -1,5 +1,13 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import axios from "axios";
+
+const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL = "anthropic/claude-haiku-4.5";
+
+function getApiKey(): string | undefined {
+    return process.env.OPENROUTER_API_KEY?.trim();
+}
 
 export interface SentenceConstructionPair {
     id: string;
@@ -18,7 +26,7 @@ export interface SentenceEvaluationResult {
 /**
  * Get random sentence construction pairs for the game
  */
-export async function getRandomSentencePairs(count: number = 5): Promise<SentenceConstructionPair[]> {
+export async function getRandomSentencePairs(count: number = 3): Promise<SentenceConstructionPair[]> {
     const allPairs = await prisma.sentenceConstructionPair.findMany({
         take: count * 3,
     });
@@ -73,32 +81,92 @@ export async function evaluateSentence(
         };
     }
 
-    // Use AI to check grammar and meaning
-    try {
-        const aiPrompt = `ตรวจประโยคภาษาไทยนี้: "${sentence}"
-
-โจทย์: แต่งประโยคโดยใช้คำว่า "${word1}" และ "${word2}"
-
-ตรวจสอบ:
-1. ใช้คำครบทั้ง 2 คำไหม? (ใช่)
-2. ไวยากรณ์ถูกต้องไหม?
-3. ประโยคสมบูรณ์มีความหมายไหม?
-
-ตอบเป็น JSON: {"grammarOk": true/false, "feedback": "คำอธิบายสั้นๆ"}`;
-
-        // Simple grammar check - you can enhance with AI
-        const isGrammarOk = sentence.length >= 10 && sentence.length <= 200;
-
+    // Basic validation first
+    if (sentence.length < 5) {
         return {
-            correct: isGrammarOk,
+            correct: false,
             usesWord1: true,
             usesWord2: true,
-            grammarOk: isGrammarOk,
-            feedback: isGrammarOk
-                ? `✅ ถูกต้อง! ใช้คำครบและประโยคสมบูรณ์ +15 คะแนน`
-                : `❌ ประโยคสั้นเกินไปหรือไม่สมบูรณ์ ลองแต่งใหม่ให้ยาวขึ้น`,
+            grammarOk: false,
+            feedback: "❌ ประโยคสั้นเกินไป กรุณาเขียนประโยคที่สมบูรณ์",
+        };
+    }
+
+    // Use AI to check grammar and meaning
+    const apiKey = getApiKey();
+    if (!apiKey) {
+        // Fallback to basic check if no API key
+        return {
+            correct: true,
+            usesWord1: true,
+            usesWord2: true,
+            grammarOk: true,
+            feedback: "✅ ใช้คำครบทั้ง 2 คำ +15 คะแนน",
+        };
+    }
+
+    try {
+        const response = await axios.post(
+            OPENROUTER_API_URL,
+            {
+                model: MODEL,
+                messages: [
+                    {
+                        role: "system",
+                        content: `คุณเป็นครูสอนภาษาไทย ตรวจประโยคของนักเรียนต่างชาติ
+ตอบเป็น JSON เท่านั้น: {"grammarOk": true/false, "feedback": "คำอธิบาย 1-2 ประโยค"}`
+                    },
+                    {
+                        role: "user",
+                        content: `ตรวจประโยคนี้: "${sentence}"
+โจทย์: แต่งประโยคโดยใช้คำว่า "${word1}" และ "${word2}"
+
+ตรวจ: ไวยากรณ์ถูกไหม? ประโยคสมบูรณ์และมีความหมายไหม?`
+                    }
+                ],
+                temperature: 0.3,
+                max_tokens: 150,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://proficienthai.vercel.app",
+                    "X-Title": "ProficienThAI",
+                },
+                timeout: 10000,
+            }
+        );
+
+        const aiResponse = response.data.choices[0]?.message?.content || "";
+
+        // Try to parse JSON from response
+        const jsonMatch = aiResponse.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+            const result = JSON.parse(jsonMatch[0]);
+            const isGrammarOk = result.grammarOk === true;
+
+            return {
+                correct: isGrammarOk,
+                usesWord1: true,
+                usesWord2: true,
+                grammarOk: isGrammarOk,
+                feedback: isGrammarOk
+                    ? `✅ ${result.feedback || "ประโยคถูกต้อง!"} +15 คะแนน`
+                    : `❌ ${result.feedback || "ไวยากรณ์ไม่ถูกต้อง ลองใหม่อีกครั้ง"}`,
+            };
+        }
+
+        // If can't parse JSON, assume correct (since words are used)
+        return {
+            correct: true,
+            usesWord1: true,
+            usesWord2: true,
+            grammarOk: true,
+            feedback: "✅ ใช้คำครบทั้ง 2 คำ +15 คะแนน",
         };
     } catch (error) {
+        console.error("[SentenceEval] AI error:", error);
         // Fallback to basic check
         return {
             correct: true,
@@ -154,12 +222,12 @@ export function formatSentenceGameSummary(
         message = "ดีมาก!";
     }
 
-    return `${emoji} จบเกมแต่งประโยคแล้ว! ${message}
+    return `${emoji} จบเกมเขียนประโยคแล้ว! ${message}
 
 📊 ผลคะแนน:
 ✅ ถูก: ${correctCount}/${totalCount} ข้อ
 📈 ได้คะแนน: +${pointsEarned} แต้ม
 🎯 อัตราถูก: ${percentage}%
 
-พิมพ์ "เกม" เพื่อเล่นเกมอื่น หรือ "แต่งประโยค" เพื่อเล่นใหม่`;
+พิมพ์ "ฝึกฝน" เพื่อเล่นเกมอื่น หรือ "เขียนประโยค" เพื่อเล่นใหม่`;
 }

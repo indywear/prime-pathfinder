@@ -6,18 +6,38 @@ import {
     createDashboardFlex,
     createProfileFlex,
     createMenuFlex,
-    createGameMenuFlex,
+    createPracticeMenuFlex,
     createLeaderboardFlex,
-    createVocabGameFlex,
     createFillBlankGameFlex,
-    createWordOrderGameFlex,
+    createMultipleChoiceGameFlex,
     createSentenceGameFlex,
     createSpinWheelResultFlex,
     createWelcomeFlex,
     createEditProfileFlex,
+    createGameResultFlex,
     createQuickReply,
     createTextMessage,
     lineClient,
+    // New Flex Messages for Game Categories
+    createGameCategoryMenuFlex,
+    createVocabGamesMenuFlex,
+    createGrammarGamesMenuFlex,
+    createReadingGamesMenuFlex,
+    createFunGamesMenuFlex,
+    createVocabMatchGameFlex,
+    createVocabMeaningGameFlex,
+    createVocabOppositeGameFlex,
+    createVocabSynonymGameFlex,
+    createFixSentenceGameFlex,
+    createArrangeSentenceGameFlex,
+    createSpeedGrammarGameFlex,
+    createReadAnswerGameFlex,
+    createSummarizeGameFlex,
+    createContinueStoryGameFlex,
+    createDailyVocabFlex,
+    createRaceClockGameFlex,
+    createGachaResultFlex,
+    createMyTaskFlex,
 } from "@/lib/line/client";
 import { generateWritingFeedback, generateConversationResponse, generateSimpleFeedback } from "@/lib/ai/feedback";
 import {
@@ -27,6 +47,82 @@ import {
     formatPointsMessage,
 } from "@/lib/gamification/points";
 import { SPIN_WHEEL_PRIZES } from "@/lib/gamification/rewards";
+
+// Game Logic Imports
+import {
+    getRandomVocabMatchQuestions,
+    getVocabMatchOptions,
+    checkVocabMatchAnswer,
+    formatVocabMatchQuestion,
+} from "@/lib/games/vocabMatch";
+import {
+    getRandomVocabMeaningQuestions,
+    checkVocabMeaningAnswer,
+    formatVocabMeaningQuestion,
+} from "@/lib/games/vocabMeaning";
+import {
+    getRandomVocabOppositeQuestions,
+    getVocabOppositeOptions,
+    checkVocabOppositeAnswer,
+    formatVocabOppositeQuestion,
+} from "@/lib/games/vocabOpposite";
+import {
+    getRandomVocabSynonymQuestions,
+    getVocabSynonymOptions,
+    checkVocabSynonymAnswer,
+    formatVocabSynonymQuestion,
+} from "@/lib/games/vocabSynonym";
+import {
+    getRandomFixSentenceQuestions,
+    checkFixSentenceAnswer,
+    formatFixSentenceQuestion,
+} from "@/lib/games/fixSentence";
+import {
+    getRandomArrangeSentenceQuestions,
+    checkArrangeSentenceAnswer,
+    formatArrangeSentenceQuestion,
+} from "@/lib/games/arrangeSentence";
+import {
+    getRandomSpeedGrammarQuestions,
+    checkSpeedGrammarAnswer,
+    formatSpeedGrammarQuestion,
+    getSpeedGrammarCorrectOption,
+} from "@/lib/games/speedGrammar";
+import {
+    getRandomReadAnswerQuestions,
+    checkReadAnswerAnswer,
+    formatReadAnswerQuestion,
+    getReadAnswerCorrectOption,
+} from "@/lib/games/readAnswer";
+import {
+    getRandomSummarizeQuestions,
+    evaluateSummary,
+    formatSummarizeQuestion,
+} from "@/lib/games/summarize";
+import {
+    getRandomContinueStoryQuestions,
+    evaluateContinuation,
+    formatContinueStoryQuestion,
+} from "@/lib/games/continueStory";
+import {
+    getTodayVocab,
+    hasLearnedToday,
+    recordDailyVocabLearned,
+    formatDailyVocab,
+} from "@/lib/games/dailyVocab";
+import {
+    getRandomRaceClockQuestions,
+    checkRaceClockAnswer,
+    calculateRaceClockPoints,
+    formatRaceClockQuestion,
+    getRaceClockCorrectOption,
+} from "@/lib/games/raceClock";
+import {
+    pullGacha,
+    canPullGacha,
+    recordGachaPull,
+    formatGachaResult,
+} from "@/lib/games/vocabGacha";
 
 const REGISTRATION_STEPS = [
     { field: "chineseName", question: "ชื่อ-นามสกุล (ภาษาจีน) ของคุณคืออะไรครับ?", type: "text" },
@@ -60,20 +156,49 @@ const MENU_KEYWORDS = {
     REGISTER: ["ลงทะเบียน", "register", "สมัคร"],
     FEEDBACK: ["ขอผลป้อนกลับ", "feedback", "ผลป้อนกลับ"],
     SUBMIT: ["ส่งงาน", "submit", "ส่ง", "submit task"],
-    PRACTICE: ["ฝึกฝน", "practice", "ฝึก"],
+    PRACTICE: ["ฝึกฝน", "practice", "ฝึก", "เกม", "game", "games", "เล่นเกม"],
     DASHBOARD: ["แดชบอร์ด", "dashboard", "ความก้าวหน้า", "ดูความก้าวหน้า"],
     PROFILE: ["ข้อมูลส่วนตัว", "profile", "โปรไฟล์"],
     EDIT_PROFILE: ["แก้ไขข้อมูล", "แก้ไขชื่อ", "เปลี่ยนชื่อ", "edit profile", "แก้ไข"],
-    CANCEL: ["ยกเลิก", "cancel", "หยุด", "ออก"],
+    CANCEL: ["ยกเลิก", "cancel", "หยุด", "ออก", "ออกจากเกม"],
     HELP: ["ช่วยเหลือ", "help", "วิธีใช้", "เมนู", "menu", "รายการ"],
     LEADERBOARD: ["leaderboard", "อันดับ", "ลีดเดอร์บอร์ด", "ranking"],
     SPIN_WHEEL: ["spin wheel", "สปินวงล้อ", "วงล้อ", "spin", "หมุนวงล้อ"],
-    GAME_MENU: ["เกม", "game", "games", "เล่นเกม"],
-    VOCAB_GAME: ["คำศัพท์", "vocabulary", "vocab", "คำศัพท์จีน"],
-    FILL_BLANK_GAME: ["เติมคำ", "fill blank", "fillblank", "เติมช่องว่าง"],
-    WORD_ORDER_GAME: ["เรียงคำ", "word order", "เรียงประโยค"],
-    SENTENCE_GAME: ["แต่งประโยค", "sentence", "แต่ง"],
+    MY_TASK: ["ภาระงาน", "task", "การบ้าน", "งานประจำสัปดาห์", "งานอาจารย์"],
     SHOW_ANSWER: ["เฉลย", "ดูเฉลย", "คำตอบ", "answer"],
+    SKIP_QUESTION: ["ข้าม", "skip"],
+
+    // === Game Category Menus ===
+    VOCAB_GAMES: ["เกมคำศัพท์", "vocab games", "คำศัพท์"],
+    GRAMMAR_GAMES: ["เกมไวยากรณ์", "grammar games", "ไวยากรณ์"],
+    READING_GAMES: ["เกมอ่าน", "reading games", "อ่านเขียน"],
+    FUN_GAMES: ["เกมสนุก", "fun games", "สนุก"],
+
+    // === Vocabulary Games (4 เกม) ===
+    VOCAB_MATCH_GAME: ["จับคู่คำ", "vocab match", "จับคู่"],
+    VOCAB_MEANING_GAME: ["ความหมาย", "vocab meaning", "แปลคำ"],
+    VOCAB_OPPOSITE_GAME: ["คำตรงข้าม", "opposite", "ตรงข้าม"],
+    VOCAB_SYNONYM_GAME: ["คำพ้อง", "synonym", "พ้องความหมาย"],
+
+    // === Grammar Games (4 เกม) ===
+    FILL_BLANK_GAME: ["เติมคำ", "fill blank", "fillblank"],
+    FIX_SENTENCE_GAME: ["แก้ประโยค", "fix sentence", "ประโยคผิด"],
+    ARRANGE_SENTENCE_GAME: ["เรียงประโยค", "arrange", "เรียงคำ"],
+    SPEED_GRAMMAR_GAME: ["speed grammar", "สปีดแกรมม่า", "ไวยากรณ์เร็ว"],
+
+    // === Reading & Writing Games (4 เกม) ===
+    READ_ANSWER_GAME: ["อ่านตอบ", "read answer", "อ่านแล้วตอบ"],
+    SENTENCE_GAME: ["เขียนประโยค", "แต่งประโยค", "sentence", "เขียน"],
+    SUMMARIZE_GAME: ["สรุปเรื่อง", "summarize", "สรุป"],
+    CONTINUE_STORY_GAME: ["เขียนต่อ", "continue story", "ต่อเรื่อง"],
+
+    // === Fun Games (3 เกม) ===
+    DAILY_VOCAB_GAME: ["คำศัพท์วันนี้", "daily vocab", "คำวันนี้"],
+    RACE_CLOCK_GAME: ["แข่งเวลา", "race clock", "แข่งกับเวลา"],
+    VOCAB_GACHA_GAME: ["กาชา", "gacha", "สุ่มคำ"],
+
+    // Legacy support
+    MULTIPLE_CHOICE_GAME: ["เลือกตอบ", "multiple choice", "เลือก"],
 };
 
 // Fields that can be edited
@@ -160,23 +285,86 @@ export async function handleTextMessage(
                 case "SPIN_WHEEL":
                     await handleSpinWheel(event.replyToken, userId);
                     break;
-                case "GAME_MENU":
-                    await handleGameMenu(event.replyToken, userId);
+                case "MY_TASK":
+                    await handleMyTask(event.replyToken, userId);
                     break;
-                case "VOCAB_GAME":
-                    await handleVocabGameStart(event.replyToken, userId);
+                case "SHOW_ANSWER":
+                    await handleShowAnswer(event.replyToken, userId);
                     break;
+                case "SKIP_QUESTION":
+                    await handleSkipQuestion(event.replyToken, userId);
+                    break;
+
+                // Game Category Menus
+                case "VOCAB_GAMES":
+                    await handleVocabGamesMenu(event.replyToken, userId);
+                    break;
+                case "GRAMMAR_GAMES":
+                    await handleGrammarGamesMenu(event.replyToken, userId);
+                    break;
+                case "READING_GAMES":
+                    await handleReadingGamesMenu(event.replyToken, userId);
+                    break;
+                case "FUN_GAMES":
+                    await handleFunGamesMenu(event.replyToken, userId);
+                    break;
+
+                // Vocabulary Games
+                case "VOCAB_MATCH_GAME":
+                    await handleVocabMatchGameStart(event.replyToken, userId);
+                    break;
+                case "VOCAB_MEANING_GAME":
+                    await handleVocabMeaningGameStart(event.replyToken, userId);
+                    break;
+                case "VOCAB_OPPOSITE_GAME":
+                    await handleVocabOppositeGameStart(event.replyToken, userId);
+                    break;
+                case "VOCAB_SYNONYM_GAME":
+                    await handleVocabSynonymGameStart(event.replyToken, userId);
+                    break;
+
+                // Grammar Games
                 case "FILL_BLANK_GAME":
                     await handleFillBlankGameStart(event.replyToken, userId);
                     break;
-                case "WORD_ORDER_GAME":
-                    await handleWordOrderGameStart(event.replyToken, userId);
+                case "FIX_SENTENCE_GAME":
+                    await handleFixSentenceGameStart(event.replyToken, userId);
+                    break;
+                case "ARRANGE_SENTENCE_GAME":
+                    await handleArrangeSentenceGameStart(event.replyToken, userId);
+                    break;
+                case "SPEED_GRAMMAR_GAME":
+                    await handleSpeedGrammarGameStart(event.replyToken, userId);
+                    break;
+
+                // Reading & Writing Games
+                case "READ_ANSWER_GAME":
+                    await handleReadAnswerGameStart(event.replyToken, userId);
                     break;
                 case "SENTENCE_GAME":
                     await handleSentenceGameStart(event.replyToken, userId);
                     break;
-                case "SHOW_ANSWER":
-                    await handleShowAnswer(event.replyToken, userId);
+                case "SUMMARIZE_GAME":
+                    await handleSummarizeGameStart(event.replyToken, userId);
+                    break;
+                case "CONTINUE_STORY_GAME":
+                    await handleContinueStoryGameStart(event.replyToken, userId);
+                    break;
+
+                // Fun Games
+                case "DAILY_VOCAB_GAME":
+                    await handleDailyVocabGameStart(event.replyToken, userId);
+                    break;
+                case "RACE_CLOCK_GAME":
+                    await handleRaceClockGameStart(event.replyToken, userId);
+                    break;
+                case "VOCAB_GACHA_GAME":
+                    await handleVocabGachaGameStart(event.replyToken, userId);
+                    break;
+
+                // Legacy
+                case "MULTIPLE_CHOICE_GAME":
+                    await handleMultipleChoiceGameStart(event.replyToken, userId);
                     break;
             }
             return;
@@ -337,31 +525,12 @@ async function handlePracticeStart(replyToken: string, userId: string) {
         return;
     }
 
-    const vocabularyCount = await prisma.vocabulary.count();
-
-    if (vocabularyCount === 0) {
-        await replyText(replyToken, "ขณะนี้ยังไม่มีแบบฝึกหัดครับ กรุณารอการอัปเดต\n\nลองพิมพ์ \"เกม\" เพื่อเล่นเกมอื่นๆ");
-        return;
-    }
-
-    const randomVocab = await prisma.vocabulary.findFirst({
-        skip: Math.floor(Math.random() * vocabularyCount),
-    });
-
-    if (!randomVocab) {
-        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งครับ");
-        return;
-    }
-
-    await replyWithQuickReply(
+    // Show practice menu with 3 game types
+    const practiceMenuFlex = createPracticeMenuFlex();
+    await lineClient.replyMessage({
         replyToken,
-        `🔤 ฝึกคำศัพท์\n\nคำว่า "${randomVocab.word}" หมายความว่าอะไร?\n\n${randomVocab.exampleSentence ? `ตัวอย่าง: ${randomVocab.exampleSentence}` : ""}`,
-        [
-            { label: "ดูคำตอบ", text: `คำตอบ: ${randomVocab.meaning}` },
-            { label: "ข้อถัดไป", text: "ฝึกฝน" },
-            { label: "กลับเมนู", text: "เมนู" },
-        ]
-    );
+        messages: [practiceMenuFlex] as any,
+    });
 }
 
 async function handleDashboard(replyToken: string, userId: string) {
@@ -592,49 +761,6 @@ async function handleEditFieldSubmit(replyToken: string, user: any, newValue: st
     );
 }
 
-async function handleGameMenu(replyToken: string, userId: string) {
-    const gameMenuFlex = createGameMenuFlex();
-    await lineClient.replyMessage({
-        replyToken,
-        messages: [gameMenuFlex] as any,
-    });
-}
-
-async function handleVocabGameStart(replyToken: string, userId: string) {
-    const count = await prisma.chineseVocabulary.count();
-
-    if (count === 0) {
-        await replyText(replyToken, "ขออภัย ยังไม่มีคำศัพท์ในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
-        return;
-    }
-
-    const randomIndex = Math.floor(Math.random() * count);
-    const question = await prisma.chineseVocabulary.findFirst({
-        skip: randomIndex,
-    });
-
-    if (!question) {
-        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
-        return;
-    }
-
-    await prisma.user.update({
-        where: { lineUserId: userId },
-        data: { currentGameType: "VOCAB", currentQuestionId: question.id },
-    });
-
-    const vocabFlex = createVocabGameFlex({
-        chineseWord: question.chineseWord,
-        category: question.category || "ทั่วไป",
-        questionNumber: randomIndex + 1,
-    });
-
-    await lineClient.replyMessage({
-        replyToken,
-        messages: [vocabFlex] as any,
-    });
-}
-
 async function handleFillBlankGameStart(replyToken: string, userId: string) {
     const count = await prisma.fillBlankQuestion.count();
 
@@ -669,16 +795,16 @@ async function handleFillBlankGameStart(replyToken: string, userId: string) {
     });
 }
 
-async function handleWordOrderGameStart(replyToken: string, userId: string) {
-    const count = await prisma.wordOrderQuestion.count();
+async function handleMultipleChoiceGameStart(replyToken: string, userId: string) {
+    const count = await prisma.multipleChoiceQuestion.count();
 
     if (count === 0) {
-        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ หรือลองเกมอื่น");
         return;
     }
 
     const randomIndex = Math.floor(Math.random() * count);
-    const question = await prisma.wordOrderQuestion.findFirst({
+    const question = await prisma.multipleChoiceQuestion.findFirst({
         skip: randomIndex,
     });
 
@@ -689,18 +815,22 @@ async function handleWordOrderGameStart(replyToken: string, userId: string) {
 
     await prisma.user.update({
         where: { lineUserId: userId },
-        data: { currentGameType: "WORD_ORDER", currentQuestionId: question.id },
+        data: { currentGameType: "MULTIPLE_CHOICE", currentQuestionId: question.id },
     });
 
-    const words = question.shuffledWords as { number: number; word: string }[];
-    const wordOrderFlex = createWordOrderGameFlex({
-        words,
+    const multipleChoiceFlex = createMultipleChoiceGameFlex({
+        question: question.question,
+        optionA: question.optionA,
+        optionB: question.optionB,
+        optionC: question.optionC,
+        optionD: question.optionD,
         questionNumber: randomIndex + 1,
+        totalQuestions: count,
     });
 
     await lineClient.replyMessage({
         replyToken,
-        messages: [wordOrderFlex] as any,
+        messages: [multipleChoiceFlex] as any,
     });
 }
 
@@ -708,7 +838,7 @@ async function handleSentenceGameStart(replyToken: string, userId: string) {
     const count = await prisma.sentenceConstructionPair.count();
 
     if (count === 0) {
-        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ หรือลองเกมอื่น");
         return;
     }
 
@@ -724,7 +854,7 @@ async function handleSentenceGameStart(replyToken: string, userId: string) {
 
     await prisma.user.update({
         where: { lineUserId: userId },
-        data: { currentGameType: "SENTENCE", currentQuestionId: pair.id },
+        data: { currentGameType: "SENTENCE_WRITING", currentQuestionId: pair.id },
     });
 
     const sentenceFlex = createSentenceGameFlex({
@@ -849,51 +979,150 @@ async function handleShowAnswer(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.currentGameType || !user?.currentQuestionId) {
-        await replyText(replyToken, "กรุณาเริ่มเล่นเกมก่อนครับ พิมพ์ \"เกม\" เพื่อเลือกเกม");
+        await replyText(replyToken, "กรุณาเริ่มเล่นเกมก่อนครับ พิมพ์ \"ฝึกฝน\" เพื่อเลือกเกม");
         return;
     }
 
     let answerText = "";
+    const gameType = user.currentGameType;
+    const gameData = user.gameData ? JSON.parse(user.gameData) : {};
+    const answerLabel: Record<string, string> = { 'A': 'ก', 'B': 'ข', 'C': 'ค', 'D': 'ง' };
 
-    if (user.currentGameType === "VOCAB") {
-        const vocab = await prisma.chineseVocabulary.findUnique({
-            where: { id: user.currentQuestionId },
-        });
-        if (vocab) {
-            answerText = `เฉลย: ${vocab.chineseWord} = ${vocab.thaiMeaning}`;
-        }
-    } else if (user.currentGameType === "FILL_BLANK") {
+    // Vocabulary Games
+    if (gameType === "VOCAB_MATCH") {
+        const correctIdx = ['A', 'B', 'C', 'D'].indexOf(gameData.correctAnswer);
+        answerText = `📖 เฉลย: ${answerLabel[gameData.correctAnswer]}. ${gameData.options[correctIdx]}`;
+    }
+    else if (gameType === "VOCAB_MEANING") {
+        answerText = `📖 เฉลย: ${gameData.correctAnswer}`;
+    }
+    else if (gameType === "VOCAB_OPPOSITE" || gameType === "VOCAB_SYNONYM") {
+        answerText = `📖 เฉลย: ${answerLabel[gameData.correctAnswer]}. ${gameData.correctText}`;
+    }
+    // Grammar Games
+    else if (gameType === "FILL_BLANK") {
         const fillBlank = await prisma.fillBlankQuestion.findUnique({
             where: { id: user.currentQuestionId },
         });
         if (fillBlank) {
-            answerText = `เฉลย: ${fillBlank.answer}`;
+            answerText = `📝 เฉลย: ${fillBlank.answer}`;
         }
-    } else if (user.currentGameType === "WORD_ORDER") {
-        const wordOrder = await prisma.wordOrderQuestion.findUnique({
+    }
+    else if (gameType === "FIX_SENTENCE" || gameType === "ARRANGE_SENTENCE") {
+        answerText = `📝 เฉลย:\n"${gameData.correctSentence}"`;
+    }
+    else if (gameType === "SPEED_GRAMMAR") {
+        const question = await prisma.speedGrammarQuestion.findUnique({
             where: { id: user.currentQuestionId },
         });
-        if (wordOrder) {
-            answerText = `เฉลย: ${wordOrder.correctAnswer}`;
+        if (question) {
+            const correctOption = getSpeedGrammarCorrectOption(question);
+            answerText = `⚡ เฉลย: ${answerLabel[gameData.correctAnswer]}. ${correctOption}`;
         }
-    } else if (user.currentGameType === "SENTENCE") {
+    }
+    // Reading & Writing Games
+    else if (gameType === "READ_ANSWER") {
+        const question = await prisma.readAnswerQuestion.findUnique({
+            where: { id: user.currentQuestionId },
+        });
+        if (question) {
+            const correctOption = getReadAnswerCorrectOption(question);
+            answerText = `📖 เฉลย: ${answerLabel[gameData.correctAnswer]}. ${correctOption}`;
+        }
+    }
+    else if (gameType === "SENTENCE_WRITING") {
         const pair = await prisma.sentenceConstructionPair.findUnique({
             where: { id: user.currentQuestionId },
         });
         if (pair) {
-            answerText = `ตัวอย่างประโยค: ${pair.word1} และ ${pair.word2} สามารถแต่งประโยคได้หลากหลาย ลองแต่งดูนะครับ`;
-        } else {
-            answerText = "เกมแต่งประโยคไม่มีคำตอบตายตัวครับ";
+            answerText = `✍️ เกมเขียนประโยคไม่มีคำตอบตายตัว\n\nลองแต่งประโยคที่มีคำว่า "${pair.word1}" และ "${pair.word2}" ได้เลยครับ`;
+        }
+    }
+    else if (gameType === "SUMMARIZE") {
+        answerText = `📝 ตัวอย่างการสรุป:\n"${gameData.sampleSummary}"`;
+    }
+    else if (gameType === "CONTINUE_STORY") {
+        answerText = `📖 เรื่องนี้ไม่มีคำตอบตายตัว\n\nคำสำคัญที่ควรมี: ${gameData.keywords.replace(/\|/g, ', ')}`;
+    }
+    // Fun Games
+    else if (gameType === "RACE_CLOCK") {
+        answerText = `🏎️ เฉลย: ${answerLabel[gameData.correctAnswer]}`;
+    }
+    // Legacy
+    else if (gameType === "MULTIPLE_CHOICE") {
+        const question = await prisma.multipleChoiceQuestion.findUnique({
+            where: { id: user.currentQuestionId },
+        });
+        if (question) {
+            const correctOption = question.correctAnswer === 'A' ? question.optionA :
+                                  question.correctAnswer === 'B' ? question.optionB :
+                                  question.correctAnswer === 'C' ? question.optionC : question.optionD;
+            answerText = `📋 เฉลย: ${answerLabel[question.correctAnswer]}. ${correctOption}`;
         }
     }
 
     // Reset game state after showing answer
     await prisma.user.update({
         where: { lineUserId: userId },
-        data: { currentGameType: null, currentQuestionId: null },
+        data: { currentGameType: null, currentQuestionId: null, gameData: null },
     });
 
-    await replyText(replyToken, answerText || "ไม่พบคำตอบครับ (จบเกมแล้ว)");
+    await replyWithQuickReply(
+        replyToken,
+        answerText || "ไม่พบคำตอบครับ",
+        [
+            { label: "เล่นต่อ", text: getGameStartCommand(gameType) },
+            { label: "เกมอื่น", text: "ฝึกฝน" },
+            { label: "เมนู", text: "เมนู" },
+        ]
+    );
+}
+
+async function handleSkipQuestion(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.currentGameType || !user?.currentQuestionId) {
+        await replyText(replyToken, "ไม่มีคำถามให้ข้ามครับ พิมพ์ \"ฝึกฝน\" เพื่อเริ่มเล่น");
+        return;
+    }
+
+    const gameType = user.currentGameType;
+
+    // Reset current question and start a new one
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: { currentGameType: null, currentQuestionId: null, gameData: null },
+    });
+
+    // Redirect to the same game type to get a new question
+    const gameHandlers: Record<string, () => Promise<void>> = {
+        // Vocabulary Games
+        "VOCAB_MATCH": () => handleVocabMatchGameStart(replyToken, userId),
+        "VOCAB_MEANING": () => handleVocabMeaningGameStart(replyToken, userId),
+        "VOCAB_OPPOSITE": () => handleVocabOppositeGameStart(replyToken, userId),
+        "VOCAB_SYNONYM": () => handleVocabSynonymGameStart(replyToken, userId),
+        // Grammar Games
+        "FILL_BLANK": () => handleFillBlankGameStart(replyToken, userId),
+        "FIX_SENTENCE": () => handleFixSentenceGameStart(replyToken, userId),
+        "ARRANGE_SENTENCE": () => handleArrangeSentenceGameStart(replyToken, userId),
+        "SPEED_GRAMMAR": () => handleSpeedGrammarGameStart(replyToken, userId),
+        // Reading & Writing Games
+        "READ_ANSWER": () => handleReadAnswerGameStart(replyToken, userId),
+        "SENTENCE_WRITING": () => handleSentenceGameStart(replyToken, userId),
+        "SUMMARIZE": () => handleSummarizeGameStart(replyToken, userId),
+        "CONTINUE_STORY": () => handleContinueStoryGameStart(replyToken, userId),
+        // Fun Games
+        "RACE_CLOCK": () => handleRaceClockGameStart(replyToken, userId),
+        // Legacy
+        "MULTIPLE_CHOICE": () => handleMultipleChoiceGameStart(replyToken, userId),
+    };
+
+    const handler = gameHandlers[gameType];
+    if (handler) {
+        await handler();
+    } else {
+        await replyText(replyToken, "ข้ามคำถามแล้วครับ พิมพ์ \"ฝึกฝน\" เพื่อเลือกเกม");
+    }
 }
 
 async function handleGameAnswer(replyToken: string, user: any, text: string) {
@@ -902,102 +1131,832 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
         let points = 0;
         let correctAnswer = "";
         let message = "";
+        const gameType = user.currentGameType;
+        const gameData = user.gameData ? JSON.parse(user.gameData) : {};
 
-        // Check Answer Logic
-        if (user.currentGameType === "VOCAB") {
-        const question = await prisma.chineseVocabulary.findUnique({ where: { id: user.currentQuestionId } });
-        if (!question) {
-            await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
-            return;
-        }
-        correctAnswer = question.thaiMeaning;
-        if (text.includes(question.thaiMeaning)) {
-            isCorrect = true;
-            points = 5;
-        }
-    } else if (user.currentGameType === "FILL_BLANK") {
-        const question = await prisma.fillBlankQuestion.findUnique({ where: { id: user.currentQuestionId } });
-        if (!question) {
-            await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
-            return;
-        }
-        correctAnswer = question.answer;
-        if (text.trim() === question.answer.trim()) {
-            isCorrect = true;
-            points = 10;
-        }
-    } else if (user.currentGameType === "WORD_ORDER") {
-        const question = await prisma.wordOrderQuestion.findUnique({ where: { id: user.currentQuestionId } });
-        if (!question) {
-            await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
-            return;
-        }
-        correctAnswer = question.correctAnswer;
-        // Basic normalization (remove spaces) for checking
-        if (text.replace(/\s/g, "") === question.correctAnswer.replace(/\s/g, "")) {
-            isCorrect = true;
-            points = 15;
-        }
-    } else if (user.currentGameType === "SENTENCE") {
-        const question = await prisma.sentenceConstructionPair.findUnique({ where: { id: user.currentQuestionId } });
-        if (!question) {
-            await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
-            return;
-        }
-        // Check if both words are present
-        if (text.includes(question.word1) && text.includes(question.word2) && text.length > 20) {
-            isCorrect = true;
-            points = 20;
-            message = `แต่งประโยคได้ดีมากครับ! มีคำว่า "${question.word1}" และ "${question.word2}" ครบถ้วน`;
-        } else {
-            message = `ลองแต่งประโยคให้ยาวกว่านี้และมีคำว่า "${question.word1}" และ "${question.word2}" นะครับ`;
-        }
-    }
+        // Answer map for multiple choice games
+        const answerMap: Record<string, string> = {
+            'ก': 'A', 'a': 'A', '1': 'A',
+            'ข': 'B', 'b': 'B', '2': 'B',
+            'ค': 'C', 'c': 'C', '3': 'C',
+            'ง': 'D', 'd': 'D', '4': 'D',
+        };
+        const answerLabel: Record<string, string> = { 'A': 'ก', 'B': 'ข', 'C': 'ค', 'D': 'ง' };
 
-    if (isCorrect) {
-        // Update Points and Reset Game State
-        await prisma.user.update({
-            where: { id: user.id },
-            data: {
-                totalPoints: { increment: points },
-                currentGameType: null,
-                currentQuestionId: null
+        // ==================
+        // Vocabulary Games
+        // ==================
+        if (gameType === "VOCAB_MATCH") {
+            const normalizedAnswer = answerMap[text.trim()] || text.trim().toUpperCase();
+            isCorrect = normalizedAnswer === gameData.correctAnswer;
+            points = isCorrect ? 10 : 0;
+            if (!isCorrect) {
+                const correctIdx = ['A', 'B', 'C', 'D'].indexOf(gameData.correctAnswer);
+                message = `คำตอบที่ถูกคือ ${answerLabel[gameData.correctAnswer]}. ${gameData.options[correctIdx]}`;
             }
-        });
+        }
+        else if (gameType === "VOCAB_MEANING") {
+            isCorrect = checkVocabMeaningAnswer(text, gameData.correctAnswer);
+            points = isCorrect ? 10 : 0;
+            if (!isCorrect) {
+                message = `คำตอบที่ถูกคือ: ${gameData.correctAnswer}`;
+            }
+        }
+        else if (gameType === "VOCAB_OPPOSITE") {
+            const normalizedAnswer = answerMap[text.trim()] || text.trim().toUpperCase();
+            isCorrect = normalizedAnswer === gameData.correctAnswer;
+            points = isCorrect ? 10 : 0;
+            if (!isCorrect) {
+                message = `คำตอบที่ถูกคือ ${answerLabel[gameData.correctAnswer]}. ${gameData.correctText}`;
+            }
+        }
+        else if (gameType === "VOCAB_SYNONYM") {
+            const normalizedAnswer = answerMap[text.trim()] || text.trim().toUpperCase();
+            isCorrect = normalizedAnswer === gameData.correctAnswer;
+            points = isCorrect ? 10 : 0;
+            if (!isCorrect) {
+                message = `คำตอบที่ถูกคือ ${answerLabel[gameData.correctAnswer]}. ${gameData.correctText}`;
+            }
+        }
 
-        const successMsg = message || `ถูกต้องนะคร้าบ! 🎉\n\nรับไปเลย ${points} คะแนน\n\n(เฉลย: ${correctAnswer})`;
+        // ==================
+        // Grammar Games
+        // ==================
+        else if (gameType === "FILL_BLANK") {
+            const question = await prisma.fillBlankQuestion.findUnique({ where: { id: user.currentQuestionId } });
+            if (!question) {
+                await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+                return;
+            }
+            correctAnswer = question.answer;
+            if (text.trim().toLowerCase() === question.answer.trim().toLowerCase()) {
+                isCorrect = true;
+                points = 10;
+            } else {
+                message = `คำตอบที่ถูกคือ: ${question.answer}`;
+            }
+        }
+        else if (gameType === "FIX_SENTENCE") {
+            isCorrect = checkFixSentenceAnswer(text, gameData.correctSentence);
+            points = isCorrect ? 12 : 0;
+            if (!isCorrect) {
+                message = `ประโยคที่ถูกคือ:\n"${gameData.correctSentence}"`;
+            }
+        }
+        else if (gameType === "ARRANGE_SENTENCE") {
+            isCorrect = checkArrangeSentenceAnswer(text, gameData.correctSentence);
+            points = isCorrect ? 12 : 0;
+            if (!isCorrect) {
+                message = `ประโยคที่ถูกคือ:\n"${gameData.correctSentence}"`;
+            }
+        }
+        else if (gameType === "SPEED_GRAMMAR") {
+            const normalizedAnswer = answerMap[text.trim()] || text.trim().toUpperCase();
+            isCorrect = normalizedAnswer === gameData.correctAnswer;
 
-        await replyWithQuickReply(
-            replyToken,
-            successMsg,
-            [
-                { label: "เล่นต่อ", text: getGameStartCommand(user.currentGameType) },
-                { label: "เมนูหลัก", text: "เมนู" }
-            ]
-        );
-    } else {
-        // Wrong Answer: Give user a chance to try again or give up
-        await replyWithQuickReply(
-            replyToken,
-            `ยังไม่ถูกครับ 😅\n\nลองใหม่อีกครั้ง หรือพิมพ์ "เฉลย" เพื่อดูคำตอบครับ`,
-            [
-                { label: "เฉลย", text: "เฉลย" },
-                { label: "เมนูหลัก", text: "เมนู" }
-            ]
-        );
-    }
+            // Calculate time bonus
+            const timeUsed = (Date.now() - gameData.startTime) / 1000;
+            if (isCorrect) {
+                const timeLimit = gameData.timeLimit || 30;
+                if (timeUsed <= timeLimit) {
+                    const timeBonus = Math.round(5 * (1 - timeUsed / timeLimit));
+                    points = 15 + timeBonus;
+                    message = `ใช้เวลา ${Math.round(timeUsed)} วินาที`;
+                } else {
+                    points = 10;
+                    message = `หมดเวลา แต่ตอบถูก!`;
+                }
+            } else {
+                const question = await prisma.speedGrammarQuestion.findUnique({ where: { id: user.currentQuestionId } });
+                if (question) {
+                    const correctOption = getSpeedGrammarCorrectOption(question);
+                    message = `คำตอบที่ถูกคือ ${answerLabel[gameData.correctAnswer]}. ${correctOption}`;
+                }
+            }
+        }
+
+        // ==================
+        // Reading & Writing Games
+        // ==================
+        else if (gameType === "READ_ANSWER") {
+            const normalizedAnswer = answerMap[text.trim()] || text.trim().toUpperCase();
+            isCorrect = normalizedAnswer === gameData.correctAnswer;
+            points = isCorrect ? 15 : 0;
+            if (!isCorrect) {
+                const question = await prisma.readAnswerQuestion.findUnique({ where: { id: user.currentQuestionId } });
+                if (question) {
+                    const correctOption = getReadAnswerCorrectOption(question);
+                    message = `คำตอบที่ถูกคือ ${answerLabel[gameData.correctAnswer]}. ${correctOption}`;
+                }
+            }
+        }
+        else if (gameType === "SENTENCE_WRITING") {
+            const question = await prisma.sentenceConstructionPair.findUnique({ where: { id: user.currentQuestionId } });
+            if (!question) {
+                await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+                return;
+            }
+            const hasWord1 = text.includes(question.word1);
+            const hasWord2 = text.includes(question.word2);
+
+            if (hasWord1 && hasWord2 && text.length >= 10) {
+                isCorrect = true;
+                points = 15;
+                message = `ดีมาก! ประโยคมีคำว่า "${question.word1}" และ "${question.word2}" ครบถ้วน`;
+            } else {
+                let hint = "ลองปรับประโยค:\n";
+                if (!hasWord1) hint += `- ต้องมีคำว่า "${question.word1}"\n`;
+                if (!hasWord2) hint += `- ต้องมีคำว่า "${question.word2}"\n`;
+                if (text.length < 10) hint += `- เขียนให้ยาวกว่านี้อีกนิด`;
+                message = hint;
+            }
+        }
+        else if (gameType === "SUMMARIZE") {
+            const keywordsArray = gameData.keywords.split('|').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
+            const evaluation = await evaluateSummary(text, gameData.passage, gameData.sampleSummary, keywordsArray);
+            isCorrect = evaluation.correct;
+            points = isCorrect ? 20 : (evaluation.hasKeywords ? 10 : 0);
+            message = evaluation.feedback;
+        }
+        else if (gameType === "CONTINUE_STORY") {
+            const keywordsArray = gameData.keywords.split('|').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
+            const evaluation = await evaluateContinuation(
+                text,
+                gameData.storyStart,
+                keywordsArray,
+                gameData.minLength
+            );
+            isCorrect = evaluation.correct;
+            points = isCorrect ? 20 : (evaluation.hasKeywords && evaluation.isLongEnough ? 10 : 0);
+            message = evaluation.feedback;
+        }
+
+        // ==================
+        // Fun Games
+        // ==================
+        else if (gameType === "RACE_CLOCK") {
+            const normalizedAnswer = answerMap[text.trim()] || text.trim().toUpperCase();
+            isCorrect = normalizedAnswer === gameData.correctAnswer;
+
+            const timeUsed = Math.round((Date.now() - gameData.startTime) / 1000);
+            points = calculateRaceClockPoints(isCorrect, timeUsed);
+
+            if (isCorrect) {
+                message = `ใช้เวลา ${timeUsed} วินาที`;
+            } else {
+                const question = await prisma.multipleChoiceQuestion.findFirst({ where: { id: user.currentQuestionId } }) ||
+                                 await prisma.speedGrammarQuestion.findFirst({ where: { id: user.currentQuestionId } });
+                if (question) {
+                    const correctOption = getRaceClockCorrectOption(question as any);
+                    message = `หมดเวลา ${timeUsed} วินาที\nคำตอบที่ถูกคือ ${answerLabel[gameData.correctAnswer]}. ${correctOption}`;
+                }
+            }
+        }
+
+        // ==================
+        // Multiple Choice (Legacy)
+        // ==================
+        else if (gameType === "MULTIPLE_CHOICE") {
+            const question = await prisma.multipleChoiceQuestion.findUnique({ where: { id: user.currentQuestionId } });
+            if (!question) {
+                await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+                return;
+            }
+
+            const normalizedAnswer = (answerMap[text.trim()] || text.trim().toUpperCase());
+            correctAnswer = question.correctAnswer;
+
+            if (normalizedAnswer === question.correctAnswer) {
+                isCorrect = true;
+                points = 10;
+                const correctOption = question.correctAnswer === 'A' ? question.optionA :
+                                     question.correctAnswer === 'B' ? question.optionB :
+                                     question.correctAnswer === 'C' ? question.optionC : question.optionD;
+                message = `ถูกต้อง! คำตอบคือ ${correctOption}`;
+            } else {
+                const correctOption = question.correctAnswer === 'A' ? question.optionA :
+                                     question.correctAnswer === 'B' ? question.optionB :
+                                     question.correctAnswer === 'C' ? question.optionC : question.optionD;
+                message = `คำตอบที่ถูกคือ ${answerLabel[question.correctAnswer]}. ${correctOption}`;
+            }
+        }
+
+        // ==================
+        // Handle Result
+        // ==================
+        if (isCorrect) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    totalPoints: { increment: points },
+                    currentGameType: null,
+                    currentQuestionId: null,
+                    gameData: null,
+                }
+            });
+
+            const successMsg = `✅ ${message || "ถูกต้อง!"}\n\n+${points} คะแนน`;
+
+            await replyWithQuickReply(
+                replyToken,
+                successMsg,
+                [
+                    { label: "ข้อต่อไป", text: getGameStartCommand(gameType) },
+                    { label: "เกมอื่น", text: "ฝึกฝน" },
+                    { label: "เมนู", text: "เมนู" }
+                ]
+            );
+        } else {
+            // For AI-evaluated games (SUMMARIZE, CONTINUE_STORY), give partial credit
+            if ((gameType === "SUMMARIZE" || gameType === "CONTINUE_STORY") && points > 0) {
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        totalPoints: { increment: points },
+                        currentGameType: null,
+                        currentQuestionId: null,
+                        gameData: null,
+                    }
+                });
+
+                await replyWithQuickReply(
+                    replyToken,
+                    `📝 ${message}\n\n+${points} คะแนน`,
+                    [
+                        { label: "ข้อต่อไป", text: getGameStartCommand(gameType) },
+                        { label: "เกมอื่น", text: "ฝึกฝน" },
+                        { label: "เมนู", text: "เมนู" }
+                    ]
+                );
+            } else {
+                await replyWithQuickReply(
+                    replyToken,
+                    `❌ ${message || "ยังไม่ถูก"}\n\nลองใหม่ หรือพิมพ์ "เฉลย"`,
+                    [
+                        { label: "เฉลย", text: "เฉลย" },
+                        { label: "ข้าม", text: "ข้าม" },
+                        { label: "ออก", text: "ฝึกฝน" }
+                    ]
+                );
+            }
+        }
     } catch (error) {
         console.error("handleGameAnswer error:", error);
-        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งครับ 🙏");
+        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งครับ");
     }
+}
+
+// =====================
+// My Task Handler (Task ที่อาจารย์สร้าง)
+// =====================
+
+async function handleMyTask(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
+        return;
+    }
+
+    // Get active tasks
+    const activeTasks = await prisma.task.findMany({
+        where: { isActive: true },
+        orderBy: { weekNumber: "desc" },
+        take: 5,
+    });
+
+    if (activeTasks.length === 0) {
+        await replyText(replyToken, "ขณะนี้ยังไม่มีภาระงานที่เปิดรับครับ\n\nกรุณารอประกาศจากอาจารย์");
+        return;
+    }
+
+    // Check user's submissions
+    const submissions = await prisma.submission.findMany({
+        where: { userId: user.id },
+        select: { taskId: true },
+    });
+    const submittedTaskIds = new Set(submissions.map(s => s.taskId));
+
+    const myTaskFlex = createMyTaskFlex({
+        tasks: activeTasks.map(task => ({
+            id: task.id,
+            weekNumber: task.weekNumber,
+            title: task.title,
+            description: task.description,
+            deadline: task.deadline,
+            isSubmitted: submittedTaskIds.has(task.id),
+        })),
+        userName: user.thaiName || "นักเรียน",
+    });
+
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [myTaskFlex] as any,
+    });
+}
+
+// =====================
+// Game Category Menu Handlers
+// =====================
+
+async function handleVocabGamesMenu(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
+        return;
+    }
+
+    const vocabMenuFlex = createVocabGamesMenuFlex();
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [vocabMenuFlex] as any,
+    });
+}
+
+async function handleGrammarGamesMenu(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
+        return;
+    }
+
+    const grammarMenuFlex = createGrammarGamesMenuFlex();
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [grammarMenuFlex] as any,
+    });
+}
+
+async function handleReadingGamesMenu(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
+        return;
+    }
+
+    const readingMenuFlex = createReadingGamesMenuFlex();
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [readingMenuFlex] as any,
+    });
+}
+
+async function handleFunGamesMenu(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
+        return;
+    }
+
+    const funMenuFlex = createFunGamesMenuFlex();
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [funMenuFlex] as any,
+    });
+}
+
+// =====================
+// Vocabulary Game Handlers
+// =====================
+
+async function handleVocabMatchGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomVocabMatchQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+    const options = getVocabMatchOptions(question);
+    const correctIndex = options.indexOf(question.meaning);
+    const correctAnswer = ['A', 'B', 'C', 'D'][correctIndex];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "VOCAB_MATCH",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({ options, correctAnswer }),
+        },
+    });
+
+    const questionText = formatVocabMatchQuestion(question, options, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "ก", text: "ก" },
+        { label: "ข", text: "ข" },
+        { label: "ค", text: "ค" },
+        { label: "ง", text: "ง" },
+    ]);
+}
+
+async function handleVocabMeaningGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomVocabMeaningQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "VOCAB_MEANING",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({ correctAnswer: question.meaning }),
+        },
+    });
+
+    const questionText = formatVocabMeaningQuestion(question, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "ข้าม", text: "ข้าม" },
+        { label: "ออก", text: "ฝึกฝน" },
+    ]);
+}
+
+async function handleVocabOppositeGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomVocabOppositeQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+    const options = getVocabOppositeOptions(question);
+    const correctIndex = options.indexOf(question.opposite);
+    const correctAnswer = ['A', 'B', 'C', 'D'][correctIndex];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "VOCAB_OPPOSITE",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({ options, correctAnswer, correctText: question.opposite }),
+        },
+    });
+
+    const questionText = formatVocabOppositeQuestion(question, options, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "ก", text: "ก" },
+        { label: "ข", text: "ข" },
+        { label: "ค", text: "ค" },
+        { label: "ง", text: "ง" },
+    ]);
+}
+
+async function handleVocabSynonymGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomVocabSynonymQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+    const options = getVocabSynonymOptions(question);
+    const correctIndex = options.indexOf(question.synonym);
+    const correctAnswer = ['A', 'B', 'C', 'D'][correctIndex];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "VOCAB_SYNONYM",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({ options, correctAnswer, correctText: question.synonym }),
+        },
+    });
+
+    const questionText = formatVocabSynonymQuestion(question, options, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "ก", text: "ก" },
+        { label: "ข", text: "ข" },
+        { label: "ค", text: "ค" },
+        { label: "ง", text: "ง" },
+    ]);
+}
+
+// =====================
+// Grammar Game Handlers
+// =====================
+
+async function handleFixSentenceGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomFixSentenceQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "FIX_SENTENCE",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({ correctSentence: question.correctSentence }),
+        },
+    });
+
+    const questionText = formatFixSentenceQuestion(question, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "เฉลย", text: "เฉลย" },
+        { label: "ข้าม", text: "ข้าม" },
+        { label: "ออก", text: "ฝึกฝน" },
+    ]);
+}
+
+async function handleArrangeSentenceGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomArrangeSentenceQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "ARRANGE_SENTENCE",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({ correctSentence: question.correctSentence }),
+        },
+    });
+
+    const questionText = formatArrangeSentenceQuestion(question, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "เฉลย", text: "เฉลย" },
+        { label: "ข้าม", text: "ข้าม" },
+        { label: "ออก", text: "ฝึกฝน" },
+    ]);
+}
+
+async function handleSpeedGrammarGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomSpeedGrammarQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "SPEED_GRAMMAR",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({
+                correctAnswer: question.correctAnswer,
+                startTime: Date.now(),
+                timeLimit: question.timeLimit,
+            }),
+        },
+    });
+
+    const questionText = formatSpeedGrammarQuestion(question, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "ก", text: "ก" },
+        { label: "ข", text: "ข" },
+        { label: "ค", text: "ค" },
+        { label: "ง", text: "ง" },
+    ]);
+}
+
+// =====================
+// Reading & Writing Game Handlers
+// =====================
+
+async function handleReadAnswerGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomReadAnswerQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "READ_ANSWER",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({ correctAnswer: question.correctAnswer }),
+        },
+    });
+
+    const questionText = formatReadAnswerQuestion(question, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "ก", text: "ก" },
+        { label: "ข", text: "ข" },
+        { label: "ค", text: "ค" },
+        { label: "ง", text: "ง" },
+    ]);
+}
+
+async function handleSummarizeGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomSummarizeQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "SUMMARIZE",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({
+                passage: question.passage,
+                keywords: question.keywords,
+                sampleSummary: question.sampleSummary,
+            }),
+        },
+    });
+
+    const questionText = formatSummarizeQuestion(question, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "ข้าม", text: "ข้าม" },
+        { label: "ออก", text: "ฝึกฝน" },
+    ]);
+}
+
+async function handleContinueStoryGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomContinueStoryQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "CONTINUE_STORY",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({
+                keywords: question.keywords,
+                minLength: question.minLength,
+                storyStart: question.storyStart,
+            }),
+        },
+    });
+
+    const questionText = formatContinueStoryQuestion(question, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "ข้าม", text: "ข้าม" },
+        { label: "ออก", text: "ฝึกฝน" },
+    ]);
+}
+
+// =====================
+// Fun Game Handlers
+// =====================
+
+async function handleDailyVocabGameStart(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
+        return;
+    }
+
+    const todayVocab = await getTodayVocab();
+
+    if (!todayVocab) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำศัพท์วันนี้\n\nกรุณาลองใหม่ภายหลัง");
+        return;
+    }
+
+    const alreadyLearned = await hasLearnedToday(user.id);
+
+    if (alreadyLearned) {
+        await replyText(
+            replyToken,
+            `คุณได้เรียนคำศัพท์วันนี้แล้ว!\n\n📖 "${todayVocab.word}"\n💡 ${todayVocab.meaning}\n📝 ${todayVocab.example}\n\nกลับมาพรุ่งนี้เพื่อเรียนคำใหม่นะครับ`
+        );
+        return;
+    }
+
+    // Mark as learned (this function also gives points)
+    await recordDailyVocabLearned(user.id);
+
+    const vocabMessage = formatDailyVocab(todayVocab);
+    await replyWithQuickReply(replyToken, vocabMessage, [
+        { label: "เล่นเกมอื่น", text: "ฝึกฝน" },
+        { label: "แดชบอร์ด", text: "แดชบอร์ด" },
+    ]);
+}
+
+async function handleRaceClockGameStart(replyToken: string, userId: string) {
+    const questions = await getRandomRaceClockQuestions(1);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
+        return;
+    }
+
+    const question = questions[0];
+
+    await prisma.user.update({
+        where: { lineUserId: userId },
+        data: {
+            currentGameType: "RACE_CLOCK",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({
+                correctAnswer: question.correctAnswer,
+                startTime: Date.now(),
+            }),
+        },
+    });
+
+    const questionText = formatRaceClockQuestion(question, 0, 1);
+    await replyWithQuickReply(replyToken, questionText, [
+        { label: "ก", text: "ก" },
+        { label: "ข", text: "ข" },
+        { label: "ค", text: "ค" },
+        { label: "ง", text: "ง" },
+    ]);
+}
+
+async function handleVocabGachaGameStart(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
+        return;
+    }
+
+    const canPull = await canPullGacha(user.id);
+
+    if (!canPull) {
+        await replyText(replyToken, "🎰 หมดโควต้าสุ่มวันนี้แล้ว!\n\nสุ่มได้ 3 ครั้งต่อวัน\nกลับมาพรุ่งนี้นะครับ");
+        return;
+    }
+
+    const result = await pullGacha(user.id);
+
+    if (!result) {
+        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
+        return;
+    }
+
+    // Record the pull for daily limit tracking
+    await recordGachaPull(user.id, result.vocab, result.points);
+
+    // Points already given by pullGacha(), use result.points
+    const gachaFlex = createGachaResultFlex({
+        word: result.vocab.word,
+        meaning: result.vocab.meaning,
+        rarity: result.vocab.rarity,
+        isNew: result.isNew,
+        points: result.points,
+    });
+
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [gachaFlex] as any,
+    });
 }
 
 function getGameStartCommand(gameType: string): string {
     switch (gameType) {
-        case "VOCAB": return "คำศัพท์";
+        // Vocabulary Games
+        case "VOCAB_MATCH": return "จับคู่คำ";
+        case "VOCAB_MEANING": return "ความหมาย";
+        case "VOCAB_OPPOSITE": return "คำตรงข้าม";
+        case "VOCAB_SYNONYM": return "คำพ้อง";
+        // Grammar Games
         case "FILL_BLANK": return "เติมคำ";
-        case "WORD_ORDER": return "เรียงคำ";
-        case "SENTENCE": return "แต่งประโยค";
-        default: return "เกม";
+        case "FIX_SENTENCE": return "แก้ประโยค";
+        case "ARRANGE_SENTENCE": return "เรียงประโยค";
+        case "SPEED_GRAMMAR": return "speed grammar";
+        // Reading Games
+        case "READ_ANSWER": return "อ่านตอบ";
+        case "SENTENCE_WRITING": return "เขียนประโยค";
+        case "SUMMARIZE": return "สรุปเรื่อง";
+        case "CONTINUE_STORY": return "เขียนต่อ";
+        // Fun Games
+        case "DAILY_VOCAB": return "คำศัพท์วันนี้";
+        case "RACE_CLOCK": return "แข่งเวลา";
+        case "VOCAB_GACHA": return "กาชา";
+        // Legacy
+        case "MULTIPLE_CHOICE": return "เลือกตอบ";
+        default: return "ฝึกฝน";
     }
 }
