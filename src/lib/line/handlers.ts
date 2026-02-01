@@ -14,6 +14,7 @@ import {
     createSentenceGameFlex,
     createSpinWheelResultFlex,
     createWelcomeFlex,
+    createEditProfileFlex,
     createQuickReply,
     createTextMessage,
     lineClient,
@@ -62,6 +63,7 @@ const MENU_KEYWORDS = {
     PRACTICE: ["ฝึกฝน", "practice", "ฝึก"],
     DASHBOARD: ["แดชบอร์ด", "dashboard", "ความก้าวหน้า", "ดูความก้าวหน้า"],
     PROFILE: ["ข้อมูลส่วนตัว", "profile", "โปรไฟล์"],
+    EDIT_PROFILE: ["แก้ไขข้อมูล", "แก้ไขชื่อ", "เปลี่ยนชื่อ", "edit profile", "แก้ไข"],
     CANCEL: ["ยกเลิก", "cancel", "หยุด", "ออก"],
     HELP: ["ช่วยเหลือ", "help", "วิธีใช้", "เมนู", "menu", "รายการ"],
     LEADERBOARD: ["leaderboard", "อันดับ", "ลีดเดอร์บอร์ด", "ranking"],
@@ -73,6 +75,14 @@ const MENU_KEYWORDS = {
     SENTENCE_GAME: ["แต่งประโยค", "sentence", "แต่ง"],
     SHOW_ANSWER: ["เฉลย", "ดูเฉลย", "คำตอบ", "answer"],
 };
+
+// Fields that can be edited
+const EDITABLE_FIELDS = [
+    { key: "thaiName", label: "ชื่อไทย", question: "พิมพ์ชื่อไทยใหม่ของคุณ:" },
+    { key: "chineseName", label: "ชื่อจีน", question: "พิมพ์ชื่อจีนใหม่ของคุณ:" },
+    { key: "email", label: "อีเมล", question: "พิมพ์อีเมลใหม่ของคุณ:" },
+    { key: "university", label: "มหาวิทยาลัย", question: "พิมพ์ชื่อมหาวิทยาลัยใหม่:" },
+];
 
 function detectMenuAction(text: string): string | null {
     const lowerText = text.toLowerCase().trim();
@@ -135,6 +145,9 @@ export async function handleTextMessage(
                 case "PROFILE":
                     await handleProfile(event.replyToken, userId);
                     break;
+                case "EDIT_PROFILE":
+                    await handleEditProfileMenu(event.replyToken, userId);
+                    break;
                 case "CANCEL":
                     await replyText(event.replyToken, "ไม่มีการทำงานที่ต้องยกเลิกครับ");
                     break;
@@ -166,6 +179,19 @@ export async function handleTextMessage(
                     await handleShowAnswer(event.replyToken, userId);
                     break;
             }
+            return;
+        }
+
+        // Check if user wants to edit a specific field (e.g., "แก้ไข:ชื่อไทย")
+        if (text.startsWith("แก้ไข:")) {
+            const fieldToEdit = text.replace("แก้ไข:", "").trim();
+            await handleEditFieldStart(event.replyToken, userId, fieldToEdit);
+            return;
+        }
+
+        // Check if user is in editing mode
+        if (user?.currentGameType?.startsWith("editing:")) {
+            await handleEditFieldSubmit(event.replyToken, user, text);
             return;
         }
 
@@ -469,6 +495,101 @@ async function handleGeneralConversation(replyToken: string, userId: string, tex
         console.error("[handleGeneralConversation] Error:", error);
         await replyText(replyToken, "ขอโทษครับ ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง");
     }
+}
+
+// =====================
+// Edit Profile Handlers
+// =====================
+
+async function handleEditProfileMenu(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนครับ พิมพ์ 'ลงทะเบียน' เพื่อเริ่มต้น");
+        return;
+    }
+
+    const editFlex = createEditProfileFlex({
+        thaiName: user.thaiName || "-",
+        chineseName: user.chineseName || "-",
+        email: user.email || "-",
+        university: user.university || "-",
+    });
+
+    await lineClient.replyMessage({
+        replyToken,
+        messages: [editFlex] as any,
+    });
+}
+
+const FIELD_MAP: Record<string, { dbField: string; label: string }> = {
+    "ชื่อไทย": { dbField: "thaiName", label: "ชื่อไทย" },
+    "ชื่อจีน": { dbField: "chineseName", label: "ชื่อจีน" },
+    "อีเมล": { dbField: "email", label: "อีเมล" },
+    "มหาวิทยาลัย": { dbField: "university", label: "มหาวิทยาลัย" },
+};
+
+async function handleEditFieldStart(replyToken: string, userId: string, fieldName: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, "กรุณาลงทะเบียนก่อนครับ");
+        return;
+    }
+
+    const fieldInfo = FIELD_MAP[fieldName];
+    if (!fieldInfo) {
+        await replyText(replyToken, "ไม่พบข้อมูลที่ต้องการแก้ไข พิมพ์ 'แก้ไข' เพื่อดูตัวเลือก");
+        return;
+    }
+
+    // Store editing state
+    await prisma.user.update({
+        where: { id: user.id },
+        data: { currentGameType: `editing:${fieldInfo.dbField}` },
+    });
+
+    await replyWithQuickReply(
+        replyToken,
+        `พิมพ์${fieldInfo.label}ใหม่ของคุณ:`,
+        [{ label: "ยกเลิก", text: "ยกเลิกแก้ไข" }]
+    );
+}
+
+async function handleEditFieldSubmit(replyToken: string, user: any, newValue: string) {
+    // Check for cancel
+    if (newValue === "ยกเลิกแก้ไข" || newValue === "ยกเลิก") {
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { currentGameType: null },
+        });
+        await replyText(replyToken, "ยกเลิกการแก้ไขแล้วครับ");
+        return;
+    }
+
+    const editingField = user.currentGameType.replace("editing:", "");
+
+    // Find the label for confirmation message
+    const fieldEntry = Object.entries(FIELD_MAP).find(([, v]) => v.dbField === editingField);
+    const fieldLabel = fieldEntry ? fieldEntry[1].label : editingField;
+
+    // Update the field
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            [editingField]: newValue,
+            currentGameType: null,
+        },
+    });
+
+    await replyWithQuickReply(
+        replyToken,
+        `อัพเดท${fieldLabel}เป็น "${newValue}" เรียบร้อยแล้วครับ`,
+        [
+            { label: "แก้ไขเพิ่ม", text: "แก้ไข" },
+            { label: "ดูข้อมูล", text: "ข้อมูลส่วนตัว" },
+        ]
+    );
 }
 
 async function handleGameMenu(replyToken: string, userId: string) {

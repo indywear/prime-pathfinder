@@ -1161,6 +1161,107 @@ export function createWelcomeFlex(userName?: string): FlexMessage {
     };
 }
 
+export function createEditProfileFlex(currentData: {
+    thaiName: string;
+    chineseName: string;
+    email: string;
+    university: string;
+}): FlexMessage {
+    return {
+        type: "flex",
+        altText: "แก้ไขข้อมูลส่วนตัว",
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "แก้ไขข้อมูลส่วนตัว",
+                        weight: "bold",
+                        size: "lg",
+                        color: "#FFFFFF",
+                    },
+                ],
+                paddingAll: "15px",
+                backgroundColor: "#5B5BFF",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "เลือกข้อมูลที่ต้องการแก้ไข:",
+                        size: "sm",
+                        color: "#666666",
+                        margin: "none",
+                    },
+                    {
+                        type: "box",
+                        layout: "vertical",
+                        contents: [
+                            createEditButton("ชื่อไทย", currentData.thaiName, "แก้ไข:ชื่อไทย"),
+                            createEditButton("ชื่อจีน", currentData.chineseName, "แก้ไข:ชื่อจีน"),
+                            createEditButton("อีเมล", currentData.email, "แก้ไข:อีเมล"),
+                            createEditButton("มหาวิทยาลัย", currentData.university, "แก้ไข:มหาวิทยาลัย"),
+                        ],
+                        spacing: "sm",
+                        margin: "lg",
+                    },
+                ],
+                paddingAll: "20px",
+            },
+            footer: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ยกเลิก", text: "เมนู" },
+                        style: "secondary",
+                        height: "sm",
+                    },
+                ],
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+function createEditButton(label: string, currentValue: string, command: string) {
+    return {
+        type: "box" as const,
+        layout: "horizontal" as const,
+        contents: [
+            {
+                type: "box" as const,
+                layout: "vertical" as const,
+                contents: [
+                    { type: "text" as const, text: label, size: "sm" as const, color: "#666666" },
+                    { type: "text" as const, text: currentValue || "-", size: "md" as const, weight: "bold" as const },
+                ],
+                flex: 3,
+            },
+            {
+                type: "button" as const,
+                action: { type: "message" as const, label: "แก้ไข", text: command },
+                style: "primary" as const,
+                color: "#5B5BFF",
+                height: "sm" as const,
+                flex: 1,
+            },
+        ],
+        spacing: "md" as const,
+        alignItems: "center" as const,
+        paddingAll: "10px" as const,
+        backgroundColor: "#F8F8FF",
+        cornerRadius: "md" as const,
+    };
+}
+
 export function createSpinWheelResultFlex(data: {
     reward: string;
     points: number;
