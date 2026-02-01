@@ -1,5 +1,11 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import {
+    getDifficultiesForLevel,
+    getRecentlyAnsweredQuestionIds,
+    filterQuestionsForUser,
+    getUserLevel,
+} from "./questionHistory";
 
 export interface ReadAnswerQuestion {
     id: string;
@@ -13,26 +19,36 @@ export interface ReadAnswerQuestion {
 }
 
 /**
- * Get random read & answer questions
+ * Get random read & answer questions (with difficulty and history filtering)
  */
-export async function getRandomReadAnswerQuestions(count: number = 3): Promise<ReadAnswerQuestion[]> {
+export async function getRandomReadAnswerQuestions(
+    userId?: string,
+    count: number = 3
+): Promise<ReadAnswerQuestion[]> {
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
+    const answeredIds = userId
+        ? await getRecentlyAnsweredQuestionIds(userId, "READ_ANSWER", 24)
+        : [];
+
     const allQuestions = await prisma.readAnswerQuestion.findMany({
-        take: count * 3,
+        where: { difficulty: { in: difficulties } },
     });
 
     if (allQuestions.length === 0) {
-        return [];
+        const fallback = await prisma.readAnswerQuestion.findMany();
+        if (fallback.length === 0) return [];
+        return shuffle(fallback).slice(0, count).map(q => ({
+            id: q.id, passage: q.passage, question: q.question,
+            optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD,
+            correctAnswer: q.correctAnswer,
+        }));
     }
 
-    const shuffled = shuffle(allQuestions);
-    return shuffled.slice(0, count).map(q => ({
-        id: q.id,
-        passage: q.passage,
-        question: q.question,
-        optionA: q.optionA,
-        optionB: q.optionB,
-        optionC: q.optionC,
-        optionD: q.optionD,
+    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    return filtered.map(q => ({
+        id: q.id, passage: q.passage, question: q.question,
+        optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD,
         correctAnswer: q.correctAnswer,
     }));
 }

@@ -47,14 +47,14 @@ export async function pullGacha(userId: string): Promise<GachaResult | null> {
     const targetRarity = getRandomRarity();
 
     // Try to find a vocab with that rarity
+    // Removed take limit for true randomization
     let vocabs = await prisma.gachaVocab.findMany({
         where: { rarity: targetRarity },
-        take: 10,
     });
 
     // Fallback to any rarity if none found
     if (vocabs.length === 0) {
-        vocabs = await prisma.gachaVocab.findMany({ take: 10 });
+        vocabs = await prisma.gachaVocab.findMany();
     }
 
     if (vocabs.length === 0) {

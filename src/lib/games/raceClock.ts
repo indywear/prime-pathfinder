@@ -1,5 +1,11 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import {
+    getDifficultiesForLevel,
+    getRecentlyAnsweredQuestionIds,
+    filterQuestionsForUser,
+    getUserLevel,
+} from "./questionHistory";
 
 export interface RaceClockQuestion {
     id: string;
@@ -16,42 +22,65 @@ const BASE_POINTS = 10;
 const MAX_BONUS = 10;  // Max bonus for speed
 
 /**
- * Get random race clock questions (from multiple sources)
+ * Get random race clock questions (with difficulty and history filtering)
  */
-export async function getRandomRaceClockQuestions(count: number = 10): Promise<RaceClockQuestion[]> {
+export async function getRandomRaceClockQuestions(
+    userId?: string,
+    count: number = 10
+): Promise<RaceClockQuestion[]> {
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
+    const answeredIds = userId
+        ? await getRecentlyAnsweredQuestionIds(userId, "RACE_CLOCK", 24)
+        : [];
+
     // Combine questions from multiple choice and speed grammar
     const [multipleChoice, speedGrammar] = await Promise.all([
-        prisma.multipleChoiceQuestion.findMany({ take: count }),
-        prisma.speedGrammarQuestion.findMany({ take: count }),
+        prisma.multipleChoiceQuestion.findMany({
+            where: { difficulty: { in: difficulties } },
+        }),
+        prisma.speedGrammarQuestion.findMany({
+            where: { difficulty: { in: difficulties } },
+        }),
     ]);
 
-    const allQuestions = [
+    let allQuestions = [
         ...multipleChoice.map(q => ({
-            id: q.id,
-            question: q.question,
-            optionA: q.optionA,
-            optionB: q.optionB,
-            optionC: q.optionC,
-            optionD: q.optionD,
+            id: q.id, question: q.question,
+            optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD,
             correctAnswer: q.correctAnswer,
         })),
         ...speedGrammar.map(q => ({
-            id: q.id,
-            question: q.question,
-            optionA: q.optionA,
-            optionB: q.optionB,
-            optionC: q.optionC,
-            optionD: q.optionD,
+            id: q.id, question: q.question,
+            optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD,
             correctAnswer: q.correctAnswer,
         })),
     ];
 
     if (allQuestions.length === 0) {
-        return [];
+        // Fallback: get any questions
+        const [mcFallback, sgFallback] = await Promise.all([
+            prisma.multipleChoiceQuestion.findMany(),
+            prisma.speedGrammarQuestion.findMany(),
+        ]);
+        allQuestions = [
+            ...mcFallback.map(q => ({
+                id: q.id, question: q.question,
+                optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD,
+                correctAnswer: q.correctAnswer,
+            })),
+            ...sgFallback.map(q => ({
+                id: q.id, question: q.question,
+                optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD,
+                correctAnswer: q.correctAnswer,
+            })),
+        ];
+        if (allQuestions.length === 0) return [];
     }
 
-    const shuffled = shuffle(allQuestions);
-    return shuffled.slice(0, count);
+    // Filter out recently answered
+    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    return filtered;
 }
 
 /**

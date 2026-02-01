@@ -1,5 +1,11 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import {
+    getDifficultiesForLevel,
+    getRecentlyAnsweredQuestionIds,
+    filterQuestionsForUser,
+    getUserLevel,
+} from "./questionHistory";
 
 export interface SpeedGrammarQuestion {
     id: string;
@@ -13,27 +19,37 @@ export interface SpeedGrammarQuestion {
 }
 
 /**
- * Get random speed grammar questions
+ * Get random speed grammar questions (with difficulty and history filtering)
  */
-export async function getRandomSpeedGrammarQuestions(count: number = 5): Promise<SpeedGrammarQuestion[]> {
+export async function getRandomSpeedGrammarQuestions(
+    userId?: string,
+    count: number = 5
+): Promise<SpeedGrammarQuestion[]> {
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
+    const answeredIds = userId
+        ? await getRecentlyAnsweredQuestionIds(userId, "SPEED_GRAMMAR", 24)
+        : [];
+
     const allQuestions = await prisma.speedGrammarQuestion.findMany({
-        take: count * 3,
+        where: { difficulty: { in: difficulties } },
     });
 
     if (allQuestions.length === 0) {
-        return [];
+        const fallback = await prisma.speedGrammarQuestion.findMany();
+        if (fallback.length === 0) return [];
+        return shuffle(fallback).slice(0, count).map(q => ({
+            id: q.id, question: q.question,
+            optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD,
+            correctAnswer: q.correctAnswer, timeLimit: q.timeLimit,
+        }));
     }
 
-    const shuffled = shuffle(allQuestions);
-    return shuffled.slice(0, count).map(q => ({
-        id: q.id,
-        question: q.question,
-        optionA: q.optionA,
-        optionB: q.optionB,
-        optionC: q.optionC,
-        optionD: q.optionD,
-        correctAnswer: q.correctAnswer,
-        timeLimit: q.timeLimit,
+    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    return filtered.map(q => ({
+        id: q.id, question: q.question,
+        optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD,
+        correctAnswer: q.correctAnswer, timeLimit: q.timeLimit,
     }));
 }
 

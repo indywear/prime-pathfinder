@@ -7,15 +7,13 @@ interface Task {
     weekNumber: number
     title: string
     description: string
-    landingPageSlug: string
+    contentUrl: string
     minWords: number
     maxWords: number
-    startDate: string
     deadline: string
     isActive: boolean
     _count: {
         submissions: number
-        feedbackRequests: number
     }
 }
 
@@ -29,9 +27,15 @@ export default function TasksPage() {
     }, [])
 
     const fetchTasks = async () => {
-        const res = await fetch('/api/tasks')
-        const data = await res.json()
-        setTasks(data.tasks)
+        try {
+            const res = await fetch('/api/tasks')
+            const data = await res.json()
+            // Handle both array response and {tasks: []} response
+            setTasks(Array.isArray(data) ? data : data.tasks || [])
+        } catch (error) {
+            console.error('Failed to fetch tasks:', error)
+            setTasks([])
+        }
         setLoading(false)
     }
 
@@ -78,13 +82,10 @@ export default function TasksPage() {
                                     weekNumber: parseInt(formData.get('weekNumber') as string),
                                     title: formData.get('title'),
                                     description: formData.get('description'),
-                                    contentHtml: formData.get('contentHtml'),
-                                    landingPageSlug: formData.get('slug'),
+                                    contentUrl: formData.get('contentUrl'),
                                     minWords: parseInt(formData.get('minWords') as string),
                                     maxWords: parseInt(formData.get('maxWords') as string),
-                                    startDate: formData.get('startDate'),
                                     deadline: formData.get('deadline'),
-                                    createdBy: 'admin',
                                 }),
                             })
                             setShowCreateForm(false)
@@ -103,11 +104,11 @@ export default function TasksPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">URL Slug</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Content URL</label>
                                 <input
-                                    type="text"
-                                    name="slug"
-                                    placeholder="week-1-intro"
+                                    type="url"
+                                    name="contentUrl"
+                                    placeholder="https://example.com/content"
                                     required
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                 />
@@ -131,15 +132,6 @@ export default function TasksPage() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                             />
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Content (HTML)</label>
-                            <textarea
-                                name="contentHtml"
-                                required
-                                rows={6}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"
-                            />
-                        </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Min Words</label>
@@ -155,30 +147,19 @@ export default function TasksPage() {
                                 <input
                                     type="number"
                                     name="maxWords"
-                                    defaultValue={150}
+                                    defaultValue={120}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                 />
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                                <input
-                                    type="datetime-local"
-                                    name="startDate"
-                                    required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
-                                <input
-                                    type="datetime-local"
-                                    name="deadline"
-                                    required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                />
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
+                            <input
+                                type="datetime-local"
+                                name="deadline"
+                                required
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                            />
                         </div>
                         <div className="flex gap-2">
                             <button
@@ -201,6 +182,11 @@ export default function TasksPage() {
 
             {/* Tasks List */}
             <div className="bg-white rounded-xl border border-gray-200">
+                {tasks.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                        <p>No tasks yet. Click "Create New Task" to add your first task.</p>
+                    </div>
+                ) : (
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead className="bg-gray-50 border-b border-gray-200">
@@ -221,17 +207,24 @@ export default function TasksPage() {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="text-sm font-medium text-gray-900">{task.title}</div>
-                                        <div className="text-xs text-gray-500">{task.description}</div>
-                                        <div className="text-xs text-indigo-600 mt-1">
-                                            /task/{task.landingPageSlug}
-                                        </div>
+                                        <div className="text-xs text-gray-500 line-clamp-2">{task.description}</div>
+                                        {task.contentUrl && (
+                                            <a
+                                                href={task.contentUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-xs text-indigo-600 mt-1 hover:underline"
+                                            >
+                                                View Content
+                                            </a>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         {new Date(task.deadline).toLocaleDateString('th-TH')}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        <div>📝 {task._count.submissions} submissions</div>
-                                        <div className="text-gray-500">💬 {task._count.feedbackRequests} feedback</div>
+                                        <div>📝 {task._count?.submissions || 0} submissions</div>
+                                        <div className="text-xs text-gray-400">{task.minWords}-{task.maxWords} words</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span
@@ -244,13 +237,6 @@ export default function TasksPage() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                                        <a
-                                            href={`/task/${task.landingPageSlug}`}
-                                            target="_blank"
-                                            className="text-indigo-600 hover:text-indigo-900"
-                                        >
-                                            View
-                                        </a>
                                         <button
                                             onClick={() => toggleTaskStatus(task.id, task.isActive)}
                                             className="text-gray-600 hover:text-gray-900"
@@ -263,6 +249,7 @@ export default function TasksPage() {
                         </tbody>
                     </table>
                 </div>
+                )}
             </div>
         </div>
     )

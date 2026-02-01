@@ -1,5 +1,8 @@
 // Game Logic Exports - 15 Games
 
+// Question History & Difficulty
+export * from './questionHistory';
+
 // Vocabulary Games (4)
 export * from './vocabMatch';
 export * from './vocabMeaning';

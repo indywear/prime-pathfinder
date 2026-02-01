@@ -70,7 +70,7 @@ export async function GET() {
     // Test 1: VOCAB_MATCH
     // ==================
     try {
-        const questions = await getRandomVocabMatchQuestions(1);
+        const questions = await getRandomVocabMatchQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
             const options = getVocabMatchOptions(q);
@@ -104,7 +104,7 @@ export async function GET() {
     // Test 2: VOCAB_MEANING
     // ==================
     try {
-        const questions = await getRandomVocabMeaningQuestions(1);
+        const questions = await getRandomVocabMeaningQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
 
@@ -134,7 +134,7 @@ export async function GET() {
     // Test 3: VOCAB_OPPOSITE
     // ==================
     try {
-        const questions = await getRandomVocabOppositeQuestions(1);
+        const questions = await getRandomVocabOppositeQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
             const options = getVocabOppositeOptions(q);
@@ -164,7 +164,7 @@ export async function GET() {
     // Test 4: VOCAB_SYNONYM
     // ==================
     try {
-        const questions = await getRandomVocabSynonymQuestions(1);
+        const questions = await getRandomVocabSynonymQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
             const options = getVocabSynonymOptions(q);
@@ -217,7 +217,7 @@ export async function GET() {
     // Test 6: FIX_SENTENCE
     // ==================
     try {
-        const questions = await getRandomFixSentenceQuestions(1);
+        const questions = await getRandomFixSentenceQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
 
@@ -245,7 +245,7 @@ export async function GET() {
     // Test 7: ARRANGE_SENTENCE
     // ==================
     try {
-        const questions = await getRandomArrangeSentenceQuestions(1);
+        const questions = await getRandomArrangeSentenceQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
 
@@ -271,7 +271,7 @@ export async function GET() {
     // Test 8: SPEED_GRAMMAR
     // ==================
     try {
-        const questions = await getRandomSpeedGrammarQuestions(1);
+        const questions = await getRandomSpeedGrammarQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
 
@@ -300,7 +300,7 @@ export async function GET() {
     // Test 9: READ_ANSWER
     // ==================
     try {
-        const questions = await getRandomReadAnswerQuestions(1);
+        const questions = await getRandomReadAnswerQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
 
@@ -329,7 +329,7 @@ export async function GET() {
     // Test 10: SUMMARIZE
     // ==================
     try {
-        const questions = await getRandomSummarizeQuestions(1);
+        const questions = await getRandomSummarizeQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
             const keywords = getSummarizeKeywords(q);
@@ -363,7 +363,7 @@ export async function GET() {
     // Test 11: CONTINUE_STORY
     // ==================
     try {
-        const questions = await getRandomContinueStoryQuestions(1);
+        const questions = await getRandomContinueStoryQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
             const keywords = getContinueStoryKeywords(q);
@@ -419,7 +419,7 @@ export async function GET() {
     // Test 13: RACE_CLOCK
     // ==================
     try {
-        const questions = await getRandomRaceClockQuestions(1);
+        const questions = await getRandomRaceClockQuestions(undefined, 1);
         if (questions.length > 0) {
             const q = questions[0];
 

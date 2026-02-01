@@ -26,7 +26,7 @@ export async function getTodayVocab(): Promise<DailyVocabWord | null> {
 
     if (!vocab) {
         // Fallback: get random vocab
-        const allVocabs = await prisma.dailyVocab.findMany({ take: 30 });
+        const allVocabs = await prisma.dailyVocab.findMany();
         if (allVocabs.length === 0) return null;
 
         const randomIndex = Math.floor(Math.random() * allVocabs.length);

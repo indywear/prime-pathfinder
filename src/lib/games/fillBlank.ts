@@ -1,5 +1,9 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import {
+    getRecentlyAnsweredQuestionIds,
+    filterQuestionsForUser,
+} from "./questionHistory";
 
 export interface FillBlankQuestion {
     id: string;
@@ -8,21 +12,30 @@ export interface FillBlankQuestion {
 }
 
 /**
- * Get random fill-in-blank questions for the game
+ * Get random fill-in-blank questions for the game (with history filtering)
+ * @param userId - User ID for personalized question selection
+ * @param count - Number of questions to return
  */
-export async function getRandomFillBlankQuestions(count: number = 5): Promise<FillBlankQuestion[]> {
-    const allQuestions = await prisma.fillBlankQuestion.findMany({
-        take: count * 3,
-    });
+export async function getRandomFillBlankQuestions(
+    userId?: string,
+    count: number = 5
+): Promise<FillBlankQuestion[]> {
+    // Get recently answered question IDs
+    const answeredIds = userId
+        ? await getRecentlyAnsweredQuestionIds(userId, "FILL_BLANK", 24)
+        : [];
+
+    // Fetch all questions
+    const allQuestions = await prisma.fillBlankQuestion.findMany();
 
     if (allQuestions.length === 0) {
         return [];
     }
 
-    // Shuffle and pick using Fisher-Yates
-    const shuffled = shuffle(allQuestions);
+    // Filter out recently answered, prioritize new questions
+    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
 
-    return shuffled.slice(0, count).map(q => ({
+    return filtered.map(q => ({
         id: q.id,
         sentence: q.sentence,
         answer: q.answer,

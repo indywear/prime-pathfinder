@@ -605,6 +605,24 @@ model GachaVocab {
 }
 
 // =====================
+// User Question History (Track answered questions)
+// =====================
+
+model UserQuestionHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  questionId   String   // ID of the question from any game table
+  gameType     String   // Which game (VOCAB_MATCH, FILL_BLANK, etc.)
+  wasCorrect   Boolean  @default(false)
+  answeredAt   DateTime @default(now())
+
+  @@unique([userId, questionId, gameType])
+  @@index([userId])
+  @@index([userId, gameType])
+  @@index([answeredAt])
+}
+
+// =====================
 // Game Sessions
 // =====================
 

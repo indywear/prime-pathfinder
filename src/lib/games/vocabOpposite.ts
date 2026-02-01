@@ -1,5 +1,11 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import {
+    getDifficultiesForLevel,
+    getRecentlyAnsweredQuestionIds,
+    filterQuestionsForUser,
+    getUserLevel,
+} from "./questionHistory";
 
 export interface VocabOppositeQuestion {
     id: string;
@@ -11,25 +17,35 @@ export interface VocabOppositeQuestion {
 }
 
 /**
- * Get random vocab opposite questions
+ * Get random vocab opposite questions (with difficulty and history filtering)
  */
-export async function getRandomVocabOppositeQuestions(count: number = 5): Promise<VocabOppositeQuestion[]> {
+export async function getRandomVocabOppositeQuestions(
+    userId?: string,
+    count: number = 5
+): Promise<VocabOppositeQuestion[]> {
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
+    const answeredIds = userId
+        ? await getRecentlyAnsweredQuestionIds(userId, "VOCAB_OPPOSITE", 24)
+        : [];
+
     const allQuestions = await prisma.vocabOppositeQuestion.findMany({
-        take: count * 3,
+        where: { difficulty: { in: difficulties } },
     });
 
     if (allQuestions.length === 0) {
-        return [];
+        const fallback = await prisma.vocabOppositeQuestion.findMany();
+        if (fallback.length === 0) return [];
+        return shuffle(fallback).slice(0, count).map(q => ({
+            id: q.id, word: q.word, opposite: q.opposite,
+            wrongA: q.wrongA, wrongB: q.wrongB, wrongC: q.wrongC,
+        }));
     }
 
-    const shuffled = shuffle(allQuestions);
-    return shuffled.slice(0, count).map(q => ({
-        id: q.id,
-        word: q.word,
-        opposite: q.opposite,
-        wrongA: q.wrongA,
-        wrongB: q.wrongB,
-        wrongC: q.wrongC,
+    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    return filtered.map(q => ({
+        id: q.id, word: q.word, opposite: q.opposite,
+        wrongA: q.wrongA, wrongB: q.wrongB, wrongC: q.wrongC,
     }));
 }
 

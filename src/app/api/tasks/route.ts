@@ -15,7 +15,10 @@ export async function GET(request: NextRequest) {
             orderBy: { weekNumber: "desc" },
             include: {
                 _count: {
-                    select: { submissions: true },
+                    select: {
+                        submissions: true,
+                        feedbackRequests: true,
+                    },
                 },
             },
         });

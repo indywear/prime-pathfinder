@@ -27,9 +27,8 @@ export interface SentenceEvaluationResult {
  * Get random sentence construction pairs for the game
  */
 export async function getRandomSentencePairs(count: number = 3): Promise<SentenceConstructionPair[]> {
-    const allPairs = await prisma.sentenceConstructionPair.findMany({
-        take: count * 3,
-    });
+    // Fetch all pairs then shuffle for true randomization
+    const allPairs = await prisma.sentenceConstructionPair.findMany();
 
     if (allPairs.length === 0) {
         return [];

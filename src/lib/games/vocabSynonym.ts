@@ -1,5 +1,11 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import {
+    getDifficultiesForLevel,
+    getRecentlyAnsweredQuestionIds,
+    filterQuestionsForUser,
+    getUserLevel,
+} from "./questionHistory";
 
 export interface VocabSynonymQuestion {
     id: string;
@@ -11,25 +17,35 @@ export interface VocabSynonymQuestion {
 }
 
 /**
- * Get random vocab synonym questions
+ * Get random vocab synonym questions (with difficulty and history filtering)
  */
-export async function getRandomVocabSynonymQuestions(count: number = 5): Promise<VocabSynonymQuestion[]> {
+export async function getRandomVocabSynonymQuestions(
+    userId?: string,
+    count: number = 5
+): Promise<VocabSynonymQuestion[]> {
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
+    const answeredIds = userId
+        ? await getRecentlyAnsweredQuestionIds(userId, "VOCAB_SYNONYM", 24)
+        : [];
+
     const allQuestions = await prisma.vocabSynonymQuestion.findMany({
-        take: count * 3,
+        where: { difficulty: { in: difficulties } },
     });
 
     if (allQuestions.length === 0) {
-        return [];
+        const fallback = await prisma.vocabSynonymQuestion.findMany();
+        if (fallback.length === 0) return [];
+        return shuffle(fallback).slice(0, count).map(q => ({
+            id: q.id, word: q.word, synonym: q.synonym,
+            wrongA: q.wrongA, wrongB: q.wrongB, wrongC: q.wrongC,
+        }));
     }
 
-    const shuffled = shuffle(allQuestions);
-    return shuffled.slice(0, count).map(q => ({
-        id: q.id,
-        word: q.word,
-        synonym: q.synonym,
-        wrongA: q.wrongA,
-        wrongB: q.wrongB,
-        wrongC: q.wrongC,
+    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    return filtered.map(q => ({
+        id: q.id, word: q.word, synonym: q.synonym,
+        wrongA: q.wrongA, wrongB: q.wrongB, wrongC: q.wrongC,
     }));
 }
 

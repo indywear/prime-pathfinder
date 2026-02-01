@@ -1,6 +1,12 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
 import axios from "axios";
+import {
+    getDifficultiesForLevel,
+    getRecentlyAnsweredQuestionIds,
+    filterQuestionsForUser,
+    getUserLevel,
+} from "./questionHistory";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = "anthropic/claude-haiku-4.5";
@@ -25,23 +31,33 @@ export interface SummarizeResult {
 }
 
 /**
- * Get random summarize questions
+ * Get random summarize questions (with difficulty and history filtering)
  */
-export async function getRandomSummarizeQuestions(count: number = 3): Promise<SummarizeQuestion[]> {
+export async function getRandomSummarizeQuestions(
+    userId?: string,
+    count: number = 3
+): Promise<SummarizeQuestion[]> {
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
+    const answeredIds = userId
+        ? await getRecentlyAnsweredQuestionIds(userId, "SUMMARIZE", 24)
+        : [];
+
     const allQuestions = await prisma.summarizeQuestion.findMany({
-        take: count * 3,
+        where: { difficulty: { in: difficulties } },
     });
 
     if (allQuestions.length === 0) {
-        return [];
+        const fallback = await prisma.summarizeQuestion.findMany();
+        if (fallback.length === 0) return [];
+        return shuffle(fallback).slice(0, count).map(q => ({
+            id: q.id, passage: q.passage, sampleSummary: q.sampleSummary, keywords: q.keywords,
+        }));
     }
 
-    const shuffled = shuffle(allQuestions);
-    return shuffled.slice(0, count).map(q => ({
-        id: q.id,
-        passage: q.passage,
-        sampleSummary: q.sampleSummary,
-        keywords: q.keywords,
+    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    return filtered.map(q => ({
+        id: q.id, passage: q.passage, sampleSummary: q.sampleSummary, keywords: q.keywords,
     }));
 }
 

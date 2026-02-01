@@ -1525,7 +1525,7 @@ async function handleFunGamesMenu(replyToken: string, userId: string) {
 // =====================
 
 async function handleVocabMatchGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomVocabMatchQuestions(1);
+    const questions = await getRandomVocabMatchQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
@@ -1556,7 +1556,7 @@ async function handleVocabMatchGameStart(replyToken: string, userId: string) {
 }
 
 async function handleVocabMeaningGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomVocabMeaningQuestions(1);
+    const questions = await getRandomVocabMeaningQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
@@ -1582,7 +1582,7 @@ async function handleVocabMeaningGameStart(replyToken: string, userId: string) {
 }
 
 async function handleVocabOppositeGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomVocabOppositeQuestions(1);
+    const questions = await getRandomVocabOppositeQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
@@ -1613,7 +1613,7 @@ async function handleVocabOppositeGameStart(replyToken: string, userId: string) 
 }
 
 async function handleVocabSynonymGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomVocabSynonymQuestions(1);
+    const questions = await getRandomVocabSynonymQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
@@ -1648,7 +1648,7 @@ async function handleVocabSynonymGameStart(replyToken: string, userId: string) {
 // =====================
 
 async function handleFixSentenceGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomFixSentenceQuestions(1);
+    const questions = await getRandomFixSentenceQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
@@ -1675,7 +1675,7 @@ async function handleFixSentenceGameStart(replyToken: string, userId: string) {
 }
 
 async function handleArrangeSentenceGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomArrangeSentenceQuestions(1);
+    const questions = await getRandomArrangeSentenceQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
@@ -1702,7 +1702,7 @@ async function handleArrangeSentenceGameStart(replyToken: string, userId: string
 }
 
 async function handleSpeedGrammarGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomSpeedGrammarQuestions(1);
+    const questions = await getRandomSpeedGrammarQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
@@ -1738,7 +1738,7 @@ async function handleSpeedGrammarGameStart(replyToken: string, userId: string) {
 // =====================
 
 async function handleReadAnswerGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomReadAnswerQuestions(1);
+    const questions = await getRandomReadAnswerQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
@@ -1766,7 +1766,7 @@ async function handleReadAnswerGameStart(replyToken: string, userId: string) {
 }
 
 async function handleSummarizeGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomSummarizeQuestions(1);
+    const questions = await getRandomSummarizeQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
@@ -1796,7 +1796,7 @@ async function handleSummarizeGameStart(replyToken: string, userId: string) {
 }
 
 async function handleContinueStoryGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomContinueStoryQuestions(1);
+    const questions = await getRandomContinueStoryQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
@@ -1865,7 +1865,7 @@ async function handleDailyVocabGameStart(replyToken: string, userId: string) {
 }
 
 async function handleRaceClockGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomRaceClockQuestions(1);
+    const questions = await getRandomRaceClockQuestions(userId, 1);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");

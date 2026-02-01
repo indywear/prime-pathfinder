@@ -1,5 +1,11 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import {
+    getDifficultiesForLevel,
+    getRecentlyAnsweredQuestionIds,
+    filterQuestionsForUser,
+    getUserLevel,
+} from "./questionHistory";
 
 export interface ArrangeSentenceQuestion {
     id: string;
@@ -8,22 +14,33 @@ export interface ArrangeSentenceQuestion {
 }
 
 /**
- * Get random arrange sentence questions
+ * Get random arrange sentence questions (with difficulty and history filtering)
  */
-export async function getRandomArrangeSentenceQuestions(count: number = 5): Promise<ArrangeSentenceQuestion[]> {
+export async function getRandomArrangeSentenceQuestions(
+    userId?: string,
+    count: number = 5
+): Promise<ArrangeSentenceQuestion[]> {
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
+    const answeredIds = userId
+        ? await getRecentlyAnsweredQuestionIds(userId, "ARRANGE_SENTENCE", 24)
+        : [];
+
     const allQuestions = await prisma.arrangeSentenceQuestion.findMany({
-        take: count * 3,
+        where: { difficulty: { in: difficulties } },
     });
 
     if (allQuestions.length === 0) {
-        return [];
+        const fallback = await prisma.arrangeSentenceQuestion.findMany();
+        if (fallback.length === 0) return [];
+        return shuffle(fallback).slice(0, count).map(q => ({
+            id: q.id, shuffledWords: q.shuffledWords, correctSentence: q.correctSentence,
+        }));
     }
 
-    const shuffled = shuffle(allQuestions);
-    return shuffled.slice(0, count).map(q => ({
-        id: q.id,
-        shuffledWords: q.shuffledWords,
-        correctSentence: q.correctSentence,
+    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    return filtered.map(q => ({
+        id: q.id, shuffledWords: q.shuffledWords, correctSentence: q.correctSentence,
     }));
 }
 

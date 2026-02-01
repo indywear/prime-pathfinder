@@ -1,5 +1,11 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import {
+    getDifficultiesForLevel,
+    getRecentlyAnsweredQuestionIds,
+    filterQuestionsForUser,
+    getUserLevel,
+} from "./questionHistory";
 
 export interface VocabMatchQuestion {
     id: string;
@@ -11,19 +17,49 @@ export interface VocabMatchQuestion {
 }
 
 /**
- * Get random vocab match questions
+ * Get random vocab match questions (with difficulty and history filtering)
+ * @param userId - User ID for personalized question selection
+ * @param count - Number of questions to return
  */
-export async function getRandomVocabMatchQuestions(count: number = 5): Promise<VocabMatchQuestion[]> {
+export async function getRandomVocabMatchQuestions(
+    userId?: string,
+    count: number = 5
+): Promise<VocabMatchQuestion[]> {
+    // Get user level for difficulty filtering
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
+
+    // Get recently answered question IDs
+    const answeredIds = userId
+        ? await getRecentlyAnsweredQuestionIds(userId, "VOCAB_MATCH", 24)
+        : [];
+
+    // Fetch questions matching user's difficulty level
     const allQuestions = await prisma.vocabMatchQuestion.findMany({
-        take: count * 3,
+        where: {
+            difficulty: { in: difficulties },
+        },
     });
 
     if (allQuestions.length === 0) {
-        return [];
+        // Fallback: get any questions if none match difficulty
+        const fallbackQuestions = await prisma.vocabMatchQuestion.findMany();
+        if (fallbackQuestions.length === 0) return [];
+
+        return shuffle(fallbackQuestions).slice(0, count).map(q => ({
+            id: q.id,
+            word: q.word,
+            meaning: q.meaning,
+            wrongA: q.wrongA,
+            wrongB: q.wrongB,
+            wrongC: q.wrongC,
+        }));
     }
 
-    const shuffled = shuffle(allQuestions);
-    return shuffled.slice(0, count).map(q => ({
+    // Filter out recently answered, prioritize new questions
+    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+
+    return filtered.map(q => ({
         id: q.id,
         word: q.word,
         meaning: q.meaning,

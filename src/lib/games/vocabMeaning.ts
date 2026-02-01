@@ -1,5 +1,11 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import {
+    getDifficultiesForLevel,
+    getRecentlyAnsweredQuestionIds,
+    filterQuestionsForUser,
+    getUserLevel,
+} from "./questionHistory";
 
 export interface VocabMeaningQuestion {
     id: string;
@@ -8,22 +14,33 @@ export interface VocabMeaningQuestion {
 }
 
 /**
- * Get random vocab meaning questions (use VocabMatchQuestion as source)
+ * Get random vocab meaning questions (with difficulty and history filtering)
  */
-export async function getRandomVocabMeaningQuestions(count: number = 5): Promise<VocabMeaningQuestion[]> {
+export async function getRandomVocabMeaningQuestions(
+    userId?: string,
+    count: number = 5
+): Promise<VocabMeaningQuestion[]> {
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
+    const answeredIds = userId
+        ? await getRecentlyAnsweredQuestionIds(userId, "VOCAB_MEANING", 24)
+        : [];
+
     const allQuestions = await prisma.vocabMatchQuestion.findMany({
-        take: count * 3,
+        where: { difficulty: { in: difficulties } },
     });
 
     if (allQuestions.length === 0) {
-        return [];
+        const fallback = await prisma.vocabMatchQuestion.findMany();
+        if (fallback.length === 0) return [];
+        return shuffle(fallback).slice(0, count).map(q => ({
+            id: q.id, word: q.word, meaning: q.meaning,
+        }));
     }
 
-    const shuffled = shuffle(allQuestions);
-    return shuffled.slice(0, count).map(q => ({
-        id: q.id,
-        word: q.word,
-        meaning: q.meaning,
+    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    return filtered.map(q => ({
+        id: q.id, word: q.word, meaning: q.meaning,
     }));
 }
 
