@@ -80,11 +80,13 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-    return NextResponse.json({ 
-        status: 'ok', 
+    return NextResponse.json({
+        status: 'ok',
         timestamp: new Date().toISOString(),
         hasSecret: !!process.env.LINE_CHANNEL_SECRET,
         hasToken: !!process.env.LINE_CHANNEL_ACCESS_TOKEN,
         hasDb: !!process.env.DATABASE_URL,
+        hasOpenRouter: !!process.env.OPENROUTER_API_KEY,
+        openRouterKeyPrefix: process.env.OPENROUTER_API_KEY?.substring(0, 10) || 'not set',
     })
 }
