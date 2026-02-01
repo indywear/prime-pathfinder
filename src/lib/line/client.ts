@@ -1082,6 +1082,85 @@ export function createSentenceGameFlex(data: {
     };
 }
 
+export function createWelcomeFlex(userName?: string): FlexMessage {
+    return {
+        type: "flex",
+        altText: "ยินดีต้อนรับ",
+        contents: {
+            type: "bubble",
+            size: "kilo",
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: userName ? `สวัสดีครับ ${userName}!` : "สวัสดีครับ!",
+                        weight: "bold",
+                        size: "lg",
+                    },
+                    {
+                        type: "text",
+                        text: "วันนี้อยากฝึกอะไรครับ?",
+                        size: "sm",
+                        color: "#666666",
+                        margin: "md",
+                    },
+                ],
+                paddingAll: "20px",
+            },
+            footer: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            {
+                                type: "button",
+                                action: { type: "message", label: "เล่นเกม", text: "เกม" },
+                                style: "primary",
+                                color: "#FF6B35",
+                                height: "sm",
+                            },
+                            {
+                                type: "button",
+                                action: { type: "message", label: "ส่งงาน", text: "ส่งงาน" },
+                                style: "primary",
+                                color: "#1DB446",
+                                height: "sm",
+                            },
+                        ],
+                        spacing: "sm",
+                    },
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            {
+                                type: "button",
+                                action: { type: "message", label: "ดูความก้าวหน้า", text: "แดชบอร์ด" },
+                                style: "secondary",
+                                height: "sm",
+                            },
+                            {
+                                type: "button",
+                                action: { type: "message", label: "เมนูทั้งหมด", text: "เมนู" },
+                                style: "secondary",
+                                height: "sm",
+                            },
+                        ],
+                        spacing: "sm",
+                        margin: "sm",
+                    },
+                ],
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
 export function createSpinWheelResultFlex(data: {
     reward: string;
     points: number;

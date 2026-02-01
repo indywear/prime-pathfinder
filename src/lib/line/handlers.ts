@@ -13,6 +13,9 @@ import {
     createWordOrderGameFlex,
     createSentenceGameFlex,
     createSpinWheelResultFlex,
+    createWelcomeFlex,
+    createQuickReply,
+    createTextMessage,
     lineClient,
 } from "@/lib/line/client";
 import { generateWritingFeedback, generateConversationResponse, generateSimpleFeedback } from "@/lib/ai/feedback";
@@ -413,6 +416,14 @@ async function handleHelp(replyToken: string, userId: string) {
     }
 }
 
+// Greeting patterns to detect
+const GREETING_PATTERNS = ["สวัสดี", "หวัดดี", "ดีครับ", "ดีค่ะ", "hello", "hi", "hey", "ไง"];
+
+function isGreeting(text: string): boolean {
+    const lowerText = text.toLowerCase().trim();
+    return GREETING_PATTERNS.some(pattern => lowerText.includes(pattern.toLowerCase()));
+}
+
 async function handleGeneralConversation(replyToken: string, userId: string, text: string) {
     console.log("[handleGeneralConversation] Starting for user:", userId, "text:", text.substring(0, 50));
 
@@ -420,9 +431,20 @@ async function handleGeneralConversation(replyToken: string, userId: string, tex
         const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
         console.log("[handleGeneralConversation] User found:", !!user, "isRegistered:", user?.isRegistered);
 
+        // For greetings, show Welcome Flex Message (cleaner UI)
+        if (isGreeting(text) && user?.isRegistered) {
+            const welcomeFlex = createWelcomeFlex(user.thaiName || undefined);
+            await lineClient.replyMessage({
+                replyToken,
+                messages: [welcomeFlex] as any,
+            });
+            return;
+        }
+
+        // For non-greetings, use AI with Quick Reply buttons
         const context = user?.isRegistered
-            ? `User is registered as ${user.thaiName}, Level ${user.currentLevel}`
-            : "User is not registered yet";
+            ? `User: ${user.thaiName}, Level ${user.currentLevel}. Keep response SHORT (1-2 sentences max). No emoji.`
+            : "User not registered. Keep response SHORT. No emoji.";
 
         console.log("[handleGeneralConversation] Calling AI with context:", context);
         const response = await generateConversationResponse(text, context);
@@ -435,7 +457,13 @@ async function handleGeneralConversation(replyToken: string, userId: string, tex
             });
         }
 
-        await replyText(replyToken, response);
+        // Reply with Quick Reply buttons for easy navigation
+        const quickReplyOptions = [
+            { label: "เล่นเกม", text: "เกม" },
+            { label: "เมนู", text: "เมนู" },
+            { label: "แดชบอร์ด", text: "แดชบอร์ด" },
+        ];
+        await replyWithQuickReply(replyToken, response, quickReplyOptions);
         console.log("[handleGeneralConversation] Reply sent successfully");
     } catch (error) {
         console.error("[handleGeneralConversation] Error:", error);

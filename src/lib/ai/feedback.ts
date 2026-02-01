@@ -314,13 +314,16 @@ export async function generateConversationResponse(
     console.log("[AI/ConversationResponse] API Key exists:", !!apiKey);
     console.log("[AI/ConversationResponse] Using model:", MODEL);
 
-    const systemPrompt = `You are ProficienThAI, a friendly Thai language learning chatbot.
-You help students improve their Thai reading and writing skills.
-Respond naturally in Thai, keeping messages concise and helpful.
-If the student asks about assignments or feedback, guide them to use the appropriate menu.
-Be encouraging and supportive.
+    const systemPrompt = `You are ProficienThAI, a Thai language learning assistant.
 
-Context: ${context}`;
+RULES:
+- Respond ONLY in Thai
+- Keep responses SHORT: 1-2 sentences maximum
+- NO emojis allowed
+- Be helpful and direct
+- If asked about features, mention: "พิมพ์ 'เมนู' เพื่อดูตัวเลือกทั้งหมด"
+
+${context}`;
 
     try {
         const response = await axios.post(
