@@ -414,22 +414,33 @@ async function handleHelp(replyToken: string, userId: string) {
 }
 
 async function handleGeneralConversation(replyToken: string, userId: string, text: string) {
-    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+    console.log("[handleGeneralConversation] Starting for user:", userId, "text:", text.substring(0, 50));
 
-    const context = user?.isRegistered
-        ? `User is registered as ${user.thaiName}, Level ${user.currentLevel}`
-        : "User is not registered yet";
+    try {
+        const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+        console.log("[handleGeneralConversation] User found:", !!user, "isRegistered:", user?.isRegistered);
 
-    const response = await generateConversationResponse(text, context);
+        const context = user?.isRegistered
+            ? `User is registered as ${user.thaiName}, Level ${user.currentLevel}`
+            : "User is not registered yet";
 
-    if (user?.isRegistered) {
-        await prisma.user.update({
-            where: { id: user.id },
-            data: { totalPoints: { increment: POINTS.DAILY_CHAT } },
-        });
+        console.log("[handleGeneralConversation] Calling AI with context:", context);
+        const response = await generateConversationResponse(text, context);
+        console.log("[handleGeneralConversation] AI response received:", response.substring(0, 50));
+
+        if (user?.isRegistered) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { totalPoints: { increment: POINTS.DAILY_CHAT } },
+            });
+        }
+
+        await replyText(replyToken, response);
+        console.log("[handleGeneralConversation] Reply sent successfully");
+    } catch (error) {
+        console.error("[handleGeneralConversation] Error:", error);
+        await replyText(replyToken, "ขอโทษครับ ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง");
     }
-
-    await replyText(replyToken, response);
 }
 
 async function handleGameMenu(replyToken: string, userId: string) {
