@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
         LINE_CHANNEL_ACCESS_TOKEN: process.env.LINE_CHANNEL_ACCESS_TOKEN ? "Set" : "NOT SET",
         LINE_CHANNEL_SECRET: process.env.LINE_CHANNEL_SECRET ? "Set" : "NOT SET",
         OPENROUTER_API_KEY: openRouterKey ? `Set (${openRouterKey.substring(0, 15)}...)` : "NOT SET",
-        ADMIN_EMAIL: process.env.ADMIN_EMAIL ? "Set" : "NOT SET",
-        ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ? "Set" : "NOT SET",
+        ADMIN_EMAIL: process.env.ADMIN_EMAIL ? `Set (value: "${process.env.ADMIN_EMAIL}")` : "NOT SET",
+        ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ? `Set (length: ${process.env.ADMIN_PASSWORD.length}, first3: "${process.env.ADMIN_PASSWORD.substring(0, 3)}...")` : "NOT SET",
         NODE_ENV: process.env.NODE_ENV,
     };
 
