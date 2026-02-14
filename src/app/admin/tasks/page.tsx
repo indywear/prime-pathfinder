@@ -86,6 +86,9 @@ export default function TasksPage() {
                                     title: formData.get('title'),
                                     description: formData.get('description'),
                                     contentHtml: formData.get('contentHtml'),
+                                    bestPractice: formData.get('bestPractice'),
+                                    generalPractice: formData.get('generalPractice'),
+                                    badPractice: formData.get('badPractice'),
                                     minWords: parseInt(formData.get('minWords') as string),
                                     maxWords: parseInt(formData.get('maxWords') as string),
                                     deadline: formData.get('deadline'),
@@ -150,6 +153,26 @@ export default function TasksPage() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"
                             />
                         </div>
+                        {/* Practice Examples for AI Grading */}
+                        <div className="border-t border-gray-200 pt-4 mt-4">
+                            <h3 className="text-sm font-semibold text-gray-800 mb-2">Practice Examples (ตัวอย่างคำตอบสำหรับ AI ใช้อ้างอิงตอนตรวจ)</h3>
+                            <p className="text-xs text-gray-500 mb-3">ใส่ตัวอย่างคำตอบ 3 ระดับ เพื่อให้ AI ประเมินงานนักเรียนได้แม่นยำขึ้น</p>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-green-700 mb-1">Best Practice (ตัวอย่างคำตอบที่ดี)</label>
+                                    <textarea name="bestPractice" rows={4} className="w-full px-3 py-2 border border-green-200 rounded-lg text-sm" placeholder="วางตัวอย่างคำตอบที่ดีที่สุดที่นี่..." />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-yellow-700 mb-1">General Practice (ตัวอย่างคำตอบระดับกลาง)</label>
+                                    <textarea name="generalPractice" rows={4} className="w-full px-3 py-2 border border-yellow-200 rounded-lg text-sm" placeholder="วางตัวอย่างคำตอบระดับกลางที่นี่..." />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-red-700 mb-1">Bad Practice (ตัวอย่างคำตอบที่ต้องปรับปรุง)</label>
+                                    <textarea name="badPractice" rows={4} className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm" placeholder="วางตัวอย่างคำตอบที่ไม่ดีที่นี่..." />
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Min Words</label>

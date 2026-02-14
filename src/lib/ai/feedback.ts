@@ -22,13 +22,15 @@ function logApiError(context: string, error: unknown) {
     }
 }
 
-// New 5-Criteria Rubric Scores (1-4 each, total 20)
+// 7-Criteria Rubric Scores (1-4 each, total 28)
 interface RubricScores {
-    content: number;        // เนื้อหาและการนำเสนอ
-    organization: number;   // การลำดับความ
-    grammar: number;        // ไวยากรณ์และโครงสร้างประโยค
-    vocabulary: number;     // การเลือกใช้คำศัพท์
-    mechanics: number;      // อักขระวิธีและการเว้นวรรค
+    accuracy: number;          // ความถูกต้อง
+    contentSelection: number;  // การเลือกสาระ
+    interpretation: number;    // การตีความ
+    taskFulfillment: number;   // การทำตามภารกิจ
+    organization: number;      // การเรียบเรียง
+    languageUse: number;       // การใช้ภาษา
+    mechanics: number;         // อักขระวิธี
     total: number;
 }
 
@@ -38,12 +40,20 @@ interface FeedbackResult {
     suggestions: string[];
     encouragement: string;
     criteriaFeedback: {
-        content: string;
+        accuracy: string;
+        contentSelection: string;
+        interpretation: string;
+        taskFulfillment: string;
         organization: string;
-        grammar: string;
-        vocabulary: string;
+        languageUse: string;
         mechanics: string;
     };
+}
+
+interface PracticeExamples {
+    bestPractice?: string | null;
+    generalPractice?: string | null;
+    badPractice?: string | null;
 }
 
 export async function generateSimpleFeedback(
@@ -86,9 +96,10 @@ Always respond in Thai language.`;
 export async function generateWritingFeedback(
     content: string,
     taskDescription: string,
-    isFullSubmission: boolean = false
+    isFullSubmission: boolean = false,
+    practiceExamples?: PracticeExamples
 ): Promise<FeedbackResult> {
-    const systemPrompt = `You are a friendly and encouraging Thai language teacher named "ProficienThAI". 
+    const systemPrompt = `You are a friendly and encouraging Thai language teacher named "ProficienThAI".
 You help non-native speakers (mainly Chinese students) improve their Thai reading and writing skills.
 
 Your personality:
@@ -96,65 +107,97 @@ Your personality:
 - Give constructive feedback
 - Celebrate small wins
 - Use simple Thai that intermediate learners can understand
-- Mix in key vocabulary explanations when relevant
 
 เกณฑ์การประเมินงานเขียนภาษาไทย (สำหรับนักศึกษาต่างชาติ) - แต่ละเกณฑ์ให้คะแนน 1-4:
 
-1. เนื้อหาและการนำเสนอ (Content & Presentation) [content]
-   - 4 (ดีมาก): เนื้อหาตรงประเด็น ครบถ้วนตามคำสั่ง มีการขยายความและยกตัวอย่างประกอบชัดเจน น่าสนใจ
-   - 3 (ดี): เนื้อหาตรงประเด็นเป็นส่วนใหญ่ มีรายละเอียดสนับสนุนพอสมควร แต่อาจมีบางส่วนที่ไม่ชัดเจน
-   - 2 (พอใช้): เนื้อหาตรงประเด็นเพียงบางส่วน รายละเอียดน้อย หรือนำเสนอความคิดแบบซ้ำไปซ้ำมา
-   - 1 (ต้องปรับปรุง): เนื้อหาไม่ตรงประเด็น หรือสั้นเกินกว่าจะสื่อความหมายได้
+1. ความถูกต้อง (Accuracy) [accuracy]
+   - 4 (ดีมาก): ข้อมูลถูกต้องครบถ้วน ไม่บิดเบือนจากแหล่งที่มา ไม่มีข้อมูลที่แต่งเติมขึ้นเอง
+   - 3 (ดี): ข้อมูลถูกต้องเป็นส่วนใหญ่ มีข้อมูลคลาดเคลื่อนเล็กน้อย 1-2 จุด
+   - 2 (พอใช้): ข้อมูลถูกต้องบางส่วน มีข้อมูลคลาดเคลื่อนหรือแต่งเติมหลายจุด
+   - 1 (ต้องปรับปรุง): ข้อมูลผิดพลาดเป็นส่วนใหญ่ หรือแต่งเรื่องขึ้นมาเอง
 
-2. การลำดับความ (Organization) [organization]
-   - 4 (ดีมาก): วางลำดับความดีมาก (นำ เนื้อ สรุป) มีการเชื่อมโยงประโยคและย่อหน้าได้อย่างลื่นไหล
-   - 3 (ดี): วางลำดับความเป็นระบบ มีคำเชื่อมที่ถูกต้องเป็นส่วนใหญ่ แต่การเชื่อมต่อบางจุดยังไม่เป็นธรรมชาติ
-   - 2 (พอใช้): วางลำดับความยังสับสนในบางจุด ใช้คำเชื่อมซ้ำ ๆ หรือใช้ผิดบริบท
+2. การเลือกสาระ (Content Selection) [contentSelection]
+   - 4 (ดีมาก): เลือกประเด็นสำคัญได้ครบถ้วน จัดลำดับความสำคัญได้ดี ไม่มีข้อมูลที่ไม่เกี่ยวข้อง
+   - 3 (ดี): เลือกประเด็นสำคัญได้เป็นส่วนใหญ่ แต่อาจขาดบางประเด็นหรือมีข้อมูลปลีกย่อยเกินไป
+   - 2 (พอใช้): เลือกสาระได้บางส่วน ขาดประเด็นสำคัญหลายจุด หรือมีข้อมูลที่ไม่จำเป็นปะปนมาก
+   - 1 (ต้องปรับปรุง): เลือกสาระไม่ตรงประเด็น หรือสรุปได้ไม่ครอบคลุมเนื้อหาหลัก
+
+3. การตีความ (Interpretation) [interpretation]
+   - 4 (ดีมาก): เข้าใจและถ่ายทอดสาระได้ลึกซึ้ง มีการวิเคราะห์หรือเสนอมุมมองของตนเองอย่างสมเหตุสมผล
+   - 3 (ดี): เข้าใจเนื้อหาหลักได้ดี ถ่ายทอดได้ถูกต้อง แต่การวิเคราะห์ยังไม่ลึกซึ้ง
+   - 2 (พอใช้): เข้าใจเนื้อหาผิวเผิน การตีความบางจุดคลาดเคลื่อนจากต้นฉบับ
+   - 1 (ต้องปรับปรุง): ตีความผิดพลาดจากต้นฉบับ หรือไม่แสดงการวิเคราะห์ใดๆ
+
+4. การทำตามภารกิจ (Task Fulfillment) [taskFulfillment]
+   - 4 (ดีมาก): ทำตามคำสั่งได้ครบถ้วน รูปแบบถูกต้อง ความยาวเหมาะสม ตอบโจทย์ทุกข้อกำหนด
+   - 3 (ดี): ทำตามคำสั่งได้เป็นส่วนใหญ่ แต่อาจขาดบางข้อกำหนดย่อย
+   - 2 (พอใช้): ทำตามคำสั่งได้บางส่วน ขาดข้อกำหนดสำคัญ หรือรูปแบบไม่ถูกต้อง
+   - 1 (ต้องปรับปรุง): ไม่ทำตามคำสั่ง รูปแบบผิด หรือเนื้อหาไม่ตรงกับภารกิจ
+
+5. การเรียบเรียง (Organization) [organization]
+   - 4 (ดีมาก): วางลำดับความดีมาก มีการเชื่อมโยงประโยคและย่อหน้าได้อย่างลื่นไหลเป็นธรรมชาติ
+   - 3 (ดี): วางลำดับความเป็นระบบ มีคำเชื่อมที่ถูกต้องเป็นส่วนใหญ่
+   - 2 (พอใช้): วางลำดับความยังสับสนในบางจุด ใช้คำเชื่อมซ้ำหรือผิดบริบท
    - 1 (ต้องปรับปรุง): วางลำดับความไม่ชัดเจน สับสน ประโยคไม่ต่อเนื่อง
 
-3. ไวยากรณ์และโครงสร้างประโยค (Grammar and Structure) [grammar]
-   - 4 (ดีมาก): ใช้ไวยากรณ์ได้ถูกต้องและใช้โครงสร้างประโยคหลากหลาย ไม่ติดโครงสร้างภาษาแม่ (L1 Interference)
-   - 3 (ดี): ใช้ไวยากรณ์ถูกต้องเป็นส่วนใหญ่ มีข้อผิดพลาดบ้างแต่ไม่กระทบต่อการสื่อสาร
-   - 2 (พอใช้): ใช้ไวยากรณ์ผิดพลาดบ่อย หรือใช้ประโยคโครงสร้างเดียวซ้ำ ๆ
-   - 1 (ต้องปรับปรุง): ใช้ไวยากรณ์ผิดพลาดเป็นส่วนใหญ่ เรียงโครงสร้างประโยคแบบภาษาแม่จนอ่านไม่เข้าใจ
+6. การใช้ภาษา (Language Use) [languageUse]
+   - 4 (ดีมาก): ใช้ไวยากรณ์ถูกต้อง เลือกคำศัพท์หลากหลายเหมาะสมกับระดับภาษา ไม่ติดโครงสร้างภาษาแม่
+   - 3 (ดี): ใช้ไวยากรณ์ถูกต้องเป็นส่วนใหญ่ คำศัพท์เหมาะสมแต่ยังไม่หลากหลาย
+   - 2 (พอใช้): ใช้ไวยากรณ์ผิดพลาดบ่อย คำศัพท์จำกัด หรือใช้คำทับศัพท์มาก
+   - 1 (ต้องปรับปรุง): ไวยากรณ์ผิดเป็นส่วนใหญ่ เรียงประโยคแบบภาษาแม่จนอ่านไม่เข้าใจ
 
-4. การเลือกใช้คำศัพท์ (Vocabulary Use) [vocabulary]
-   - 4 (ดีมาก): เลือกใช้คำศัพท์ได้ถูกต้อง หลากหลาย และเหมาะสมกับระดับภาษา/กาลเทศะ
-   - 3 (ดี): เลือกใช้คำศัพท์ได้ถูกต้องตามความหมาย แต่อาจยังใช้คำศัพท์พื้นฐานเป็นหลัก ไม่หลากหลาย
-   - 2 (พอใช้): เลือกใช้คำศัพท์จำกัด ใช้คำผิดความหมายหรือใช้คำทับศัพท์บ่อยครั้ง
-   - 1 (ต้องปรับปรุง): เลือกใช้คำศัพท์น้อยมาก หรือใช้คำผิดความหมายจนทำให้เข้าใจผิด
-
-5. อักขระวิธีและการเว้นวรรค (Mechanics and Space) [mechanics]
-   - 4 (ดีมาก): สะกดคำและวางรูปวรรณยุกต์ถูกต้องทั้งหมด เว้นวรรคตอนได้ถูกต้องตามหลักภาษาไทย
-   - 3 (ดี): สะกดคำผิดเล็กน้อย (1-5 จุด) แต่ยังสื่อความหมายได้ การเว้นวรรคส่วนใหญ่ถูกต้อง
-   - 2 (พอใช้): สะกดคำผิดบ่อย โดยเฉพาะคำที่มีตัวสะกดไม่ตรงมาตรา หรือวางวรรณยุกต์ผิดที่
-   - 1 (ต้องปรับปรุง): สะกดคำผิดเป็นส่วนใหญ่ ไม่มีการเว้นวรรคตอน ทำให้ประโยคปนกันจนอ่านยาก
+7. อักขระวิธี (Mechanics) [mechanics]
+   - 4 (ดีมาก): สะกดคำถูกต้องทั้งหมด วรรณยุกต์ถูกต้อง เว้นวรรคตามหลักภาษาไทย
+   - 3 (ดี): สะกดคำผิดเล็กน้อย (1-5 จุด) การเว้นวรรคส่วนใหญ่ถูกต้อง
+   - 2 (พอใช้): สะกดคำผิดบ่อย วางวรรณยุกต์ผิดที่ เว้นวรรคไม่ถูกต้อง
+   - 1 (ต้องปรับปรุง): สะกดคำผิดเป็นส่วนใหญ่ ไม่เว้นวรรค อ่านยาก
 
 IMPORTANT: Always respond in Thai language.`;
+
+    // Build practice examples section if available
+    let practiceSection = "";
+    if (practiceExamples?.bestPractice || practiceExamples?.generalPractice || practiceExamples?.badPractice) {
+        practiceSection = "\n\n--- ตัวอย่างคำตอบอ้างอิง (ใช้เทียบระดับคุณภาพ) ---";
+        if (practiceExamples.bestPractice) {
+            practiceSection += `\n\nตัวอย่างระดับดีมาก (Best Practice):\n"""\n${practiceExamples.bestPractice}\n"""`;
+        }
+        if (practiceExamples.generalPractice) {
+            practiceSection += `\n\nตัวอย่างระดับกลาง (General Practice):\n"""\n${practiceExamples.generalPractice}\n"""`;
+        }
+        if (practiceExamples.badPractice) {
+            practiceSection += `\n\nตัวอย่างระดับต้องปรับปรุง (Bad Practice):\n"""\n${practiceExamples.badPractice}\n"""`;
+        }
+        practiceSection += "\n\nเทียบคุณภาพงานนักเรียนกับตัวอย่างข้างต้นเพื่อประเมินให้แม่นยำยิ่งขึ้น";
+    }
 
     const userPrompt = `${isFullSubmission ? "นักเรียนส่งงานเขียน:" : "นักเรียนขอผลป้อนกลับฉบับร่าง:"}
 
 โจทย์: ${taskDescription}
+${practiceSection}
 
 งานเขียนของนักเรียน:
 """
 ${content}
 """
 
-กรุณาประเมินโดยใช้เกณฑ์ 5 ข้อ (1-4 คะแนนต่อข้อ) ตอบเป็น JSON format ดังนี้:
+กรุณาประเมินโดยใช้เกณฑ์ 7 ข้อ (1-4 คะแนนต่อข้อ) ตอบเป็น JSON format ดังนี้:
 {
   "scores": {
-    "content": <1-4>,
+    "accuracy": <1-4>,
+    "contentSelection": <1-4>,
+    "interpretation": <1-4>,
+    "taskFulfillment": <1-4>,
     "organization": <1-4>,
-    "grammar": <1-4>,
-    "vocabulary": <1-4>,
+    "languageUse": <1-4>,
     "mechanics": <1-4>
   },
   "criteriaFeedback": {
-    "content": "<ข้อเสนอแนะเรื่องเนื้อหา>",
-    "organization": "<ข้อเสนอแนะเรื่องการลำดับความ>",
-    "grammar": "<ข้อเสนอแนะเรื่องไวยากรณ์>",
-    "vocabulary": "<ข้อเสนอแนะเรื่องคำศัพท์>",
+    "accuracy": "<ข้อเสนอแนะเรื่องความถูกต้อง>",
+    "contentSelection": "<ข้อเสนอแนะเรื่องการเลือกสาระ>",
+    "interpretation": "<ข้อเสนอแนะเรื่องการตีความ>",
+    "taskFulfillment": "<ข้อเสนอแนะเรื่องการทำตามภารกิจ>",
+    "organization": "<ข้อเสนอแนะเรื่องการเรียบเรียง>",
+    "languageUse": "<ข้อเสนอแนะเรื่องการใช้ภาษา>",
     "mechanics": "<ข้อเสนอแนะเรื่องอักขระวิธี>"
   },
   "feedback": "<ข้อความสรุปภาพรวม 2-3 ประโยค>",
@@ -176,7 +219,7 @@ ${content}
                     { role: "user", content: userPrompt },
                 ],
                 temperature: 0.7,
-                max_tokens: 1000,
+                max_tokens: 1500,
             },
             {
                 headers: {
@@ -198,28 +241,31 @@ ${content}
 
         const result = JSON.parse(jsonMatch[0]);
 
+        const scores = {
+            accuracy: result.scores?.accuracy || 2,
+            contentSelection: result.scores?.contentSelection || 2,
+            interpretation: result.scores?.interpretation || 2,
+            taskFulfillment: result.scores?.taskFulfillment || 2,
+            organization: result.scores?.organization || 2,
+            languageUse: result.scores?.languageUse || 2,
+            mechanics: result.scores?.mechanics || 2,
+            total: 0,
+        };
+        scores.total = scores.accuracy + scores.contentSelection + scores.interpretation +
+            scores.taskFulfillment + scores.organization + scores.languageUse + scores.mechanics;
+
         return {
-            scores: {
-                content: result.scores?.content || 2,
-                organization: result.scores?.organization || 2,
-                grammar: result.scores?.grammar || 2,
-                vocabulary: result.scores?.vocabulary || 2,
-                mechanics: result.scores?.mechanics || 2,
-                total:
-                    (result.scores?.content || 2) +
-                    (result.scores?.organization || 2) +
-                    (result.scores?.grammar || 2) +
-                    (result.scores?.vocabulary || 2) +
-                    (result.scores?.mechanics || 2),
-            },
+            scores,
             feedback: result.feedback || "",
             suggestions: result.suggestions || [],
             encouragement: result.encouragement || "",
             criteriaFeedback: {
-                content: result.criteriaFeedback?.content || "",
+                accuracy: result.criteriaFeedback?.accuracy || "",
+                contentSelection: result.criteriaFeedback?.contentSelection || "",
+                interpretation: result.criteriaFeedback?.interpretation || "",
+                taskFulfillment: result.criteriaFeedback?.taskFulfillment || "",
                 organization: result.criteriaFeedback?.organization || "",
-                grammar: result.criteriaFeedback?.grammar || "",
-                vocabulary: result.criteriaFeedback?.vocabulary || "",
+                languageUse: result.criteriaFeedback?.languageUse || "",
                 mechanics: result.criteriaFeedback?.mechanics || "",
             },
         };
@@ -229,25 +275,24 @@ ${content}
         // Return default feedback on error
         return {
             scores: {
-                content: 2,
-                organization: 2,
-                grammar: 2,
-                vocabulary: 2,
-                mechanics: 2,
-                total: 10,
+                accuracy: 2, contentSelection: 2, interpretation: 2,
+                taskFulfillment: 2, organization: 2, languageUse: 2, mechanics: 2,
+                total: 14,
             },
             feedback: "ขอบคุณที่ส่งงานมาครับ งานเขียนของคุณอยู่ในเกณฑ์พอใช้",
             suggestions: [
-                "ลองอ่านทบทวนอีกครั้งเพื่อตรวจสอบความถูกต้อง",
-                "เพิ่มความหลากหลายของคำศัพท์",
-                "ตรวจสอบการเรียงลำดับประโยค",
+                "ตรวจสอบความถูกต้องของข้อมูลอีกครั้ง",
+                "เลือกประเด็นสำคัญให้ครบถ้วน",
+                "ตรวจสอบการสะกดคำและการเว้นวรรค",
             ],
             encouragement: "พยายามต่อไปนะครับ!",
             criteriaFeedback: {
-                content: "ตรวจสอบว่าเนื้อหาตรงประเด็น",
-                organization: "ลองจัดลำดับย่อหน้าให้ชัดเจน",
-                grammar: "ตรวจสอบโครงสร้างประโยค",
-                vocabulary: "เพิ่มความหลากหลายของคำศัพท์",
+                accuracy: "ตรวจสอบความถูกต้องของข้อมูล",
+                contentSelection: "เลือกประเด็นสำคัญให้ครบ",
+                interpretation: "ลองวิเคราะห์เนื้อหาให้ลึกขึ้น",
+                taskFulfillment: "ทำตามคำสั่งให้ครบถ้วน",
+                organization: "จัดลำดับเนื้อหาให้ชัดเจน",
+                languageUse: "ใช้คำศัพท์ให้หลากหลายขึ้น",
                 mechanics: "ตรวจสอบการสะกดและการเว้นวรรค",
             },
         };

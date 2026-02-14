@@ -74,8 +74,13 @@ model Task {
   deadline    DateTime
   isActive    Boolean  @default(true)
 
+  // Practice Examples (ตัวอย่างคำตอบสำหรับ AI ใช้อ้างอิงตอนตรวจ)
+  bestPractice    String?  @db.Text  // ตัวอย่างคำตอบที่ดี
+  generalPractice String?  @db.Text  // ตัวอย่างคำตอบระดับกลาง
+  badPractice     String?  @db.Text  // ตัวอย่างคำตอบที่ไม่ดี
+
   // Rubric configuration (JSON)
-  rubric      Json     @default("{\"grammar\": 25, \"vocabulary\": 25, \"organization\": 25, \"taskFulfillment\": 25}")
+  rubric      Json     @default("{\"accuracy\": 14, \"contentSelection\": 14, \"interpretation\": 14, \"taskFulfillment\": 14, \"organization\": 14, \"languageUse\": 14, \"mechanics\": 14}")
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -98,13 +103,16 @@ model Submission {
   taskId       String
   content      String   @db.Text
   wordCount    Int
-  
-  // Rubric scores
-  grammarScore       Int @default(0)
-  vocabularyScore    Int @default(0)
-  organizationScore  Int @default(0)
-  taskFulfillmentScore Int @default(0)
-  totalScore         Int @default(0)
+
+  // 7-Criteria Rubric Scores (1-4 each, stored as 0-14 scaled)
+  accuracyScore         Int @default(0)  // ความถูกต้อง
+  contentSelectionScore Int @default(0)  // การเลือกสาระ
+  interpretationScore   Int @default(0)  // การตีความ
+  taskFulfillmentScore  Int @default(0)  // การทำตามภารกิจ
+  organizationScore     Int @default(0)  // การเรียบเรียง
+  languageUseScore      Int @default(0)  // การใช้ภาษา
+  mechanicsScore        Int @default(0)  // อักขระวิธี
+  totalScore            Int @default(0)  // 0-100
   
   // AI Feedback
   aiFeedback   String?  @db.Text

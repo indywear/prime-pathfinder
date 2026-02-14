@@ -50,6 +50,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
                 ...(data.deadline && { deadline: new Date(data.deadline) }),
                 ...(data.isActive !== undefined && { isActive: data.isActive }),
                 ...(data.rubric && { rubric: data.rubric }),
+                ...(data.bestPractice !== undefined && { bestPractice: data.bestPractice }),
+                ...(data.generalPractice !== undefined && { generalPractice: data.generalPractice }),
+                ...(data.badPractice !== undefined && { badPractice: data.badPractice }),
             },
         })
 

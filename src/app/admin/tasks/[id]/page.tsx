@@ -6,10 +6,13 @@ interface Submission {
     id: string
     content: string
     wordCount: number
-    grammarScore: number
-    vocabularyScore: number
-    organizationScore: number
+    accuracyScore: number
+    contentSelectionScore: number
+    interpretationScore: number
     taskFulfillmentScore: number
+    organizationScore: number
+    languageUseScore: number
+    mechanicsScore: number
     totalScore: number
     aiFeedback: string | null
     pointsEarned: number
@@ -123,40 +126,32 @@ export default function TaskSubmissionsPage({ params }: { params: Promise<{ id: 
                         <table className="w-full">
                             <thead className="bg-gray-50 border-b">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Words</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Grammar</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vocab</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Org</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Content</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Words</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
                                 {submissions.map((sub, idx) => (
                                     <tr key={sub.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3 text-sm text-gray-500">{idx + 1}</td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-3 py-3 text-sm text-gray-500">{idx + 1}</td>
+                                        <td className="px-3 py-3">
                                             <div className="text-sm font-medium text-gray-900">
                                                 {sub.user.thaiName || sub.user.chineseName || 'Unknown'}
                                             </div>
                                             <div className="text-xs text-gray-400">Lv.{sub.user.currentLevel}</div>
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">{sub.wordCount}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">{sub.grammarScore}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">{sub.vocabularyScore}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">{sub.organizationScore}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">{sub.taskFulfillmentScore}</td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-3 py-3 text-sm text-gray-600">{sub.wordCount}</td>
+                                        <td className="px-3 py-3">
                                             <span className={`text-sm font-bold ${sub.totalScore >= 75 ? 'text-green-600' : sub.totalScore >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                                {sub.totalScore}
+                                                {sub.totalScore}/100
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-3 py-3">
                                             <span className={`px-2 py-1 text-xs rounded-full ${sub.onTime ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                                 {sub.onTime ? 'On Time' : 'Late'}
                                             </span>
@@ -166,10 +161,10 @@ export default function TaskSubmissionsPage({ params }: { params: Promise<{ id: 
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-xs text-gray-500">
+                                        <td className="px-3 py-3 text-xs text-gray-500">
                                             {new Date(sub.submittedAt).toLocaleString('th-TH')}
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-3 py-3">
                                             <button
                                                 onClick={() => setSelectedSubmission(sub)}
                                                 className="text-indigo-600 hover:text-indigo-800 text-sm"
@@ -201,20 +196,28 @@ export default function TaskSubmissionsPage({ params }: { params: Promise<{ id: 
                             </button>
                         </div>
 
-                        {/* Scores */}
-                        <div className="grid grid-cols-5 gap-2 mb-4">
-                            {[
-                                { label: 'Grammar', score: selectedSubmission.grammarScore },
-                                { label: 'Vocab', score: selectedSubmission.vocabularyScore },
-                                { label: 'Organization', score: selectedSubmission.organizationScore },
-                                { label: 'Content', score: selectedSubmission.taskFulfillmentScore },
-                                { label: 'Total', score: selectedSubmission.totalScore },
-                            ].map(({ label, score }) => (
-                                <div key={label} className="bg-gray-50 rounded-lg p-3 text-center">
-                                    <div className="text-lg font-bold text-indigo-600">{score}</div>
-                                    <div className="text-xs text-gray-500">{label}</div>
-                                </div>
-                            ))}
+                        {/* Scores - 7 Criteria */}
+                        <div className="mb-4">
+                            <div className="bg-indigo-50 rounded-lg p-3 text-center mb-3">
+                                <div className="text-2xl font-bold text-indigo-600">{selectedSubmission.totalScore}/100</div>
+                                <div className="text-xs text-gray-500">Total Score</div>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2">
+                                {[
+                                    { label: 'Accuracy', th: 'ความถูกต้อง', score: selectedSubmission.accuracyScore, max: 14 },
+                                    { label: 'Content', th: 'การเลือกสาระ', score: selectedSubmission.contentSelectionScore, max: 14 },
+                                    { label: 'Interpret', th: 'การตีความ', score: selectedSubmission.interpretationScore, max: 14 },
+                                    { label: 'Task', th: 'ตามภารกิจ', score: selectedSubmission.taskFulfillmentScore, max: 14 },
+                                    { label: 'Organize', th: 'การเรียบเรียง', score: selectedSubmission.organizationScore, max: 14 },
+                                    { label: 'Language', th: 'การใช้ภาษา', score: selectedSubmission.languageUseScore, max: 14 },
+                                    { label: 'Mechanics', th: 'อักขระวิธี', score: selectedSubmission.mechanicsScore, max: 14 },
+                                ].map(({ label, th, score, max }) => (
+                                    <div key={label} className="bg-gray-50 rounded-lg p-2 text-center">
+                                        <div className="text-sm font-bold text-indigo-600">{score}/{max}</div>
+                                        <div className="text-xs text-gray-500">{th}</div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Content */}

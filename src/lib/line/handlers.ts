@@ -626,17 +626,31 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
             },
         });
 
-        // Try to generate AI feedback
+        // Try to generate AI feedback with practice examples
         let feedbackMsg = "";
         try {
-            const feedback = await generateWritingFeedback(text, `${task.title}: ${task.description}`, true);
+            const feedback = await generateWritingFeedback(
+                text,
+                `${task.title}: ${task.description}`,
+                true,
+                {
+                    bestPractice: task.bestPractice,
+                    generalPractice: task.generalPractice,
+                    badPractice: task.badPractice,
+                }
+            );
             if (feedback) {
+                // Scale 1-4 per criterion to 0-14 each (total 0-100 from 7 criteria)
+                const scaleScore = (raw: number) => Math.round((raw / 4) * 14);
                 const scores = {
-                    grammarScore: Math.round(feedback.scores.grammar * 6.25), // scale 1-4 to 0-25
-                    vocabularyScore: Math.round(feedback.scores.vocabulary * 6.25),
-                    organizationScore: Math.round(feedback.scores.organization * 6.25),
-                    taskFulfillmentScore: Math.round(feedback.scores.content * 6.25),
-                    totalScore: Math.round(feedback.scores.total * 5), // scale 1-20 to 0-100
+                    accuracyScore: scaleScore(feedback.scores.accuracy),
+                    contentSelectionScore: scaleScore(feedback.scores.contentSelection),
+                    interpretationScore: scaleScore(feedback.scores.interpretation),
+                    taskFulfillmentScore: scaleScore(feedback.scores.taskFulfillment),
+                    organizationScore: scaleScore(feedback.scores.organization),
+                    languageUseScore: scaleScore(feedback.scores.languageUse),
+                    mechanicsScore: scaleScore(feedback.scores.mechanics),
+                    totalScore: Math.round((feedback.scores.total / 28) * 100),
                     aiFeedback: feedback.feedback + "\n\n" + feedback.encouragement,
                 };
 
@@ -645,11 +659,14 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
                     data: scores,
                 });
 
-                feedbackMsg = `\n\n📊 คะแนน: ${scores.totalScore}/100\n` +
-                    `📝 ไวยากรณ์: ${scores.grammarScore}/25\n` +
-                    `📚 คำศัพท์: ${scores.vocabularyScore}/25\n` +
-                    `📋 โครงสร้าง: ${scores.organizationScore}/25\n` +
-                    `✅ เนื้อหา: ${scores.taskFulfillmentScore}/25\n` +
+                feedbackMsg = `\n\n📊 คะแนนรวม: ${scores.totalScore}/100\n` +
+                    `✅ ความถูกต้อง: ${feedback.scores.accuracy}/4\n` +
+                    `📋 การเลือกสาระ: ${feedback.scores.contentSelection}/4\n` +
+                    `💡 การตีความ: ${feedback.scores.interpretation}/4\n` +
+                    `📌 การทำตามภารกิจ: ${feedback.scores.taskFulfillment}/4\n` +
+                    `📝 การเรียบเรียง: ${feedback.scores.organization}/4\n` +
+                    `📚 การใช้ภาษา: ${feedback.scores.languageUse}/4\n` +
+                    `✍️ อักขระวิธี: ${feedback.scores.mechanics}/4\n` +
                     `\n💬 ${feedback.feedback}`;
             }
         } catch (feedbackError) {
