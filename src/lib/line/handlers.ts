@@ -610,10 +610,20 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
             },
         });
 
-        // Clear submission state
+        // Award points
+        let pointsEarned = 20; // base points for submission
+        if (onTime) pointsEarned += 10;
+        if (earlyBonus) pointsEarned += 10;
+
+        // Clear submission state + award points in single update
         await prisma.user.update({
             where: { id: user.id },
-            data: { currentGameType: null, currentQuestionId: null, gameData: null },
+            data: {
+                currentGameType: null,
+                currentQuestionId: null,
+                gameData: null,
+                totalPoints: { increment: pointsEarned },
+            },
         });
 
         // Try to generate AI feedback
@@ -646,16 +656,6 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
             console.error("AI feedback error:", feedbackError);
             feedbackMsg = "\n\n(AI กำลังประเมินงาน รอสักครู่...)";
         }
-
-        // Award points
-        let pointsEarned = 20; // base points for submission
-        if (onTime) pointsEarned += 10;
-        if (earlyBonus) pointsEarned += 10;
-
-        await prisma.user.update({
-            where: { id: user.id },
-            data: { totalPoints: { increment: pointsEarned } },
-        });
 
         await prisma.submission.update({
             where: { id: submission.id },
@@ -1427,17 +1427,17 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
             message = evaluation.feedback;
         }
         else if (gameType === "SUMMARIZE") {
-            const keywordsArray = gameData.keywords.split('|').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
-            const evaluation = await evaluateSummary(text, gameData.passage, gameData.sampleSummary, keywordsArray);
+            const keywordsArray = (gameData.keywords || '').split('|').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
+            const evaluation = await evaluateSummary(text, gameData.passage || '', gameData.sampleSummary || '', keywordsArray);
             isCorrect = evaluation.correct;
             points = isCorrect ? 20 : (evaluation.hasKeywords ? 10 : 0);
             message = evaluation.feedback;
         }
         else if (gameType === "CONTINUE_STORY") {
-            const keywordsArray = gameData.keywords.split('|').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
+            const keywordsArray = (gameData.keywords || '').split('|').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
             const evaluation = await evaluateContinuation(
                 text,
-                gameData.storyStart,
+                gameData.storyStart || '',
                 keywordsArray,
                 gameData.minLength
             );
