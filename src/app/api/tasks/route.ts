@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
             weekNumber,
             title,
             description,
+            contentHtml,
             contentUrl,
             minWords = 80,
             maxWords = 120,
@@ -49,19 +50,24 @@ export async function POST(request: NextRequest) {
             rubric,
         } = body;
 
-        if (!weekNumber || !title || !description || !contentUrl || !deadline) {
+        if (!weekNumber || !title || !description || !deadline) {
             return NextResponse.json(
                 { error: "Missing required fields" },
                 { status: 400 }
             );
         }
 
+        // Auto-generate slug from weekNumber
+        const slug = `week-${weekNumber}`;
+
         const task = await prisma.task.create({
             data: {
                 weekNumber,
+                slug,
                 title,
                 description,
-                contentUrl,
+                contentHtml: contentHtml || null,
+                contentUrl: contentUrl || null,
                 minWords,
                 maxWords,
                 deadline: new Date(deadline),

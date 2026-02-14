@@ -64,24 +64,26 @@ enum ThaiLevel {
 model Task {
   id          String   @id @default(cuid())
   weekNumber  Int      @unique
+  slug        String   @unique
   title       String
   description String   @db.Text
-  contentUrl  String
+  contentUrl  String?
+  contentHtml String?  @db.Text  // เนื้อหาบทอ่านที่พิมพ์ใน Admin → สร้างหน้าเว็บอัตโนมัติ
   minWords    Int      @default(80)
   maxWords    Int      @default(120)
   deadline    DateTime
   isActive    Boolean  @default(true)
-  
+
   // Rubric configuration (JSON)
   rubric      Json     @default("{\"grammar\": 25, \"vocabulary\": 25, \"organization\": 25, \"taskFulfillment\": 25}")
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   // Relations
   submissions      Submission[]
   feedbackRequests FeedbackRequest[]
-  
+
   @@index([weekNumber])
   @@index([isActive])
 }

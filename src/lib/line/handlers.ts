@@ -559,7 +559,7 @@ async function handleSubmitStart(replyToken: string, userId: string) {
 
     await replyWithQuickReply(
         replyToken,
-        `📌 ภาระงานสัปดาห์ที่ ${activeTask.weekNumber}\n\n${activeTask.title}\n\n${activeTask.description}\n\n📖 อ่านเนื้อหา: ${activeTask.contentUrl}\n\n✏️ ความยาว: ${activeTask.minWords}-${activeTask.maxWords} คำ\n📅 กำหนดส่ง: ${activeTask.deadline.toLocaleDateString("th-TH")}\n\n✍️ พิมพ์งานเขียนของคุณได้เลยครับ\n(พิมพ์ "ยกเลิก" เพื่อยกเลิก)`,
+        `📌 ภาระงานสัปดาห์ที่ ${activeTask.weekNumber}\n\n${activeTask.title}\n\n${activeTask.description}\n\n📖 อ่านเนื้อหา: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://prime-pathfinder.vercel.app'}/task/${activeTask.slug}\n\n✏️ ความยาว: ${activeTask.minWords}-${activeTask.maxWords} คำ\n📅 กำหนดส่ง: ${activeTask.deadline.toLocaleDateString("th-TH")}\n\n✍️ พิมพ์งานเขียนของคุณได้เลยครับ\n(พิมพ์ "ยกเลิก" เพื่อยกเลิก)`,
         [{ label: "ยกเลิก", text: "ยกเลิก" }]
     );
 }

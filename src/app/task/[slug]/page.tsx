@@ -12,9 +12,9 @@ export default async function TaskPage({ params }: PageProps) {
     const { slug } = await params
 
     const task = await prisma.task.findFirst({
-        where: { 
-            title: { contains: slug },
-            isActive: true 
+        where: {
+            slug,
+            isActive: true
         },
     })
 
@@ -58,7 +58,7 @@ export default async function TaskPage({ params }: PageProps) {
             {/* Content with reading tracker */}
             <TaskContent
                 taskId={task.id}
-                content={task.contentUrl || ''}
+                content={task.contentHtml || task.contentUrl || ''}
                 title={task.title}
             />
 
@@ -77,9 +77,9 @@ export async function generateMetadata({ params }: PageProps) {
     const { slug } = await params
 
     const task = await prisma.task.findFirst({
-        where: { 
-            title: { contains: slug },
-            isActive: true 
+        where: {
+            slug,
+            isActive: true
         },
         select: { title: true, description: true },
     })

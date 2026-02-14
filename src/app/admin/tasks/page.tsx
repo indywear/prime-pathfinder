@@ -5,9 +5,11 @@ import { useState, useEffect } from 'react'
 interface Task {
     id: string
     weekNumber: number
+    slug: string
     title: string
     description: string
-    contentUrl: string
+    contentUrl: string | null
+    contentHtml: string | null
     minWords: number
     maxWords: number
     deadline: string
@@ -75,21 +77,24 @@ export default function TasksPage() {
                         onSubmit={async (e) => {
                             e.preventDefault()
                             const formData = new FormData(e.currentTarget)
-                            await fetch('/api/tasks', {
+                            const weekNum = parseInt(formData.get('weekNumber') as string)
+                            const res = await fetch('/api/tasks', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                    weekNumber: parseInt(formData.get('weekNumber') as string),
+                                    weekNumber: weekNum,
                                     title: formData.get('title'),
                                     description: formData.get('description'),
-                                    contentUrl: formData.get('contentUrl'),
+                                    contentHtml: formData.get('contentHtml'),
                                     minWords: parseInt(formData.get('minWords') as string),
                                     maxWords: parseInt(formData.get('maxWords') as string),
                                     deadline: formData.get('deadline'),
                                 }),
                             })
-                            setShowCreateForm(false)
-                            fetchTasks()
+                            if (res.ok) {
+                                setShowCreateForm(false)
+                                fetchTasks()
+                            }
                         }}
                         className="space-y-4"
                     >
@@ -104,11 +109,10 @@ export default function TasksPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Content URL</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
                                 <input
-                                    type="url"
-                                    name="contentUrl"
-                                    placeholder="https://example.com/content"
+                                    type="datetime-local"
+                                    name="deadline"
                                     required
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                 />
@@ -124,12 +128,26 @@ export default function TasksPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Description (คำอธิบายสั้นๆ ของงาน)</label>
                             <textarea
                                 name="description"
                                 required
                                 rows={2}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Reading Content (เนื้อหาบทอ่านสำหรับนักเรียน)
+                            </label>
+                            <p className="text-xs text-gray-500 mb-2">
+                                พิมพ์เนื้อหาบทอ่านที่นี่ ระบบจะสร้างหน้าเว็บให้อัตโนมัติ รองรับ HTML (เช่น &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;strong&gt;)
+                            </p>
+                            <textarea
+                                name="contentHtml"
+                                rows={10}
+                                placeholder={"<h2>หัวข้อบทอ่าน</h2>\n<p>เนื้อหาย่อหน้าแรก...</p>\n<p>เนื้อหาย่อหน้าที่สอง...</p>"}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -151,15 +169,6 @@ export default function TasksPage() {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                 />
                             </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
-                            <input
-                                type="datetime-local"
-                                name="deadline"
-                                required
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                            />
                         </div>
                         <div className="flex gap-2">
                             <button
@@ -208,14 +217,14 @@ export default function TasksPage() {
                                     <td className="px-6 py-4">
                                         <div className="text-sm font-medium text-gray-900">{task.title}</div>
                                         <div className="text-xs text-gray-500 line-clamp-2">{task.description}</div>
-                                        {task.contentUrl && (
+                                        {task.slug && (
                                             <a
-                                                href={task.contentUrl}
+                                                href={`/task/${task.slug}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-xs text-indigo-600 mt-1 hover:underline"
+                                                className="text-xs text-indigo-600 mt-1 hover:underline block"
                                             >
-                                                View Content
+                                                /task/{task.slug}
                                             </a>
                                         )}
                                     </td>

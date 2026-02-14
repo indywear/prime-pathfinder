@@ -43,7 +43,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             data: {
                 ...(data.title && { title: data.title }),
                 ...(data.description && { description: data.description }),
-                ...(data.contentUrl && { contentUrl: data.contentUrl }),
+                ...(data.contentUrl !== undefined && { contentUrl: data.contentUrl }),
+                ...(data.contentHtml !== undefined && { contentHtml: data.contentHtml }),
                 ...(data.minWords && { minWords: data.minWords }),
                 ...(data.maxWords && { maxWords: data.maxWords }),
                 ...(data.deadline && { deadline: new Date(data.deadline) }),
