@@ -123,6 +123,8 @@ import {
     recordGachaPull,
     formatGachaResult,
 } from "@/lib/games/vocabGacha";
+import { recordQuestionAnswered } from "@/lib/games/questionHistory";
+import { evaluateSentence } from "@/lib/games/sentenceConstruction";
 
 const REGISTRATION_STEPS = [
     { field: "chineseName", question: "ชื่อ-นามสกุล (ภาษาจีน) ของคุณคืออะไรครับ?", type: "text" },
@@ -384,6 +386,20 @@ export async function handleTextMessage(
             return;
         }
 
+        // Check if user is submitting a task
+        if (user?.currentGameType === "SUBMITTING_TASK") {
+            if (text === "ยกเลิก" || text === "cancel") {
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { currentGameType: null, currentQuestionId: null, gameData: null },
+                });
+                await replyText(event.replyToken, "ยกเลิกการส่งงานแล้วครับ\n\nพิมพ์ \"เมนู\" เพื่อดูตัวเลือก");
+            } else {
+                await handleSubmitWriting(event.replyToken, user, text);
+            }
+            return;
+        }
+
         // Check if user is in a game
         if (user?.currentGameType && user?.currentQuestionId) {
             await handleGameAnswer(event.replyToken, user, text);
@@ -512,10 +528,156 @@ async function handleSubmitStart(replyToken: string, userId: string) {
         return;
     }
 
-    await replyText(
+    // Check if already submitted
+    const existingSubmission = await prisma.submission.findFirst({
+        where: { userId: user.id, taskId: activeTask.id },
+    });
+
+    if (existingSubmission) {
+        await replyText(
+            replyToken,
+            `คุณส่งงานสัปดาห์ที่ ${activeTask.weekNumber} แล้วครับ\n\n📊 คะแนน: ${existingSubmission.totalScore}/100\n\nพิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้า`
+        );
+        return;
+    }
+
+    // Set state to SUBMITTING_TASK so next message is treated as a submission
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            currentGameType: "SUBMITTING_TASK",
+            currentQuestionId: activeTask.id,
+            gameData: JSON.stringify({
+                taskId: activeTask.id,
+                weekNumber: activeTask.weekNumber,
+                minWords: activeTask.minWords,
+                maxWords: activeTask.maxWords,
+                title: activeTask.title,
+            }),
+        },
+    });
+
+    await replyWithQuickReply(
         replyToken,
-        `📌 ภาระงานสัปดาห์ที่ ${activeTask.weekNumber}\n\n${activeTask.title}\n\n${activeTask.description}\n\n📖 อ่านเนื้อหา: ${activeTask.contentUrl}\n\n✏️ ความยาว: ${activeTask.minWords}-${activeTask.maxWords} คำ\n📅 กำหนดส่ง: ${activeTask.deadline.toLocaleDateString("th-TH")}\n\nพิมพ์งานเขียนของคุณได้เลยครับ`
+        `📌 ภาระงานสัปดาห์ที่ ${activeTask.weekNumber}\n\n${activeTask.title}\n\n${activeTask.description}\n\n📖 อ่านเนื้อหา: ${activeTask.contentUrl}\n\n✏️ ความยาว: ${activeTask.minWords}-${activeTask.maxWords} คำ\n📅 กำหนดส่ง: ${activeTask.deadline.toLocaleDateString("th-TH")}\n\n✍️ พิมพ์งานเขียนของคุณได้เลยครับ\n(พิมพ์ "ยกเลิก" เพื่อยกเลิก)`,
+        [{ label: "ยกเลิก", text: "ยกเลิก" }]
     );
+}
+
+async function handleSubmitWriting(replyToken: string, user: any, text: string) {
+    try {
+        let gameData: any = {};
+        try { gameData = user.gameData ? JSON.parse(user.gameData) : {}; } catch { gameData = {}; }
+        const taskId = gameData.taskId || user.currentQuestionId;
+        const minWords = gameData.minWords || 80;
+        const maxWords = gameData.maxWords || 120;
+
+        // Count words (Thai: split by spaces and common delimiters)
+        const wordCount = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+
+        if (wordCount < Math.floor(minWords * 0.5)) {
+            await replyWithQuickReply(
+                replyToken,
+                `⚠️ งานเขียนของคุณสั้นเกินไปครับ (${wordCount} คำ)\n\nความยาวขั้นต่ำ: ${minWords} คำ\n\nกรุณาเขียนเพิ่มเติมแล้วส่งใหม่ครับ`,
+                [{ label: "ยกเลิก", text: "ยกเลิก" }]
+            );
+            return;
+        }
+
+        // Get the task for deadline check
+        const task = await prisma.task.findUnique({ where: { id: taskId } });
+        if (!task) {
+            await replyText(replyToken, "ไม่พบภาระงานนี้แล้วครับ กรุณาลองใหม่");
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentGameType: null, currentQuestionId: null, gameData: null },
+            });
+            return;
+        }
+
+        const onTime = new Date() <= new Date(task.deadline);
+        const earlyBonus = new Date() < new Date(new Date(task.deadline).getTime() - 24 * 60 * 60 * 1000);
+
+        // Create submission
+        const submission = await prisma.submission.create({
+            data: {
+                userId: user.id,
+                taskId: taskId,
+                content: text,
+                wordCount: wordCount,
+                onTime: onTime,
+                earlyBonus: earlyBonus,
+            },
+        });
+
+        // Clear submission state
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { currentGameType: null, currentQuestionId: null, gameData: null },
+        });
+
+        // Try to generate AI feedback
+        let feedbackMsg = "";
+        try {
+            const feedback = await generateWritingFeedback(text, `${task.title}: ${task.description}`, true);
+            if (feedback) {
+                const scores = {
+                    grammarScore: Math.round(feedback.scores.grammar * 6.25), // scale 1-4 to 0-25
+                    vocabularyScore: Math.round(feedback.scores.vocabulary * 6.25),
+                    organizationScore: Math.round(feedback.scores.organization * 6.25),
+                    taskFulfillmentScore: Math.round(feedback.scores.content * 6.25),
+                    totalScore: Math.round(feedback.scores.total * 5), // scale 1-20 to 0-100
+                    aiFeedback: feedback.feedback + "\n\n" + feedback.encouragement,
+                };
+
+                await prisma.submission.update({
+                    where: { id: submission.id },
+                    data: scores,
+                });
+
+                feedbackMsg = `\n\n📊 คะแนน: ${scores.totalScore}/100\n` +
+                    `📝 ไวยากรณ์: ${scores.grammarScore}/25\n` +
+                    `📚 คำศัพท์: ${scores.vocabularyScore}/25\n` +
+                    `📋 โครงสร้าง: ${scores.organizationScore}/25\n` +
+                    `✅ เนื้อหา: ${scores.taskFulfillmentScore}/25\n` +
+                    `\n💬 ${feedback.feedback}`;
+            }
+        } catch (feedbackError) {
+            console.error("AI feedback error:", feedbackError);
+            feedbackMsg = "\n\n(AI กำลังประเมินงาน รอสักครู่...)";
+        }
+
+        // Award points
+        let pointsEarned = 20; // base points for submission
+        if (onTime) pointsEarned += 10;
+        if (earlyBonus) pointsEarned += 10;
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { totalPoints: { increment: pointsEarned } },
+        });
+
+        await prisma.submission.update({
+            where: { id: submission.id },
+            data: { pointsEarned },
+        });
+
+        await replyWithQuickReply(
+            replyToken,
+            `✅ ส่งงานสัปดาห์ที่ ${gameData.weekNumber} เรียบร้อยแล้วครับ!\n\n📝 จำนวนคำ: ${wordCount}\n${onTime ? "⏰ ส่งตรงเวลา" : "⚠️ ส่งเลยกำหนด"}\n${earlyBonus ? "🌟 โบนัสส่งก่อนเวลา!" : ""}\n💰 +${pointsEarned} คะแนน${feedbackMsg}`,
+            [
+                { label: "แดชบอร์ด", text: "แดชบอร์ด" },
+                { label: "เมนู", text: "เมนู" },
+            ]
+        );
+    } catch (error) {
+        console.error("Submit writing error:", error);
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { currentGameType: null, currentQuestionId: null, gameData: null },
+        });
+        await replyText(replyToken, "เกิดข้อผิดพลาดในการส่งงานครับ กรุณาลองใหม่อีกครั้ง\n\nพิมพ์ \"ส่งงาน\" เพื่อลองใหม่");
+    }
 }
 
 async function handlePracticeStart(replyToken: string, userId: string) {
@@ -986,7 +1148,8 @@ async function handleShowAnswer(replyToken: string, userId: string) {
 
     let answerText = "";
     const gameType = user.currentGameType;
-    const gameData = user.gameData ? JSON.parse(user.gameData) : {};
+    let gameData: any = {};
+    try { gameData = user.gameData ? JSON.parse(user.gameData) : {}; } catch { gameData = {}; }
     const answerLabel: Record<string, string> = { 'A': 'ก', 'B': 'ข', 'C': 'ค', 'D': 'ง' };
 
     // Vocabulary Games
@@ -1133,7 +1296,8 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
         let correctAnswer = "";
         let message = "";
         const gameType = user.currentGameType;
-        const gameData = user.gameData ? JSON.parse(user.gameData) : {};
+        let gameData: any = {};
+        try { gameData = user.gameData ? JSON.parse(user.gameData) : {}; } catch { gameData = {}; }
 
         // Answer map for multiple choice games
         const answerMap: Record<string, string> = {
@@ -1257,20 +1421,10 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                 await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
                 return;
             }
-            const hasWord1 = text.includes(question.word1);
-            const hasWord2 = text.includes(question.word2);
-
-            if (hasWord1 && hasWord2 && text.length >= 10) {
-                isCorrect = true;
-                points = 15;
-                message = `ดีมาก! ประโยคมีคำว่า "${question.word1}" และ "${question.word2}" ครบถ้วน`;
-            } else {
-                let hint = "ลองปรับประโยค:\n";
-                if (!hasWord1) hint += `- ต้องมีคำว่า "${question.word1}"\n`;
-                if (!hasWord2) hint += `- ต้องมีคำว่า "${question.word2}"\n`;
-                if (text.length < 10) hint += `- เขียนให้ยาวกว่านี้อีกนิด`;
-                message = hint;
-            }
+            const evaluation = await evaluateSentence(text, question.word1, question.word2);
+            isCorrect = evaluation.correct;
+            points = isCorrect ? 15 : 0;
+            message = evaluation.feedback;
         }
         else if (gameType === "SUMMARIZE") {
             const keywordsArray = gameData.keywords.split('|').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
@@ -1345,6 +1499,16 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
         // ==================
         // Handle Result
         // ==================
+
+        // Record question history for all games (so questions don't repeat within 24h)
+        if (user.currentQuestionId && gameType) {
+            try {
+                await recordQuestionAnswered(user.lineUserId, user.currentQuestionId, gameType, isCorrect);
+            } catch (e) {
+                console.error("Failed to record question history:", e);
+            }
+        }
+
         if (isCorrect) {
             await prisma.user.update({
                 where: { id: user.id },

@@ -1,8 +1,10 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
 import {
+    getDifficultiesForLevel,
     getRecentlyAnsweredQuestionIds,
     filterQuestionsForUser,
+    getUserLevel,
 } from "./questionHistory";
 
 export interface FillBlankQuestion {
@@ -20,19 +22,25 @@ export async function getRandomFillBlankQuestions(
     userId?: string,
     count: number = 5
 ): Promise<FillBlankQuestion[]> {
-    // Get recently answered question IDs
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
     const answeredIds = userId
         ? await getRecentlyAnsweredQuestionIds(userId, "FILL_BLANK", 24)
         : [];
 
-    // Fetch all questions
-    const allQuestions = await prisma.fillBlankQuestion.findMany();
+    const allQuestions = await prisma.fillBlankQuestion.findMany({
+        where: { difficulty: { in: difficulties } },
+    });
 
     if (allQuestions.length === 0) {
-        return [];
+        // Fallback: get any questions regardless of difficulty
+        const fallback = await prisma.fillBlankQuestion.findMany();
+        if (fallback.length === 0) return [];
+        return shuffle(fallback).slice(0, count).map(q => ({
+            id: q.id, sentence: q.sentence, answer: q.answer,
+        }));
     }
 
-    // Filter out recently answered, prioritize new questions
     const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
 
     return filtered.map(q => ({

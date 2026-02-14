@@ -15,6 +15,8 @@ interface GameConfig {
 export default function AdminGamesClient() {
     const [games, setGames] = useState<GameConfig[]>([])
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [success, setSuccess] = useState<string | null>(null)
 
     useEffect(() => {
         fetchGames()
@@ -33,6 +35,8 @@ export default function AdminGamesClient() {
     }
 
     const toggleGame = async (gameType: string, currentState: boolean) => {
+        setError(null)
+        setSuccess(null)
         try {
             const res = await fetch('/api/admin/games', {
                 method: 'PATCH',
@@ -44,9 +48,17 @@ export default function AdminGamesClient() {
                 setGames(games.map(g =>
                     g.gameType === gameType ? { ...g, isEnabled: !currentState } : g
                 ))
+                const game = games.find(g => g.gameType === gameType)
+                setSuccess(`${game?.displayName || gameType} ${!currentState ? 'เปิด' : 'ปิด'}แล้ว`)
+                setTimeout(() => setSuccess(null), 3000)
+            } else {
+                setError('ไม่สามารถเปลี่ยนสถานะได้ กรุณาลองใหม่')
+                setTimeout(() => setError(null), 5000)
             }
-        } catch (error) {
-            console.error('Failed to toggle game:', error)
+        } catch (err) {
+            console.error('Failed to toggle game:', err)
+            setError('เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่')
+            setTimeout(() => setError(null), 5000)
         }
     }
 
@@ -60,6 +72,17 @@ export default function AdminGamesClient() {
                 <h1 className="text-3xl font-bold text-gray-900">Game Management</h1>
                 <p className="mt-2 text-gray-600">เปิด/ปิดเกมแต่ละประเภท</p>
             </div>
+
+            {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                    {error}
+                </div>
+            )}
+            {success && (
+                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+                    {success}
+                </div>
+            )}
 
             {/* Game Configs */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">

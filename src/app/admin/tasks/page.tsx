@@ -237,6 +237,12 @@ export default function TasksPage() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                                        <a
+                                            href={`/admin/tasks/${task.id}`}
+                                            className="text-indigo-600 hover:text-indigo-800"
+                                        >
+                                            View
+                                        </a>
                                         <button
                                             onClick={() => toggleTaskStatus(task.id, task.isActive)}
                                             className="text-gray-600 hover:text-gray-900"

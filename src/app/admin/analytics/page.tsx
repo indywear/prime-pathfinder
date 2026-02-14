@@ -115,14 +115,14 @@ export default async function AnalyticsPage() {
                                     <div
                                         className="bg-indigo-600 h-full flex items-center justify-end px-3 text-white text-sm font-medium"
                                         style={{
-                                            width: `${(item._count.nationality / totalUsers) * 100}%`,
+                                            width: `${totalUsers > 0 ? (item._count.nationality / totalUsers) * 100 : 0}%`,
                                         }}
                                     >
                                         {item._count.nationality}
                                     </div>
                                 </div>
                                 <span className="text-sm text-gray-500 w-12 text-right">
-                                    {((item._count.nationality / totalUsers) * 100).toFixed(0)}%
+                                    {totalUsers > 0 ? ((item._count.nationality / totalUsers) * 100).toFixed(0) : 0}%
                                 </span>
                             </div>
                         ))}
@@ -141,14 +141,14 @@ export default async function AnalyticsPage() {
                                     <div
                                         className="bg-purple-600 h-full flex items-center justify-end px-3 text-white text-sm font-medium"
                                         style={{
-                                            width: `${(item._count.currentLevel / totalUsers) * 100}%`,
+                                            width: `${totalUsers > 0 ? (item._count.currentLevel / totalUsers) * 100 : 0}%`,
                                         }}
                                     >
                                         {item._count.currentLevel}
                                     </div>
                                 </div>
                                 <span className="text-sm text-gray-500 w-12 text-right">
-                                    {((item._count.currentLevel / totalUsers) * 100).toFixed(0)}%
+                                    {totalUsers > 0 ? ((item._count.currentLevel / totalUsers) * 100).toFixed(0) : 0}%
                                 </span>
                             </div>
                         ))}
@@ -167,14 +167,14 @@ export default async function AnalyticsPage() {
                                     <div
                                         className="bg-green-600 h-full flex items-center justify-end px-3 text-white text-sm font-medium"
                                         style={{
-                                            width: `${(item._count.thaiLevel / totalUsers) * 100}%`,
+                                            width: `${totalUsers > 0 ? (item._count.thaiLevel / totalUsers) * 100 : 0}%`,
                                         }}
                                     >
                                         {item._count.thaiLevel}
                                     </div>
                                 </div>
                                 <span className="text-sm text-gray-500 w-12 text-right">
-                                    {((item._count.thaiLevel / totalUsers) * 100).toFixed(0)}%
+                                    {totalUsers > 0 ? ((item._count.thaiLevel / totalUsers) * 100).toFixed(0) : 0}%
                                 </span>
                             </div>
                         ))}

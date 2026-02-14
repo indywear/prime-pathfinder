@@ -304,10 +304,12 @@ model FillBlankQuestion {
   sentence       String   @db.Text
   answer         String
   category       String?
-  
+  difficulty     Difficulty @default(MEDIUM)
+
   createdAt      DateTime @default(now())
-  
+
   @@index([category])
+  @@index([difficulty])
 }
 
 // =====================
