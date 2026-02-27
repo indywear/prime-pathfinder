@@ -199,10 +199,9 @@ async function runTests() {
     console.log('  PHASE 0: Setup');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    // Clean previous test data
+    // Clean previous test data (userQuestionHistory cascade-deleted with User)
     try {
         await prisma.languageGameSession.deleteMany({ where: { odUserId: TEST_USER_ID } });
-        await prisma.questionHistory.deleteMany({ where: { userId: TEST_USER_ID } });
         await prisma.user.delete({ where: { lineUserId: TEST_USER_ID } });
     } catch {}
 
@@ -518,10 +517,10 @@ async function runTests() {
     console.log('\n✏️ Edit Thai Name');
     res = await sendWebhook('แก้ไข:ชื่อไทย');
     assert(res.status === 200, 'Edit field start → 200');
-    await wait(3000);
+    await wait(5000);
     res = await sendWebhook('ชื่อใหม่ทดสอบ');
     assert(res.status === 200, 'Edit field submit → 200');
-    await wait(3000);
+    await wait(5000);
     u = await getUser();
     assert(u?.thaiName === 'ชื่อใหม่ทดสอบ', `Name updated: "${u?.thaiName}"`);
 
@@ -616,7 +615,7 @@ async function runTests() {
     console.log(`  🏅 Title: ${finalUser.title || '(none)'}`);
 
     const sessions = await prisma.languageGameSession.count({ where: { odUserId: TEST_USER_ID } });
-    const history = await prisma.questionHistory.count({ where: { userId: TEST_USER_ID } });
+    const history = await prisma.userQuestionHistory.count({ where: { userId: finalUser.id } });
     console.log(`  🎮 Game sessions: ${sessions}`);
     console.log(`  📝 Question history: ${history}`);
 
@@ -631,9 +630,8 @@ async function runTests() {
     // ================================================================
     console.log('\n━━━ Cleanup ━━━');
     try {
-        // Main test user
+        // Main test user (userQuestionHistory cascade-deleted with User)
         await prisma.languageGameSession.deleteMany({ where: { odUserId: TEST_USER_ID } });
-        await prisma.questionHistory.deleteMany({ where: { userId: TEST_USER_ID } });
         await prisma.user.delete({ where: { lineUserId: TEST_USER_ID } });
         console.log(`  🗑️ Main test user deleted`);
 
@@ -643,7 +641,6 @@ async function runTests() {
         });
         for (const ru of regUsers) {
             await prisma.languageGameSession.deleteMany({ where: { odUserId: ru.lineUserId } });
-            await prisma.questionHistory.deleteMany({ where: { userId: ru.lineUserId } });
             await prisma.user.delete({ where: { id: ru.id } });
         }
         console.log(`  🗑️ Registration test users: ${regUsers.length} deleted`);

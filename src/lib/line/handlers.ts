@@ -372,13 +372,16 @@ export async function handleTextMessage(
                 return;
             }
 
-            // Long-text games: ALL other text is a game answer (no menu detection)
-            // Only games with PARAGRAPH-length answers need this protection
-            // because short menu keywords (หยุด, ออก) commonly appear in paragraphs
-            const LONG_TEXT_GAMES = [
+            // Free-text answer games: ALL other text is a game answer (no menu detection)
+            // These games require typed answers (not ก/ข/ค/ง choices), so user input
+            // may accidentally contain menu keywords (e.g., "ความหมาย" in VOCAB_MEANING)
+            const FREE_TEXT_GAMES = [
+                "VOCAB_MEANING", "FILL_BLANK",
+                "COMPOSE_SENTENCE", "SENTENCE_WRITING", "SENTENCE_CONSTRUCTION",
+                "ARRANGE_SENTENCE", "FIX_SENTENCE",
                 "SUMMARIZE", "CONTINUE_STORY",
             ];
-            if (LONG_TEXT_GAMES.includes(user.currentGameType)) {
+            if (FREE_TEXT_GAMES.includes(user.currentGameType)) {
                 await handleGameAnswer(event.replyToken, user, text);
                 return;
             }
@@ -399,6 +402,14 @@ export async function handleTextMessage(
                 await handleGameAnswer(event.replyToken, user, text);
                 return;
             }
+        }
+
+        // Check if user wants to edit a specific field (must be before menu detection
+        // because "แก้ไข:ชื่อไทย" contains "แก้ไข" which matches EDIT_PROFILE keyword)
+        if (text.startsWith("แก้ไข:")) {
+            const fieldToEdit = text.replace("แก้ไข:", "").trim();
+            await handleEditFieldStart(event.replyToken, userId, fieldToEdit);
+            return;
         }
 
         // === Menu detection (only when user is NOT in any active state) ===
@@ -547,13 +558,6 @@ export async function handleTextMessage(
         if (text.startsWith("ดูบทเรียน:")) {
             const lessonId = text.replace("ดูบทเรียน:", "").trim();
             await handleLessonView(event.replyToken, userId, lessonId);
-            return;
-        }
-
-        // Check if user wants to edit a specific field (e.g., "แก้ไข:ชื่อไทย")
-        if (text.startsWith("แก้ไข:")) {
-            const fieldToEdit = text.replace("แก้ไข:", "").trim();
-            await handleEditFieldStart(event.replyToken, userId, fieldToEdit);
             return;
         }
 
@@ -2790,22 +2794,14 @@ async function handleThaiIdiomGameStart(replyToken: string, userId: string) {
 
     const question = questions[0];
     const options = getThaiIdiomOptions(question);
-
-    const sessionData = {
-        questionIds: questions.map(q => q.id),
-        currentIndex: 0,
-        correctCount: 0,
-        totalPoints: 0,
-        currentOptions: options,
-        multiplier,
-    };
+    const session = createSessionData("THAI_IDIOM", questions.map(q => q.id), multiplier);
 
     await prisma.user.update({
         where: { id: user.id },
         data: {
             currentGameType: "THAI_IDIOM",
             currentQuestionId: question.id,
-            gameData: JSON.stringify(sessionData),
+            gameData: JSON.stringify({ session, currentOptions: options }),
         },
     });
 
@@ -2858,22 +2854,14 @@ async function handleThaiCultureGameStart(replyToken: string, userId: string) {
 
     const question = questions[0];
     const options = getThaiCultureOptions(question);
-
-    const sessionData = {
-        questionIds: questions.map(q => q.id),
-        currentIndex: 0,
-        correctCount: 0,
-        totalPoints: 0,
-        currentOptions: options,
-        multiplier,
-    };
+    const session = createSessionData("THAI_CULTURE", questions.map(q => q.id), multiplier);
 
     await prisma.user.update({
         where: { id: user.id },
         data: {
             currentGameType: "THAI_CULTURE",
             currentQuestionId: question.id,
-            gameData: JSON.stringify(sessionData),
+            gameData: JSON.stringify({ session, currentOptions: options }),
         },
     });
 
