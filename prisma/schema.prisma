@@ -697,6 +697,9 @@ enum GameType {
   // Culture Games
   THAI_IDIOM           // สำนวนไทย
   THAI_CULTURE         // วัฒนธรรมไทย
+
+  // Legacy Games
+  MULTIPLE_CHOICE      // เลือกตอบ (legacy multiple choice)
 }
 
 model LanguageGameSession {

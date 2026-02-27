@@ -163,7 +163,7 @@ export async function evaluateContinuation(
                     "HTTP-Referer": "https://proficienthai.vercel.app",
                     "X-Title": "ProficienThAI",
                 },
-                timeout: 10000,
+                timeout: 7000,
             }
         );
 

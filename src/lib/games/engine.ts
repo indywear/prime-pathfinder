@@ -168,6 +168,17 @@ export const GAME_TYPES = {
         category: 'culture',
         requiredLevel: 1,
     },
+
+    // ========== Legacy Games ==========
+    MULTIPLE_CHOICE: {
+        id: 'MULTIPLE_CHOICE',
+        name: 'เลือกตอบ',
+        description: 'ตอบคำถามแบบเลือกตอบ 4 ตัวเลือก',
+        points: 10,
+        questionsPerRound: 5,
+        category: 'vocabulary',
+        requiredLevel: 1,
+    },
 } as const
 
 export type GameTypeId = keyof typeof GAME_TYPES
