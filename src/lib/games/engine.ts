@@ -179,6 +179,15 @@ export const GAME_TYPES = {
         category: 'vocabulary',
         requiredLevel: 1,
     },
+    SENTENCE_WRITING: {
+        id: 'SENTENCE_WRITING',
+        name: 'แต่งประโยค',
+        description: 'แต่งประโยคโดยใช้คำที่กำหนด',
+        points: 15,
+        questionsPerRound: 3,
+        category: 'reading',
+        requiredLevel: 5,
+    },
 } as const
 
 export type GameTypeId = keyof typeof GAME_TYPES

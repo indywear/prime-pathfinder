@@ -700,6 +700,7 @@ enum GameType {
 
   // Legacy Games
   MULTIPLE_CHOICE      // เลือกตอบ (legacy multiple choice)
+  SENTENCE_WRITING     // แต่งประโยค (legacy name, same as COMPOSE_SENTENCE)
 }
 
 model LanguageGameSession {
