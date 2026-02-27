@@ -1,4 +1,6 @@
 import prisma from "@/lib/db/prisma";
+import { addPoints } from "@/lib/gamification";
+import { getBangkokStartOfDay } from "@/lib/utils/timezone";
 
 export interface DailyVocabWord {
     id: string;
@@ -12,8 +14,7 @@ export interface DailyVocabWord {
  * Get today's vocabulary word
  */
 export async function getTodayVocab(): Promise<DailyVocabWord | null> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getBangkokStartOfDay();
 
     const vocab = await prisma.dailyVocab.findFirst({
         where: {
@@ -53,8 +54,7 @@ export async function getTodayVocab(): Promise<DailyVocabWord | null> {
  * Check if user has learned today's vocab
  */
 export async function hasLearnedToday(userId: string): Promise<boolean> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getBangkokStartOfDay();
 
     const session = await prisma.practiceSession.findFirst({
         where: {
@@ -85,13 +85,8 @@ export async function recordDailyVocabLearned(userId: string): Promise<void> {
         },
     });
 
-    // Award points (userId is internal user.id, not lineUserId)
-    await prisma.user.update({
-        where: { id: userId },
-        data: {
-            totalPoints: { increment: 5 },
-        },
-    });
+    // Award points through gamification system (handles level-ups, badges, etc.)
+    await addPoints(userId, 5, 'DAILY_VOCAB');
 }
 
 /**

@@ -1,5 +1,6 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import { calculateSimilarity } from "@/lib/utils/similarity";
 import {
     getDifficultiesForLevel,
     getRecentlyAnsweredQuestionIds,
@@ -26,6 +27,7 @@ export async function getRandomVocabMeaningQuestions(
         ? await getRecentlyAnsweredQuestionIds(userId, "VOCAB_MEANING", 24)
         : [];
 
+    // Intentional: uses VocabMatchQuestion model (same word/meaning data, different game mode - type meaning instead of match)
     const allQuestions = await prisma.vocabMatchQuestion.findMany({
         where: { difficulty: { in: difficulties } },
     });
@@ -54,51 +56,15 @@ export function checkVocabMeaningAnswer(userAnswer: string, correctMeaning: stri
     // Exact match
     if (normalized === correct) return true;
 
-    // Contains the answer
-    if (normalized.includes(correct) || correct.includes(normalized)) return true;
+    // Contains the answer (only if lengths are similar to prevent "น้ำตา" matching "น้ำ")
+    if (correct.includes(normalized) && normalized.length >= correct.length * 0.7) return true;
+    if (normalized.includes(correct) && correct.length >= normalized.length * 0.7) return true;
 
     // Similar enough (80% characters match)
     const similarity = calculateSimilarity(normalized, correct);
     return similarity >= 0.8;
 }
 
-/**
- * Calculate string similarity (Levenshtein-based)
- */
-function calculateSimilarity(s1: string, s2: string): number {
-    const longer = s1.length > s2.length ? s1 : s2;
-    const shorter = s1.length > s2.length ? s2 : s1;
-
-    if (longer.length === 0) return 1.0;
-
-    const distance = levenshteinDistance(longer, shorter);
-    return (longer.length - distance) / longer.length;
-}
-
-function levenshteinDistance(s1: string, s2: string): number {
-    const m = s1.length;
-    const n = s2.length;
-    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            if (s1[i - 1] === s2[j - 1]) {
-                dp[i][j] = dp[i - 1][j - 1];
-            } else {
-                dp[i][j] = Math.min(
-                    dp[i - 1][j] + 1,    // deletion
-                    dp[i][j - 1] + 1,    // insertion
-                    dp[i - 1][j - 1] + 1 // substitution
-                );
-            }
-        }
-    }
-
-    return dp[m][n];
-}
 
 /**
  * Calculate points for vocab meaning

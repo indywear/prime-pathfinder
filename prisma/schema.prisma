@@ -22,6 +22,8 @@ model User {
   university      String?
   email           String?
   nationality     String?
+  gender          String?   // "male" or "female" — for ครับ/ค่ะ particle
+  title           String?   // Achievement title (e.g. "จอมคำศัพท์", "เจ้าแห่งไวยากรณ์")
   thaiLevel       ThaiLevel @default(BEGINNER)
   consent         Boolean   @default(false)
   registrationStep Int      @default(0)
@@ -32,6 +34,9 @@ model User {
   currentLevel    Int       @default(1)
   lastSpinAt      DateTime?
   
+  // Task Progression
+  currentTaskWeek    Int       @default(1)  // สัปดาห์ที่ User กำลังจะทำ (ยังไม่ได้ส่ง)
+
   // Current Game State
   currentGameType    String?
   currentQuestionId  String?
@@ -42,13 +47,16 @@ model User {
   updatedAt       DateTime  @default(now()) @updatedAt
   
   // Relations
-  submissions       Submission[]
-  feedbackRequests  FeedbackRequest[]
-  practiceSessions  PracticeSession[]
-  badges            UserBadge[]
-  vocabularyProgress UserVocabulary[]
-  
-  @@index([lineUserId])
+  submissions         Submission[]
+  feedbackRequests    FeedbackRequest[]
+  practiceSessions    PracticeSession[]
+  badges              UserBadge[]
+  vocabularyProgress  UserVocabulary[]
+  writingSubmissions  WritingSubmission[]
+  vocabCollections    UserVocabCollection[]
+  gameSessions        LanguageGameSession[]
+  questionHistory     UserQuestionHistory[]
+  lessonProgress      LessonProgress[]
 }
 
 enum ThaiLevel {
@@ -89,7 +97,6 @@ model Task {
   submissions      Submission[]
   feedbackRequests FeedbackRequest[]
 
-  @@index([weekNumber])
   @@index([isActive])
 }
 
@@ -128,6 +135,7 @@ model Submission {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   
+  @@unique([userId, taskId])
   @@index([userId])
   @@index([taskId])
   @@index([submittedAt])
@@ -286,8 +294,6 @@ model SystemConfig {
   id    String @id @default(cuid())
   key   String @unique
   value String
-  
-  @@index([key])
 }
 
 // =====================
@@ -313,6 +319,8 @@ model FillBlankQuestion {
   id             String   @id @default(cuid())
   sentence       String   @db.Text
   answer         String
+  hint           String?    // คำใบ้ เช่น "คำกริยาเกี่ยวกับการเคลื่อนที่"
+  imageUrl       String?    // URL รูปภาพประกอบ
   category       String?
   difficulty     Difficulty @default(MEDIUM)
 
@@ -348,14 +356,16 @@ model MultipleChoiceQuestion {
 // =====================
 
 model SentenceConstructionPair {
-  id         String   @id @default(cuid())
+  id         String     @id @default(cuid())
   word1      String
   word2      String
   category   String?
-  
-  createdAt  DateTime @default(now())
-  
+  difficulty Difficulty @default(MEDIUM)
+
+  createdAt  DateTime   @default(now())
+
   @@index([category])
+  @@index([difficulty])
 }
 
 // =====================
@@ -403,8 +413,9 @@ model WritingSubmission {
   submittedAt     DateTime @default(now())
   
   // Relations
-  writingTask WritingTask @relation(fields: [writingTaskId], references: [id], onDelete: Cascade)
-  
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  writingTask WritingTask  @relation(fields: [writingTaskId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([writingTaskId])
   @@index([submittedAt])
@@ -421,6 +432,8 @@ model VocabMatchQuestion {
   wrongA      String
   wrongB      String
   wrongC      String
+  hint        String?    // คำใบ้ เช่น "เกี่ยวกับอาหาร"
+  imageUrl    String?    // URL รูปภาพประกอบ
   difficulty  Difficulty @default(MEDIUM)
 
   createdAt   DateTime   @default(now())
@@ -439,6 +452,8 @@ model VocabOppositeQuestion {
   wrongA      String
   wrongB      String
   wrongC      String
+  hint        String?    // คำใบ้ เช่น "ตรงข้ามกับคำด้านบวก"
+  imageUrl    String?    // URL รูปภาพประกอบ
   difficulty  Difficulty @default(MEDIUM)
 
   createdAt   DateTime   @default(now())
@@ -457,6 +472,8 @@ model VocabSynonymQuestion {
   wrongA      String
   wrongB      String
   wrongC      String
+  hint        String?    // คำใบ้ เช่น "คำที่ใช้ในชีวิตประจำวัน"
+  imageUrl    String?    // URL รูปภาพประกอบ
   difficulty  Difficulty @default(MEDIUM)
 
   createdAt   DateTime   @default(now())
@@ -473,6 +490,7 @@ model FixSentenceQuestion {
   wrongSentence   String   @db.Text
   correctSentence String   @db.Text
   hint            String?
+  imageUrl        String?    // URL รูปภาพประกอบ
   difficulty      Difficulty @default(MEDIUM)
 
   createdAt       DateTime @default(now())
@@ -488,6 +506,8 @@ model ArrangeSentenceQuestion {
   id              String   @id @default(cuid())
   shuffledWords   String   @db.Text  // คำที่สลับ คั่นด้วย |
   correctSentence String   @db.Text
+  hint            String?    // คำใบ้ เช่น "ประโยคเกี่ยวกับครอบครัว"
+  imageUrl        String?    // URL รูปภาพประกอบ
   difficulty      Difficulty @default(MEDIUM)
 
   createdAt       DateTime @default(now())
@@ -508,6 +528,8 @@ model SpeedGrammarQuestion {
   optionD        String
   correctAnswer  String   // A, B, C, D
   timeLimit      Int      @default(30)  // seconds
+  hint           String?    // คำใบ้ เช่น "สังเกตคำเชื่อมในประโยค"
+  imageUrl       String?    // URL รูปภาพประกอบ
   difficulty     Difficulty @default(MEDIUM)
 
   createdAt      DateTime @default(now())
@@ -528,6 +550,8 @@ model ReadAnswerQuestion {
   optionC       String
   optionD       String
   correctAnswer String   // A, B, C, D
+  hint          String?    // คำใบ้ เช่น "อ่านย่อหน้าที่ 2"
+  imageUrl      String?    // URL รูปภาพประกอบ
   difficulty    Difficulty @default(MEDIUM)
 
   createdAt     DateTime @default(now())
@@ -544,6 +568,8 @@ model SummarizeQuestion {
   passage       String   @db.Text
   sampleSummary String   @db.Text
   keywords      String   // คำสำคัญที่ควรมี คั่นด้วย |
+  hint          String?    // คำใบ้ เช่น "เน้นใจความสำคัญของเรื่อง"
+  imageUrl      String?    // URL รูปภาพประกอบ
   difficulty    Difficulty @default(MEDIUM)
 
   createdAt     DateTime @default(now())
@@ -560,6 +586,8 @@ model ContinueStoryQuestion {
   storyStart    String   @db.Text
   keywords      String   // คำสำคัญที่ควรมี คั่นด้วย |
   minLength     Int      @default(50)
+  hint          String?    // คำใบ้ เช่น "ลองใช้คำสำคัญในเรื่อง"
+  imageUrl      String?    // URL รูปภาพประกอบ
   difficulty    Difficulty @default(MEDIUM)
 
   createdAt     DateTime @default(now())
@@ -579,8 +607,6 @@ model DailyVocab {
   forDate     DateTime @unique
 
   createdAt   DateTime @default(now())
-
-  @@index([forDate])
 }
 
 // =====================
@@ -596,6 +622,9 @@ model UserVocabCollection {
   rarity      String   @default("COMMON")  // COMMON, RARE, EPIC, LEGENDARY
 
   collectedAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [odUserId], references: [id], onDelete: Cascade)
 
   @@unique([odUserId, word])
   @@index([odUserId])
@@ -627,6 +656,9 @@ model UserQuestionHistory {
   gameType     String   // Which game (VOCAB_MATCH, FILL_BLANK, etc.)
   wasCorrect   Boolean  @default(false)
   answeredAt   DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, questionId, gameType])
   @@index([userId])
@@ -661,6 +693,10 @@ enum GameType {
   DAILY_VOCAB          // คำศัพท์รายวัน
   RACE_CLOCK           // แข่งกับเวลา
   VOCAB_GACHA          // กาชาคำศัพท์
+
+  // Culture Games
+  THAI_IDIOM           // สำนวนไทย
+  THAI_CULTURE         // วัฒนธรรมไทย
 }
 
 model LanguageGameSession {
@@ -681,9 +717,100 @@ model LanguageGameSession {
   
   startedAt    DateTime  @default(now())
   completedAt  DateTime?
-  
+
+  // Relations
+  user User @relation(fields: [odUserId], references: [id], onDelete: Cascade)
+
   @@map("language_game_sessions")
   @@index([odUserId])
+  @@index([odUserId, isCompleted])
   @@index([gameType])
   @@index([isCompleted])
+}
+
+// =====================
+// Lessons (สอนก่อนเล่น)
+// =====================
+
+model Lesson {
+  id           String   @id @default(cuid())
+  category     String   // "vocabulary", "grammar", "reading"
+  difficulty   String   @default("EASY") // EASY, MEDIUM, HARD
+  orderIndex   Int      @default(0) // ลำดับบทเรียนใน category
+  title        String   // ชื่อบทเรียน เช่น "คำสัปท์พื้นฐาน: อาหาร"
+  content      String   @db.Text // เนื้อหาหลัก (text/markdown)
+  examples     String?  @db.Text // ตัวอย่าง (JSON array หรือ text)
+  tips         String?  @db.Text // เคล็ดลับ/เพิ่มเติม
+  imageUrl     String?  // รูปภาพประกอบ
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  progress     LessonProgress[]
+
+  @@index([category])
+  @@index([category, difficulty])
+  @@index([isActive])
+}
+
+model LessonProgress {
+  id           String   @id @default(cuid())
+  userId       String
+  lessonId     String
+  isCompleted  Boolean  @default(false)
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([userId, isCompleted])
+}
+
+// =====================
+// Thai Idiom Questions (สำนวนไทย)
+// =====================
+
+model ThaiIdiomQuestion {
+  id          String     @id @default(cuid())
+  idiom       String     // สำนวน เช่น "น้ำขึ้นให้รีบตัก"
+  meaning     String     // ความหมาย (คำตอบถูก)
+  wrongA      String     // ตัวเลือกผิด 1
+  wrongB      String     // ตัวเลือกผิด 2
+  wrongC      String     // ตัวเลือกผิด 3
+  example     String?    @db.Text  // ตัวอย่างการใช้สำนวนในประโยค
+  hint        String?    // คำใบ้
+  imageUrl    String?    // รูปภาพประกอบ
+  difficulty  Difficulty @default(MEDIUM)
+
+  createdAt   DateTime   @default(now())
+
+  @@index([difficulty])
+}
+
+// =====================
+// Thai Culture Questions (วัฒนธรรม/มารยาทไทย)
+// =====================
+
+model ThaiCultureQuestion {
+  id          String     @id @default(cuid())
+  situation   String     @db.Text  // สถานการณ์ เช่น "เมื่อเดินผ่านผู้ใหญ่ที่นั่งอยู่ ควรทำอย่างไร"
+  correct     String     // คำตอบถูก
+  wrongA      String     // ตัวเลือกผิด 1
+  wrongB      String     // ตัวเลือกผิด 2
+  wrongC      String     // ตัวเลือกผิด 3
+  explanation String?    @db.Text  // คำอธิบายเพิ่มเติม
+  category    String     @default("manners") // manners, taboo, culture, greetings
+  hint        String?    // คำใบ้
+  imageUrl    String?    // รูปภาพประกอบ
+  difficulty  Difficulty @default(MEDIUM)
+
+  createdAt   DateTime   @default(now())
+
+  @@index([difficulty])
+  @@index([category])
 }

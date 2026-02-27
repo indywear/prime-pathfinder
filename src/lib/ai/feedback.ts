@@ -83,6 +83,7 @@ Always respond in Thai language.`;
                     "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
                     "X-Title": "ProficienThAI",
                 },
+                timeout: 8000,
             }
         );
 
@@ -228,6 +229,7 @@ ${content}
                     "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
                     "X-Title": "ProficienThAI",
                 },
+                timeout: 15000,
             }
         );
 
@@ -272,28 +274,24 @@ ${content}
     } catch (error) {
         logApiError("WritingFeedback", error);
 
-        // Return default feedback on error
+        // Return zero scores on error - teacher will review manually
         return {
             scores: {
-                accuracy: 2, contentSelection: 2, interpretation: 2,
-                taskFulfillment: 2, organization: 2, languageUse: 2, mechanics: 2,
-                total: 14,
+                accuracy: 0, contentSelection: 0, interpretation: 0,
+                taskFulfillment: 0, organization: 0, languageUse: 0, mechanics: 0,
+                total: 0,
             },
-            feedback: "ขอบคุณที่ส่งงานมาครับ งานเขียนของคุณอยู่ในเกณฑ์พอใช้",
-            suggestions: [
-                "ตรวจสอบความถูกต้องของข้อมูลอีกครั้ง",
-                "เลือกประเด็นสำคัญให้ครบถ้วน",
-                "ตรวจสอบการสะกดคำและการเว้นวรรค",
-            ],
-            encouragement: "พยายามต่อไปนะครับ!",
+            feedback: "ระบบ AI ไม่สามารถประเมินได้ชั่วคราว อาจารย์จะตรวจให้ภายหลังครับ",
+            suggestions: [],
+            encouragement: "ขอบคุณที่ส่งงานมาครับ!",
             criteriaFeedback: {
-                accuracy: "ตรวจสอบความถูกต้องของข้อมูล",
-                contentSelection: "เลือกประเด็นสำคัญให้ครบ",
-                interpretation: "ลองวิเคราะห์เนื้อหาให้ลึกขึ้น",
-                taskFulfillment: "ทำตามคำสั่งให้ครบถ้วน",
-                organization: "จัดลำดับเนื้อหาให้ชัดเจน",
-                languageUse: "ใช้คำศัพท์ให้หลากหลายขึ้น",
-                mechanics: "ตรวจสอบการสะกดและการเว้นวรรค",
+                accuracy: "รอการตรวจจากอาจารย์",
+                contentSelection: "รอการตรวจจากอาจารย์",
+                interpretation: "รอการตรวจจากอาจารย์",
+                taskFulfillment: "รอการตรวจจากอาจารย์",
+                organization: "รอการตรวจจากอาจารย์",
+                languageUse: "รอการตรวจจากอาจารย์",
+                mechanics: "รอการตรวจจากอาจารย์",
             },
         };
     }
@@ -389,6 +387,7 @@ ${context}`;
                     "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://proficienthai.vercel.app",
                     "X-Title": "ProficienThAI",
                 },
+                timeout: 8000,
             }
         );
 
@@ -396,6 +395,6 @@ ${context}`;
         return response.data.choices[0]?.message?.content || "ขอโทษครับ ไม่เข้าใจ ลองพิมพ์ใหม่อีกครั้งได้ไหมครับ?";
     } catch (error) {
         logApiError("ConversationResponse", error);
-        return "ขอโทษครับ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งนะครับ";
+        return "สวัสดีครับ ผมคือ ProficienThAI ตอนนี้ระบบตอบอัตโนมัติไม่พร้อมชั่วคราว พิมพ์ \"เมนู\" เพื่อดูตัวเลือกทั้งหมดครับ";
     }
 }

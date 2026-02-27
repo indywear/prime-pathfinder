@@ -1,5 +1,6 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import { getDifficultiesForLevel, getUserLevel } from "./questionHistory";
 import axios from "axios";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -24,19 +25,27 @@ export interface SentenceEvaluationResult {
 }
 
 /**
- * Get random sentence construction pairs for the game
+ * Get random sentence construction pairs for the game (with difficulty filtering by user level)
  */
-export async function getRandomSentencePairs(count: number = 3): Promise<SentenceConstructionPair[]> {
-    // Fetch all pairs then shuffle for true randomization
-    const allPairs = await prisma.sentenceConstructionPair.findMany();
+export async function getRandomSentencePairs(userId?: string, count: number = 3): Promise<SentenceConstructionPair[]> {
+    const userLevel = userId ? await getUserLevel(userId) : 1;
+    const difficulties = getDifficultiesForLevel(userLevel);
+
+    // Filter by difficulty based on user level
+    const allPairs = await prisma.sentenceConstructionPair.findMany({
+        where: { difficulty: { in: difficulties } },
+    });
 
     if (allPairs.length === 0) {
-        return [];
+        // Fallback: get any pairs regardless of difficulty
+        const fallback = await prisma.sentenceConstructionPair.findMany();
+        if (fallback.length === 0) return [];
+        return shuffle(fallback).slice(0, count).map(p => ({
+            id: p.id, word1: p.word1, word2: p.word2,
+        }));
     }
 
-    // Shuffle and pick using Fisher-Yates
     const shuffled = shuffle(allPairs);
-
     return shuffled.slice(0, count).map(p => ({
         id: p.id,
         word1: p.word1,
@@ -139,8 +148,10 @@ export async function evaluateSentence(
 
         const aiResponse = response.data.choices[0]?.message?.content || "";
 
+        // Strip markdown code blocks if AI wraps JSON in ```json...```
+        const cleanedResponse = aiResponse.replace(/```(?:json)?\s*/g, '').replace(/```/g, '').trim();
         // Try to parse JSON from response
-        const jsonMatch = aiResponse.match(/\{[\s\S]*?\}/);
+        const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
             const result = JSON.parse(jsonMatch[0]);
             const isGrammarOk = result.grammarOk === true;

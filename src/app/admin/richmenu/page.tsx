@@ -165,6 +165,7 @@ export default function AdminRichMenuPage() {
                             name="image"
                             accept="image/png,image/jpeg"
                             required
+                            aria-label="Upload Rich Menu image"
                             style={{ marginBottom: "12px" }}
                         />
                         <p style={{ fontSize: "0.875rem", color: "#666", marginBottom: "12px" }}>

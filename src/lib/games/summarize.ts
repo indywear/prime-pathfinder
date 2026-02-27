@@ -100,7 +100,7 @@ export async function evaluateSummary(
 ): Promise<SummarizeResult> {
     // First check keywords
     const { found, missing } = checkSummarizeKeywords(userSummary, keywords);
-    const keywordRatio = found.length / keywords.length;
+    const keywordRatio = keywords.length > 0 ? found.length / keywords.length : 1.0;
 
     // Minimum length check
     if (userSummary.length < 20) {
@@ -152,7 +152,7 @@ export async function evaluateSummary(
                     }
                 ],
                 temperature: 0.3,
-                max_tokens: 150,
+                max_tokens: 200,
             },
             {
                 headers: {
@@ -166,7 +166,9 @@ export async function evaluateSummary(
         );
 
         const aiResponse = response.data.choices[0]?.message?.content || "";
-        const jsonMatch = aiResponse.match(/\{[\s\S]*?\}/);
+        // Strip markdown code blocks if AI wraps JSON in ```json...```
+        const cleanedResponse = aiResponse.replace(/```(?:json)?\s*/g, '').replace(/```/g, '').trim();
+        const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
 
         if (jsonMatch) {
             const result = JSON.parse(jsonMatch[0]);

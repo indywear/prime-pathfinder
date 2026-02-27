@@ -61,10 +61,10 @@ export function checkReadAnswerAnswer(userAnswer: string, correctAnswer: string)
     const correct = correctAnswer.trim().toUpperCase();
 
     const answerMap: Record<string, string> = {
-        'ก': 'A', '1': 'A', 'a': 'A',
-        'ข': 'B', '2': 'B', 'b': 'B',
-        'ค': 'C', '3': 'C', 'c': 'C',
-        'ง': 'D', '4': 'D', 'd': 'D',
+        'ก': 'A', '1': 'A', 'A': 'A',
+        'ข': 'B', '2': 'B', 'B': 'B',
+        'ค': 'C', '3': 'C', 'C': 'C',
+        'ง': 'D', '4': 'D', 'D': 'D',
     };
 
     const mappedAnswer = answerMap[normalized] || normalized;

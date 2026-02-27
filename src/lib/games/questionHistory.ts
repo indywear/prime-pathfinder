@@ -3,23 +3,31 @@ import { Difficulty } from "@prisma/client";
 
 /**
  * Map user level to appropriate difficulty
- * Level 1-3: EASY
- * Level 4-7: MEDIUM
- * Level 8+: HARD
+ * Level 1-2: EASY  (ง่าย สำหรับมือใหม่)
+ * Level 3-5: MEDIUM (ปานกลาง)
+ * Level 6+: HARD   (ยาก)
+ *
+ * ปรับให้ EASY อยู่นานขึ้น ลดความยากสำหรับมือใหม่
+ * (เดิม: Level 1-3 EASY, Level 4-7 MEDIUM, Level 8+ HARD)
  */
 export function getDifficultyForLevel(userLevel: number): Difficulty {
-    if (userLevel <= 3) return "EASY";
-    if (userLevel <= 7) return "MEDIUM";
+    if (userLevel <= 2) return "EASY";
+    if (userLevel <= 5) return "MEDIUM";
     return "HARD";
 }
 
 /**
  * Get all difficulties appropriate for user level (inclusive of easier levels)
- * E.g., Level 5 user can see EASY and MEDIUM questions
+ * Level 1-2: EASY only
+ * Level 3-5: EASY + MEDIUM
+ * Level 6+:  EASY + MEDIUM + HARD
+ *
+ * ปรับให้ EASY อยู่นานขึ้น ลดความยากสำหรับมือใหม่
+ * (เดิม: Level 1-3 EASY, Level 4-7 EASY+MEDIUM, Level 8+ ทั้งหมด)
  */
 export function getDifficultiesForLevel(userLevel: number): Difficulty[] {
-    if (userLevel <= 3) return ["EASY"];
-    if (userLevel <= 7) return ["EASY", "MEDIUM"];
+    if (userLevel <= 2) return ["EASY"];
+    if (userLevel <= 5) return ["EASY", "MEDIUM"];
     return ["EASY", "MEDIUM", "HARD"];
 }
 

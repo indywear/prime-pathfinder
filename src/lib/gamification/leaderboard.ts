@@ -1,4 +1,5 @@
 import prisma from '@/lib/db/prisma'
+import { getBangkokStartOfDay } from '@/lib/utils/timezone'
 
 export type LeaderboardType = 'WEEKLY' | 'MONTHLY' | 'ALL_TIME' | 'CLASS' | 'FRIENDS'
 
@@ -10,11 +11,94 @@ export interface LeaderboardEntry {
     level: number
 }
 
+function getDateRangeForType(type: LeaderboardType): Date | null {
+    switch (type) {
+        case 'WEEKLY': {
+            const today = getBangkokStartOfDay()
+            today.setDate(today.getDate() - 7)
+            return today
+        }
+        case 'MONTHLY': {
+            const today = getBangkokStartOfDay()
+            today.setDate(1)
+            return today
+        }
+        default:
+            return null // ALL_TIME, CLASS, FRIENDS — no date filter
+    }
+}
+
 export async function getLeaderboard(
     type: LeaderboardType,
     limit: number = 10,
     userId?: string
 ): Promise<{ entries: LeaderboardEntry[]; userRank?: LeaderboardEntry }> {
+    const since = getDateRangeForType(type)
+
+    // For WEEKLY/MONTHLY, aggregate points from PracticeSession within the date range
+    if (since) {
+        const sessionData = await prisma.practiceSession.groupBy({
+            by: ['userId'],
+            where: { completedAt: { gte: since } },
+            _sum: { pointsEarned: true },
+            orderBy: { _sum: { pointsEarned: 'desc' } },
+            take: limit,
+        })
+
+        const userIds = sessionData.map(s => s.userId)
+        const users = await prisma.user.findMany({
+            where: { id: { in: userIds }, isRegistered: true },
+            select: { id: true, thaiName: true, currentLevel: true },
+        })
+        const userMap = new Map(users.map(u => [u.id, u]))
+
+        const entries: LeaderboardEntry[] = sessionData
+            .filter(s => userMap.has(s.userId))
+            .map((s, index) => {
+                const user = userMap.get(s.userId)!
+                return {
+                    rank: index + 1,
+                    userId: s.userId,
+                    userName: user.thaiName || 'Unknown',
+                    points: s._sum.pointsEarned || 0,
+                    level: user.currentLevel,
+                }
+            })
+
+        let userRank: LeaderboardEntry | undefined
+        if (userId && !entries.some(e => e.userId === userId)) {
+            const userSession = await prisma.practiceSession.aggregate({
+                where: { userId, completedAt: { gte: since } },
+                _sum: { pointsEarned: true },
+            })
+            const userPoints = userSession._sum.pointsEarned || 0
+            if (userPoints > 0) {
+                const higherCount = await prisma.practiceSession.groupBy({
+                    by: ['userId'],
+                    where: { completedAt: { gte: since } },
+                    _sum: { pointsEarned: true },
+                    having: { pointsEarned: { _sum: { gt: userPoints } } },
+                })
+                const user = await prisma.user.findUnique({
+                    where: { id: userId },
+                    select: { thaiName: true, currentLevel: true },
+                })
+                if (user) {
+                    userRank = {
+                        rank: higherCount.length + 1,
+                        userId,
+                        userName: user.thaiName || 'You',
+                        points: userPoints,
+                        level: user.currentLevel,
+                    }
+                }
+            }
+        }
+
+        return { entries, userRank }
+    }
+
+    // ALL_TIME: use totalPoints directly
     const topUsers = await prisma.user.findMany({
         where: { isRegistered: true },
         orderBy: { totalPoints: 'desc' },
@@ -44,9 +128,9 @@ export async function getLeaderboard(
 
         if (user) {
             const higherCount = await prisma.user.count({
-                where: { 
+                where: {
                     isRegistered: true,
-                    totalPoints: { gt: user.totalPoints } 
+                    totalPoints: { gt: user.totalPoints }
                 },
             })
 

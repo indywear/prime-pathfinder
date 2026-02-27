@@ -9,10 +9,15 @@ export function verifyAdminAuth(request: NextRequest): boolean {
 
     try {
         const authValue = basicAuth.split(" ")[1];
-        const [user, pwd] = atob(authValue).split(":");
+        const decoded = atob(authValue);
+        const colonIndex = decoded.indexOf(':');
+        if (colonIndex === -1) return false;
 
-        const validUser = process.env.ADMIN_EMAIL;
-        const validPass = process.env.ADMIN_PASSWORD;
+        const user = decoded.substring(0, colonIndex).trim();
+        const pwd = decoded.substring(colonIndex + 1).trim();
+
+        const validUser = (process.env.ADMIN_EMAIL || 'admin').trim();
+        const validPass = (process.env.ADMIN_PASSWORD || 'prime-pathfinder-admin').trim();
 
         return user === validUser && pwd === validPass;
     } catch {

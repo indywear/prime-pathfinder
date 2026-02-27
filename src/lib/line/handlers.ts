@@ -46,6 +46,7 @@ import {
     getPointsForNextLevel,
     formatPointsMessage,
 } from "@/lib/gamification/points";
+import { addPoints, getLevelInfo, LEVEL_CONFIG, checkAndAwardTitle, getDisplayTitle } from "@/lib/gamification";
 import { SPIN_WHEEL_PRIZES } from "@/lib/gamification/rewards";
 
 // Game Logic Imports
@@ -123,8 +124,31 @@ import {
     recordGachaPull,
     formatGachaResult,
 } from "@/lib/games/vocabGacha";
-import { recordQuestionAnswered } from "@/lib/games/questionHistory";
-import { evaluateSentence } from "@/lib/games/sentenceConstruction";
+import { recordQuestionAnswered, getUserLevel } from "@/lib/games/questionHistory";
+import { evaluateSentence, getRandomSentencePairs } from "@/lib/games/sentenceConstruction";
+import { checkFillBlankAnswer } from "@/lib/games/fillBlank";
+import { p, np, kp, sp } from "@/lib/utils/particle";
+import { BOT_NAME, getTimeGreeting, getEncouragement } from "@/lib/line/botCharacter";
+import {
+    GAME_TYPES,
+    createSessionData,
+    parseSessionData,
+    getCurrentQuestionId,
+    advanceSession,
+    isSessionComplete,
+    getSessionProgress,
+    formatSessionSummary,
+    getDailyRoundCount,
+    calculatePointMultiplier,
+    getDailyLimitMessage,
+    checkLevelGate,
+    getCorrectMessage,
+    getWrongMessage,
+    GameSessionState,
+} from "@/lib/games/engine";
+
+const NEXT_QUESTION_CMD = "__next__";
+const HINT_CMD = "__hint__";
 
 const REGISTRATION_STEPS = [
     { field: "chineseName", question: "ชื่อ-นามสกุล (ภาษาจีน) ของคุณคืออะไรครับ?", type: "text" },
@@ -133,6 +157,15 @@ const REGISTRATION_STEPS = [
     { field: "university", question: "คุณเรียนมหาวิทยาลัยอะไรครับ? (กรอกเป็นภาษาอังกฤษ)", type: "text" },
     { field: "email", question: "อีเมลของคุณคืออะไรครับ?", type: "text" },
     { field: "nationality", question: "สัญชาติของคุณคืออะไรครับ?", type: "text" },
+    {
+        field: "gender",
+        question: "คุณเป็นเพศอะไรครับ? (เพื่อปรับภาษาให้เหมาะสม ครับ/ค่ะ)",
+        type: "quickReply",
+        options: [
+            { label: "ชาย 👦", text: "male" },
+            { label: "หญิง 👧", text: "female" },
+        ],
+    },
     {
         field: "thaiLevel",
         question: "ระดับภาษาไทยของคุณอยู่ระดับไหนครับ?",
@@ -157,7 +190,7 @@ const REGISTRATION_STEPS = [
 const MENU_KEYWORDS = {
     REGISTER: ["ลงทะเบียน", "register", "สมัคร"],
     FEEDBACK: ["ขอผลป้อนกลับ", "feedback", "ผลป้อนกลับ"],
-    SUBMIT: ["ส่งงาน", "submit", "ส่ง", "submit task"],
+    SUBMIT: ["ส่งงาน", "submit", "submit task"],
 
     // === Game Category Menus (ต้องอยู่ก่อน PRACTICE เพราะมีคำ "เกม" ซ้ำกัน) ===
     VOCAB_GAMES: ["เกมคำศัพท์", "vocab games"],
@@ -169,15 +202,12 @@ const MENU_KEYWORDS = {
     DASHBOARD: ["แดชบอร์ด", "dashboard", "ความก้าวหน้า", "ดูความก้าวหน้า"],
     PROFILE: ["ข้อมูลส่วนตัว", "profile", "โปรไฟล์"],
     EDIT_PROFILE: ["แก้ไขข้อมูล", "แก้ไขชื่อ", "เปลี่ยนชื่อ", "edit profile", "แก้ไข"],
-    CANCEL: ["ยกเลิก", "cancel", "หยุด", "ออก", "ออกจากเกม"],
     HELP: ["ช่วยเหลือ", "help", "วิธีใช้", "เมนู", "menu", "รายการ"],
     LEADERBOARD: ["leaderboard", "อันดับ", "ลีดเดอร์บอร์ด", "ranking"],
     SPIN_WHEEL: ["spin wheel", "สปินวงล้อ", "วงล้อ", "spin", "หมุนวงล้อ"],
     MY_TASK: ["ภาระงาน", "task", "การบ้าน", "งานประจำสัปดาห์", "งานอาจารย์"],
-    SHOW_ANSWER: ["เฉลย", "ดูเฉลย", "คำตอบ", "answer"],
-    SKIP_QUESTION: ["ข้าม", "skip"],
 
-    // === Vocabulary Games (4 เกม) ===
+    // === Vocabulary Games (4 เกม) — ต้องอยู่ก่อน SKIP/SHOW_ANSWER เพราะ "ตรงข้าม" มี "ข้าม" เป็น substring ===
     VOCAB_MATCH_GAME: ["จับคู่คำ", "vocab match", "จับคู่"],
     VOCAB_MEANING_GAME: ["ความหมาย", "vocab meaning", "แปลคำ"],
     VOCAB_OPPOSITE_GAME: ["คำตรงข้าม", "opposite", "ตรงข้าม"],
@@ -200,8 +230,21 @@ const MENU_KEYWORDS = {
     RACE_CLOCK_GAME: ["แข่งเวลา", "race clock", "แข่งกับเวลา"],
     VOCAB_GACHA_GAME: ["กาชา", "gacha", "สุ่มคำ"],
 
+    // === Culture Games (2 เกม) ===
+    CULTURE_GAMES: ["เกมวัฒนธรรม", "culture games"],
+    THAI_IDIOM_GAME: ["สำนวนไทย", "สำนวน", "thai idiom", "idiom"],
+    THAI_CULTURE_GAME: ["วัฒนธรรมไทย", "วัฒนธรรม", "มารยาท", "thai culture", "culture"],
+
+    // === Lessons (สอนก่อนเล่น) ===
+    LESSON: ["บทเรียน", "เรียน", "lesson", "เรียนรู้", "สอน"],
+
     // Legacy support
     MULTIPLE_CHOICE_GAME: ["เลือกตอบ", "multiple choice", "เลือก"],
+
+    // === Short keywords ต้องอยู่หลังสุดเพราะเป็น substring ของคำอื่น ===
+    SHOW_ANSWER: ["เฉลย", "ดูเฉลย", "คำตอบ", "answer"],
+    SKIP_QUESTION: ["ข้าม", "skip"],
+    CANCEL: ["ยกเลิก", "cancel", "หยุด", "ออก", "ออกจากเกม"],
 };
 
 // Fields that can be edited
@@ -215,8 +258,19 @@ const EDITABLE_FIELDS = [
 function detectMenuAction(text: string): string | null {
     const lowerText = text.toLowerCase().trim();
 
+    // Build a flat list of (keyword, action) pairs sorted by keyword length DESC
+    // This ensures longer/more specific keywords match before shorter ones
+    // e.g., "เขียนต่อ" matches CONTINUE_STORY before "เขียน" matches SENTENCE
+    const allPairs: { keyword: string; action: string }[] = [];
     for (const [action, keywords] of Object.entries(MENU_KEYWORDS)) {
-        if (keywords.some((keyword) => lowerText.includes(keyword.toLowerCase()))) {
+        for (const kw of keywords) {
+            allPairs.push({ keyword: kw.toLowerCase(), action });
+        }
+    }
+    allPairs.sort((a, b) => b.keyword.length - a.keyword.length);
+
+    for (const { keyword, action } of allPairs) {
+        if (lowerText.includes(keyword)) {
             return action;
         }
     }
@@ -232,6 +286,12 @@ export async function handleTextMessage(
         if (!userId) return;
 
         const text = event.message.text.trim();
+
+        // Reject extremely long messages to prevent abuse
+        if (text.length > 5000) {
+            await replyText(event.replyToken, "ข้อความยาวเกินไปครับ กรุณาส่งข้อความไม่เกิน 5,000 ตัวอักษร");
+            return;
+        }
 
         const user = await prisma.user.findUnique({
             where: { lineUserId: userId },
@@ -251,6 +311,97 @@ export async function handleTextMessage(
             return;
         }
 
+        // === Active state checks FIRST (before menu detection) ===
+        // This prevents menu keywords in game answers from being intercepted
+        // e.g., "หยุดเรียน" in a summary matching CANCEL keyword "หยุด"
+
+        // Check if user is submitting a task
+        if (user?.currentGameType === "SUBMITTING_TASK") {
+            if (text === "ยกเลิก" || text === "cancel" || text.toLowerCase() === "cancel") {
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { currentGameType: null, currentQuestionId: null, gameData: null },
+                });
+                await replyText(event.replyToken, `ยกเลิกการส่งงานแล้ว${p(user?.gender)}\n\nพิมพ์ "เมนู" เพื่อดูตัวเลือก`);
+            } else {
+                await handleSubmitWriting(event.replyToken, user, text);
+            }
+            return;
+        }
+
+        // Check if user is in editing mode
+        if (user?.currentGameType?.startsWith("editing:")) {
+            await handleEditFieldSubmit(event.replyToken, user, text);
+            return;
+        }
+
+        // Check for session "next question" command
+        if (text === NEXT_QUESTION_CMD && user?.currentGameType) {
+            await handleSessionNext(event.replyToken, userId);
+            return;
+        }
+
+        // Check for session "hint" command
+        if (text === HINT_CMD && user?.currentGameType) {
+            await handleHint(event.replyToken, userId);
+            return;
+        }
+
+        // Check if user is in a game
+        if (user?.currentGameType && user?.currentQuestionId) {
+            const lowerText = text.toLowerCase().trim();
+            const exactCancelCommands = ["ยกเลิก", "cancel", "ออกจากเกม"];
+            const exactSkipCommands = ["ข้าม", "skip"];
+            const exactAnswerCommands = ["เฉลย", "ดูเฉลย", "answer"];
+
+            // Exact-match commands always work regardless of game type
+            if (exactCancelCommands.includes(lowerText)) {
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { currentGameType: null, currentQuestionId: null, gameData: null },
+                });
+                await replyText(event.replyToken, `ออกจากเกมแล้ว${p(user?.gender)}\n\nพิมพ์ "ฝึกฝน" เพื่อเล่นเกมอื่น`);
+                return;
+            }
+            if (exactSkipCommands.includes(lowerText)) {
+                await handleSkipQuestion(event.replyToken, userId);
+                return;
+            }
+            if (exactAnswerCommands.includes(lowerText)) {
+                await handleShowAnswer(event.replyToken, userId);
+                return;
+            }
+
+            // Long-text games: ALL other text is a game answer (no menu detection)
+            // Only games with PARAGRAPH-length answers need this protection
+            // because short menu keywords (หยุด, ออก) commonly appear in paragraphs
+            const LONG_TEXT_GAMES = [
+                "SUMMARIZE", "CONTINUE_STORY",
+            ];
+            if (LONG_TEXT_GAMES.includes(user.currentGameType)) {
+                await handleGameAnswer(event.replyToken, user, text);
+                return;
+            }
+
+            // Multiple-choice games: allow menu navigation (user can switch games)
+            // Short answers (ก/ข/ค/ง) won't match any menu keyword
+            // Longer text like "เกมคำศัพท์" falls through to menu detection below
+            const menuAction = detectMenuAction(text);
+            if (menuAction) {
+                // Clear current game before processing menu action
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { currentGameType: null, currentQuestionId: null, gameData: null },
+                });
+                // Fall through to menu processing below
+            } else {
+                // No menu match = game answer
+                await handleGameAnswer(event.replyToken, user, text);
+                return;
+            }
+        }
+
+        // === Menu detection (only when user is NOT in any active state) ===
         const menuAction = detectMenuAction(text);
 
         if (menuAction) {
@@ -291,6 +442,9 @@ export async function handleTextMessage(
                 case "MY_TASK":
                     await handleMyTask(event.replyToken, userId);
                     break;
+                case "LESSON":
+                    await handleLessonMenu(event.replyToken, userId);
+                    break;
                 case "SHOW_ANSWER":
                     await handleShowAnswer(event.replyToken, userId);
                     break;
@@ -310,6 +464,9 @@ export async function handleTextMessage(
                     break;
                 case "FUN_GAMES":
                     await handleFunGamesMenu(event.replyToken, userId);
+                    break;
+                case "CULTURE_GAMES":
+                    await handleCultureGamesMenu(event.replyToken, userId);
                     break;
 
                 // Vocabulary Games
@@ -365,6 +522,14 @@ export async function handleTextMessage(
                     await handleVocabGachaGameStart(event.replyToken, userId);
                     break;
 
+                // Culture Games
+                case "THAI_IDIOM_GAME":
+                    await handleThaiIdiomGameStart(event.replyToken, userId);
+                    break;
+                case "THAI_CULTURE_GAME":
+                    await handleThaiCultureGameStart(event.replyToken, userId);
+                    break;
+
                 // Legacy
                 case "MULTIPLE_CHOICE_GAME":
                     await handleMultipleChoiceGameStart(event.replyToken, userId);
@@ -373,36 +538,22 @@ export async function handleTextMessage(
             return;
         }
 
+        // Check lesson sub-commands (e.g., "บทเรียน:vocabulary", "ดูบทเรียน:lessonId")
+        if (text.startsWith("บทเรียน:")) {
+            const category = text.replace("บทเรียน:", "").trim();
+            await handleLessonCategory(event.replyToken, userId, category);
+            return;
+        }
+        if (text.startsWith("ดูบทเรียน:")) {
+            const lessonId = text.replace("ดูบทเรียน:", "").trim();
+            await handleLessonView(event.replyToken, userId, lessonId);
+            return;
+        }
+
         // Check if user wants to edit a specific field (e.g., "แก้ไข:ชื่อไทย")
         if (text.startsWith("แก้ไข:")) {
             const fieldToEdit = text.replace("แก้ไข:", "").trim();
             await handleEditFieldStart(event.replyToken, userId, fieldToEdit);
-            return;
-        }
-
-        // Check if user is in editing mode
-        if (user?.currentGameType?.startsWith("editing:")) {
-            await handleEditFieldSubmit(event.replyToken, user, text);
-            return;
-        }
-
-        // Check if user is submitting a task
-        if (user?.currentGameType === "SUBMITTING_TASK") {
-            if (text === "ยกเลิก" || text === "cancel") {
-                await prisma.user.update({
-                    where: { id: user.id },
-                    data: { currentGameType: null, currentQuestionId: null, gameData: null },
-                });
-                await replyText(event.replyToken, "ยกเลิกการส่งงานแล้วครับ\n\nพิมพ์ \"เมนู\" เพื่อดูตัวเลือก");
-            } else {
-                await handleSubmitWriting(event.replyToken, user, text);
-            }
-            return;
-        }
-
-        // Check if user is in a game
-        if (user?.currentGameType && user?.currentQuestionId) {
-            await handleGameAnswer(event.replyToken, user, text);
             return;
         }
 
@@ -421,7 +572,7 @@ async function handleRegisterStart(replyToken: string, userId: string) {
     if (existingUser?.isRegistered) {
         await replyText(
             replyToken,
-            `สวัสดีครับ คุณ${existingUser.thaiName}! คุณลงทะเบียนแล้ว\n\nพิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้า\nหรือ "ข้อมูลส่วนตัว" เพื่อดูข้อมูลของคุณ`
+            `สวัสดี${p(existingUser.gender)} คุณ${existingUser.thaiName}! คุณลงทะเบียนแล้ว\n\nพิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้า\nหรือ "ข้อมูลส่วนตัว" เพื่อดูข้อมูลของคุณ`
         );
         return;
     }
@@ -452,6 +603,15 @@ async function handleRegistrationStep(
 
     if (currentStep.field === "consent") {
         value = answer.toUpperCase() === "YES" || answer === "ยินยอม";
+    } else if (currentStep.field === "gender") {
+        const lowerAnswer = answer.toLowerCase().trim();
+        if (lowerAnswer === "male" || lowerAnswer === "ชาย") {
+            value = "male";
+        } else if (lowerAnswer === "female" || lowerAnswer === "หญิง") {
+            value = "female";
+        } else {
+            value = "male"; // default
+        }
     } else if (currentStep.field === "thaiLevel") {
         const upperAnswer = answer.toUpperCase();
         if (["BEGINNER", "INTERMEDIATE", "ADVANCED"].includes(upperAnswer)) {
@@ -477,7 +637,7 @@ async function handleRegistrationStep(
 
         await replyText(
             replyToken,
-            `🎉 ลงทะเบียนเรียบร้อยครับ!\n\nยินดีต้อนรับ คุณ${user.thaiName}\n\nตอนนี้คุณสามารถ:\n• พิมพ์ "ส่งงาน" - ส่งภาระงาน\n• พิมพ์ "ขอผลป้อนกลับ" - ขอให้ AI ตรวจงาน\n• พิมพ์ "เกม" - เล่นเกมสะสมแต้ม\n• พิมพ์ "แดชบอร์ด" - ดูความก้าวหน้า\n\nหรือพิมพ์ "เมนู" เพื่อดูคำสั่งทั้งหมด`
+            `🎉 ลงทะเบียนเรียบร้อยแล้ว${p(user.gender)}!\n\nยินดีต้อนรับ คุณ${user.thaiName}\n\nตอนนี้คุณสามารถ:\n• พิมพ์ "ส่งงาน" - ส่งภาระงาน\n• พิมพ์ "ขอผลป้อนกลับ" - ขอให้ AI ตรวจงาน\n• พิมพ์ "เกม" - เล่นเกมสะสมแต้ม\n• พิมพ์ "แดชบอร์ด" - ดูความก้าวหน้า\n\nหรือพิมพ์ "เมนู" เพื่อดูคำสั่งทั้งหมด`
         );
         return;
     }
@@ -506,62 +666,96 @@ async function handleFeedbackStart(replyToken: string, userId: string) {
 
     await replyText(
         replyToken,
-        `สวัสดีครับ คุณ${user.thaiName}!\n\n📝 ส่งข้อความภาษาไทยที่ต้องการให้ตรวจมาได้เลยครับ\n\nผมจะช่วยตรวจและให้คำแนะนำ`
+        `สวัสดี${p(user.gender)} คุณ${user.thaiName}!\n\n📝 ส่งข้อความภาษาไทยที่ต้องการให้ตรวจมาได้เลย${p(user.gender)}\n\nจะช่วยตรวจและให้คำแนะนำ${p(user.gender)}`
     );
 }
 
 async function handleSubmitStart(replyToken: string, userId: string) {
-    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+    try {
+        const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
-    if (!user?.isRegistered) {
-        await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
-        return;
-    }
+        if (!user?.isRegistered) {
+            await replyText(replyToken, "กรุณาลงทะเบียนก่อนนะครับ\n\nพิมพ์ \"ลงทะเบียน\" เพื่อเริ่มต้น");
+            return;
+        }
 
-    const activeTask = await prisma.task.findFirst({
-        where: { isActive: true },
-        orderBy: { weekNumber: "desc" },
-    });
+        // Progressive Task System: หา Task ที่ User ยังไม่ได้ส่ง (ตามลำดับ Week)
+        let currentWeek = user.currentTaskWeek || 1;
 
-    if (!activeTask) {
-        await replyText(replyToken, "ขณะนี้ยังไม่มีภาระงานที่เปิดรับครับ กรุณารอประกาศจากอาจารย์");
-        return;
-    }
+        // Auto-advance: ข้าม Week ที่ส่งไปแล้ว (กรณี User เก่าก่อนระบบนี้)
+        let advancedWeek = false;
+        for (let i = 0; i < 50; i++) { // ป้องกัน infinite loop
+            const alreadySubmitted = await prisma.submission.findFirst({
+                where: {
+                    userId: user.id,
+                    task: { weekNumber: currentWeek },
+                },
+            });
+            if (!alreadySubmitted) break;
+            currentWeek++;
+            advancedWeek = true;
+        }
 
-    // Check if already submitted
-    const existingSubmission = await prisma.submission.findFirst({
-        where: { userId: user.id, taskId: activeTask.id },
-    });
+        // อัปเดต currentTaskWeek ถ้ามีการ advance
+        if (advancedWeek) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentTaskWeek: currentWeek },
+            });
+        }
 
-    if (existingSubmission) {
-        await replyText(
+        // หา Task ตาม Week ของ User (ไม่สนใจ isActive ก่อน เพื่อแยก case)
+        const task = await prisma.task.findFirst({
+            where: { weekNumber: currentWeek },
+        });
+
+        if (!task) {
+            // ไม่มี Task สำหรับ Week นี้ = ทำครบทุก Week แล้ว
+            await replyText(
+                replyToken,
+                `คุณทำครบทุกสัปดาห์แล้ว${p(user.gender)}! เก่งมาก!\n\nรอภาระงานใหม่จากอาจารย์${np(user.gender)}\n\nพิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้า`
+            );
+            return;
+        }
+
+        if (!task.isActive) {
+            // Task มีแต่ยังไม่เปิด
+            await replyText(
+                replyToken,
+                `ภาระงานสัปดาห์ที่ ${currentWeek} ยังไม่เปิดรับ${p(user.gender)}\n\nกรุณารอประกาศจากอาจารย์${np(user.gender)}`
+            );
+            return;
+        }
+
+        // Task มีและเปิดอยู่ → เข้าสู่โหมดส่งงาน
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                currentGameType: "SUBMITTING_TASK",
+                currentQuestionId: task.id,
+                gameData: JSON.stringify({
+                    taskId: task.id,
+                    weekNumber: task.weekNumber,
+                    minWords: task.minWords,
+                    maxWords: task.maxWords,
+                    title: task.title,
+                }),
+            },
+        });
+
+        const deadlineStr = task.deadline ? new Date(task.deadline).toLocaleDateString("th-TH") : "ไม่ระบุ";
+        const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://proficienthai.vercel.app').trim().replace(/\/+$/, '');
+        const taskUrl = `${baseUrl}/task/${task.slug}`;
+
+        await replyWithQuickReply(
             replyToken,
-            `คุณส่งงานสัปดาห์ที่ ${activeTask.weekNumber} แล้วครับ\n\n📊 คะแนน: ${existingSubmission.totalScore}/100\n\nพิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้า`
+            `📌 ภาระงานสัปดาห์ที่ ${task.weekNumber}\n\n${task.title}\n\n${task.description}\n\n📖 อ่านเนื้อหา:\n${taskUrl}\n\n✏️ ความยาว: ${task.minWords}-${task.maxWords} คำ\n📅 กำหนดส่ง: ${deadlineStr}\n\n✍️ พิมพ์งานเขียนของคุณได้เลย${p(user.gender)}\n(พิมพ์ "ยกเลิก" เพื่อยกเลิก)`,
+            [{ label: "ยกเลิก", text: "ยกเลิก" }]
         );
-        return;
+    } catch (error) {
+        console.error("Submit start error:", error);
+        await replyText(replyToken, "เกิดข้อผิดพลาดในการเริ่มส่งงานครับ กรุณาลองใหม่อีกครั้ง\n\nพิมพ์ \"ส่งงาน\" เพื่อลองใหม่");
     }
-
-    // Set state to SUBMITTING_TASK so next message is treated as a submission
-    await prisma.user.update({
-        where: { id: user.id },
-        data: {
-            currentGameType: "SUBMITTING_TASK",
-            currentQuestionId: activeTask.id,
-            gameData: JSON.stringify({
-                taskId: activeTask.id,
-                weekNumber: activeTask.weekNumber,
-                minWords: activeTask.minWords,
-                maxWords: activeTask.maxWords,
-                title: activeTask.title,
-            }),
-        },
-    });
-
-    await replyWithQuickReply(
-        replyToken,
-        `📌 ภาระงานสัปดาห์ที่ ${activeTask.weekNumber}\n\n${activeTask.title}\n\n${activeTask.description}\n\n📖 อ่านเนื้อหา: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://prime-pathfinder.vercel.app'}/task/${activeTask.slug}\n\n✏️ ความยาว: ${activeTask.minWords}-${activeTask.maxWords} คำ\n📅 กำหนดส่ง: ${activeTask.deadline.toLocaleDateString("th-TH")}\n\n✍️ พิมพ์งานเขียนของคุณได้เลยครับ\n(พิมพ์ "ยกเลิก" เพื่อยกเลิก)`,
-        [{ label: "ยกเลิก", text: "ยกเลิก" }]
-    );
 }
 
 async function handleSubmitWriting(replyToken: string, user: any, text: string) {
@@ -572,13 +766,24 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
         const minWords = gameData.minWords || 80;
         const maxWords = gameData.maxWords || 120;
 
-        // Count words (Thai: split by spaces and common delimiters)
-        const wordCount = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+        // Count words - Thai-aware: split by spaces, then estimate Thai words from continuous text
+        // Thai words average ~3 characters, so continuous Thai segments are estimated
+        const segments = text.split(/\s+/).filter((w: string) => w.length > 0);
+        let wordCount = 0;
+        for (const seg of segments) {
+            const thaiChars = (seg.match(/[\u0E00-\u0E7F]/g) || []).length;
+            if (thaiChars > 3) {
+                // Estimate Thai words: ~3 chars per word on average
+                wordCount += Math.ceil(thaiChars / 3);
+            } else {
+                wordCount += 1; // Non-Thai or very short segment = 1 word
+            }
+        }
 
         if (wordCount < Math.floor(minWords * 0.5)) {
             await replyWithQuickReply(
                 replyToken,
-                `⚠️ งานเขียนของคุณสั้นเกินไปครับ (${wordCount} คำ)\n\nความยาวขั้นต่ำ: ${minWords} คำ\n\nกรุณาเขียนเพิ่มเติมแล้วส่งใหม่ครับ`,
+                `⚠️ งานเขียนของคุณสั้นเกินไป${p(user?.gender)} (${wordCount} คำ)\n\nความยาวขั้นต่ำ: ${minWords} คำ\n\nกรุณาเขียนเพิ่มเติมแล้วส่งใหม่${p(user?.gender)}`,
                 [{ label: "ยกเลิก", text: "ยกเลิก" }]
             );
             return;
@@ -587,7 +792,7 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
         // Get the task for deadline check
         const task = await prisma.task.findUnique({ where: { id: taskId } });
         if (!task) {
-            await replyText(replyToken, "ไม่พบภาระงานนี้แล้วครับ กรุณาลองใหม่");
+            await replyText(replyToken, `ไม่พบภาระงานนี้แล้ว${p(user?.gender)} กรุณาลองใหม่`);
             await prisma.user.update({
                 where: { id: user.id },
                 data: { currentGameType: null, currentQuestionId: null, gameData: null },
@@ -615,16 +820,24 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
         if (onTime) pointsEarned += 10;
         if (earlyBonus) pointsEarned += 10;
 
-        // Clear submission state + award points in single update
+        // Clear submission state + advance to next week
         await prisma.user.update({
             where: { id: user.id },
             data: {
                 currentGameType: null,
                 currentQuestionId: null,
                 gameData: null,
-                totalPoints: { increment: pointsEarned },
+                currentTaskWeek: { increment: 1 },
             },
         });
+
+        // Award points with level-up detection
+        let levelUpMsg = "";
+        const pointResult = await addPoints(user.id, pointsEarned, 'SUBMIT_WRITING');
+        if (pointResult.leveledUp && pointResult.newLevel) {
+            const levelInfo = getLevelInfo(pointResult.newLevel);
+            levelUpMsg = `\n\n🎉 เลเวลอัป! Lv.${pointResult.newLevel} "${levelInfo.title}"`;
+        }
 
         // Try to generate AI feedback with practice examples
         let feedbackMsg = "";
@@ -679,10 +892,12 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
             data: { pointsEarned },
         });
 
+        const nextWeek = (gameData.weekNumber || 1) + 1;
         await replyWithQuickReply(
             replyToken,
-            `✅ ส่งงานสัปดาห์ที่ ${gameData.weekNumber} เรียบร้อยแล้วครับ!\n\n📝 จำนวนคำ: ${wordCount}\n${onTime ? "⏰ ส่งตรงเวลา" : "⚠️ ส่งเลยกำหนด"}\n${earlyBonus ? "🌟 โบนัสส่งก่อนเวลา!" : ""}\n💰 +${pointsEarned} คะแนน${feedbackMsg}`,
+            `✅ ส่งงานสัปดาห์ที่ ${gameData.weekNumber} เรียบร้อยแล้ว${p(user?.gender)}!\n\n📝 จำนวนคำ: ${wordCount}\n${onTime ? "⏰ ส่งตรงเวลา" : "⚠️ ส่งเลยกำหนด"}\n${earlyBonus ? "🌟 โบนัสส่งก่อนเวลา!" : ""}\n💰 +${pointsEarned} คะแนน${levelUpMsg}${feedbackMsg}\n\n🔓 ปลดล็อคสัปดาห์ที่ ${nextWeek} แล้ว!\nพิมพ์ "ส่งงาน" เพื่อดูภาระงานถัดไป`,
             [
+                { label: "ส่งงานต่อ", text: "ส่งงาน" },
                 { label: "แดชบอร์ด", text: "แดชบอร์ด" },
                 { label: "เมนู", text: "เมนู" },
             ]
@@ -693,7 +908,7 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
             where: { id: user.id },
             data: { currentGameType: null, currentQuestionId: null, gameData: null },
         });
-        await replyText(replyToken, "เกิดข้อผิดพลาดในการส่งงานครับ กรุณาลองใหม่อีกครั้ง\n\nพิมพ์ \"ส่งงาน\" เพื่อลองใหม่");
+        await replyText(replyToken, `เกิดข้อผิดพลาดในการส่งงาน${p(user?.gender)} กรุณาลองใหม่อีกครั้ง\n\nพิมพ์ "ส่งงาน" เพื่อลองใหม่`);
     }
 }
 
@@ -729,6 +944,8 @@ async function handleDashboard(replyToken: string, userId: string) {
 
     const totalTasks = await prisma.task.count();
 
+    const levelInfo = getLevelInfo(user.currentLevel);
+    const displayTitle = getDisplayTitle(user);
     const dashboardFlex = createDashboardFlex({
         thaiName: user.thaiName || "ผู้ใช้",
         level: user.currentLevel,
@@ -737,6 +954,7 @@ async function handleDashboard(replyToken: string, userId: string) {
         totalTasks,
         vocabularyCount: user.vocabularyProgress.length,
         nextLevelPoints: getPointsForNextLevel(user.currentLevel),
+        title: displayTitle,
     });
 
     await lineClient.replyMessage({
@@ -753,6 +971,7 @@ async function handleProfile(replyToken: string, userId: string) {
         return;
     }
 
+    const profileDisplayTitle = getDisplayTitle(user);
     const profileFlex = createProfileFlex({
         chineseName: user.chineseName || "-",
         thaiName: user.thaiName || "-",
@@ -760,6 +979,9 @@ async function handleProfile(replyToken: string, userId: string) {
         email: user.email || "-",
         nationality: user.nationality || "-",
         thaiLevel: user.thaiLevel,
+        level: user.currentLevel,
+        title: profileDisplayTitle,
+        totalPoints: user.totalPoints,
     });
 
     await lineClient.replyMessage({
@@ -778,16 +1000,18 @@ async function handleHelp(replyToken: string, userId: string) {
             messages: [menuFlex] as any,
         });
     } else {
-        await replyText(replyToken, `ยินดีต้อนรับสู่ ProficienThAI! 👋
+        await replyText(replyToken, `${getTimeGreeting()} ยินดีต้อนรับสู่ ProficienThAI! 👋
+
+ฉันคือ "${BOT_NAME}" ผู้ช่วยเรียนภาษาไทยของคุณ 📚
 
 📌 คำสั่งสำหรับผู้ใช้ใหม่:
-• "ลงทะเบียน" - เริ่มลงทะเบียนใช้งาน
+• พิมพ์ "ลงทะเบียน" เพื่อเริ่มต้นใช้งาน
 
 เมื่อลงทะเบียนแล้วจะสามารถ:
-✅ ส่งงานเขียน
-✅ ขอผลป้อนกลับจาก AI
-✅ เล่นเกมฝึกภาษา
-✅ สะสมแต้มและ Badge`);
+✅ เล่นเกมฝึกภาษาไทย 15+ เกม
+✅ ส่งงานเขียนและขอ feedback จาก AI
+✅ สะสมแต้มและเลเวลอัป
+✅ แข่งกับเพื่อนใน Leaderboard`);
     }
 }
 
@@ -818,18 +1042,29 @@ async function handleGeneralConversation(replyToken: string, userId: string, tex
 
         // For non-greetings, use AI with Quick Reply buttons
         const context = user?.isRegistered
-            ? `User: ${user.thaiName}, Level ${user.currentLevel}. Keep response SHORT (1-2 sentences max). No emoji.`
-            : "User not registered. Keep response SHORT. No emoji.";
+            ? `You are "${BOT_NAME}", a friendly Thai language tutor. User: ${user.thaiName}, Level ${user.currentLevel}. Keep response SHORT (1-2 sentences max). Be warm and encouraging.`
+            : `You are "${BOT_NAME}", a friendly Thai language tutor. User not registered. Keep response SHORT. Suggest typing "ลงทะเบียน" to start.`;
 
         console.log("[handleGeneralConversation] Calling AI with context:", context);
-        const response = await generateConversationResponse(text, context);
+        let response = await generateConversationResponse(text, context);
         console.log("[handleGeneralConversation] AI response received:", response.substring(0, 50));
 
         if (user?.isRegistered) {
-            await prisma.user.update({
-                where: { id: user.id },
-                data: { totalPoints: { increment: POINTS.DAILY_CHAT } },
-            });
+            // Limit daily chat points to once per day
+            const todayKey = `daily_chat_${user.id}_${new Date().toISOString().split('T')[0]}`;
+            const alreadyAwarded = await prisma.systemConfig.findUnique({ where: { key: todayKey } });
+            if (!alreadyAwarded) {
+                await prisma.systemConfig.upsert({
+                    where: { key: todayKey },
+                    update: { value: '1' },
+                    create: { key: todayKey, value: '1' },
+                });
+                const result = await addPoints(user.id, POINTS.DAILY_CHAT, 'DAILY_CHAT');
+                if (result.leveledUp && result.newLevel) {
+                    const levelInfo = getLevelInfo(result.newLevel);
+                    response += `\n\n🎉 เลเวลอัป! Lv.${result.newLevel} "${levelInfo.title}"`;
+                }
+            }
         }
 
         // Reply with Quick Reply buttons for easy navigation
@@ -912,7 +1147,7 @@ async function handleEditFieldSubmit(replyToken: string, user: any, newValue: st
             where: { id: user.id },
             data: { currentGameType: null },
         });
-        await replyText(replyToken, "ยกเลิกการแก้ไขแล้วครับ");
+        await replyText(replyToken, `ยกเลิกการแก้ไขแล้ว${p(user?.gender)}`);
         return;
     }
 
@@ -933,7 +1168,7 @@ async function handleEditFieldSubmit(replyToken: string, user: any, newValue: st
 
     await replyWithQuickReply(
         replyToken,
-        `อัพเดท${fieldLabel}เป็น "${newValue}" เรียบร้อยแล้วครับ`,
+        `อัพเดท${fieldLabel}เป็น "${newValue}" เรียบร้อยแล้ว${p(user?.gender)}`,
         [
             { label: "แก้ไขเพิ่ม", text: "แก้ไข" },
             { label: "ดูข้อมูล", text: "ข้อมูลส่วนตัว" },
@@ -942,60 +1177,91 @@ async function handleEditFieldSubmit(replyToken: string, user: any, newValue: st
 }
 
 async function handleFillBlankGameStart(replyToken: string, userId: string) {
-    const count = await prisma.fillBlankQuestion.count();
+    // Level Gate check
+    const userLevel = await getUserLevel(userId);
+    const lockMsg = checkLevelGate("FILL_BLANK", userLevel);
+    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
 
-    if (count === 0) {
+    const numQ = GAME_TYPES.FILL_BLANK.questionsPerRound;
+
+    // Load N random questions by shuffling IDs
+    const allIds = await prisma.fillBlankQuestion.findMany({ select: { id: true } });
+    if (allIds.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
 
-    const randomIndex = Math.floor(Math.random() * count);
-    const question = await prisma.fillBlankQuestion.findFirst({
-        skip: randomIndex,
-    });
+    const shuffled = allIds.sort(() => Math.random() - 0.5);
+    const selectedIds = shuffled.slice(0, numQ).map(q => q.id);
+    const questions = await prisma.fillBlankQuestion.findMany({ where: { id: { in: selectedIds } } });
 
-    if (!question) {
+    if (questions.length === 0) {
         await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
         return;
     }
 
+    const roundCount = await getDailyRoundCount(userId, "FILL_BLANK");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("FILL_BLANK", questions.map(q => q.id), multiplier);
+
+    const question = questions[0];
+
     await prisma.user.update({
         where: { lineUserId: userId },
-        data: { currentGameType: "FILL_BLANK", currentQuestionId: question.id },
+        data: {
+            currentGameType: "FILL_BLANK",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({ session }),
+        },
     });
 
     const fillBlankFlex = createFillBlankGameFlex({
         sentence: question.sentence,
-        questionNumber: randomIndex + 1,
+        questionNumber: 1,
     });
 
-    await lineClient.replyMessage({
-        replyToken,
-        messages: [fillBlankFlex] as any,
-    });
+    const messages: any[] = [];
+    if (question.imageUrl) {
+        messages.push({ type: "image", originalContentUrl: question.imageUrl, previewImageUrl: question.imageUrl });
+    }
+    if (multiplier < 1) {
+        messages.push(createTextMessage(getDailyLimitMessage(roundCount, "เติมคำ")));
+    }
+    messages.push(fillBlankFlex);
+    await lineClient.replyMessage({ replyToken, messages });
 }
 
 async function handleMultipleChoiceGameStart(replyToken: string, userId: string) {
-    const count = await prisma.multipleChoiceQuestion.count();
+    const numQ = 5; // Default 5 questions per round for legacy multiple choice
 
-    if (count === 0) {
+    const allIds = await prisma.multipleChoiceQuestion.findMany({ select: { id: true } });
+    if (allIds.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ หรือลองเกมอื่น");
         return;
     }
 
-    const randomIndex = Math.floor(Math.random() * count);
-    const question = await prisma.multipleChoiceQuestion.findFirst({
-        skip: randomIndex,
-    });
+    const shuffled = allIds.sort(() => Math.random() - 0.5);
+    const selectedIds = shuffled.slice(0, numQ).map(q => q.id);
+    const questions = await prisma.multipleChoiceQuestion.findMany({ where: { id: { in: selectedIds } } });
 
-    if (!question) {
+    if (questions.length === 0) {
         await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
         return;
     }
 
+    const roundCount = await getDailyRoundCount(userId, "MULTIPLE_CHOICE");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("MULTIPLE_CHOICE", questions.map(q => q.id), multiplier);
+
+    const question = questions[0];
+
     await prisma.user.update({
         where: { lineUserId: userId },
-        data: { currentGameType: "MULTIPLE_CHOICE", currentQuestionId: question.id },
+        data: {
+            currentGameType: "MULTIPLE_CHOICE",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify({ session }),
+        },
     });
 
     const multipleChoiceFlex = createMultipleChoiceGameFlex({
@@ -1004,49 +1270,59 @@ async function handleMultipleChoiceGameStart(replyToken: string, userId: string)
         optionB: question.optionB,
         optionC: question.optionC,
         optionD: question.optionD,
-        questionNumber: randomIndex + 1,
-        totalQuestions: count,
+        questionNumber: 1,
+        totalQuestions: questions.length,
     });
 
-    await lineClient.replyMessage({
-        replyToken,
-        messages: [multipleChoiceFlex] as any,
-    });
+    const messages: any[] = [];
+    if (multiplier < 1) {
+        messages.push(createTextMessage(getDailyLimitMessage(roundCount, "เลือกตอบ")));
+    }
+    messages.push(multipleChoiceFlex);
+    await lineClient.replyMessage({ replyToken, messages });
 }
 
 async function handleSentenceGameStart(replyToken: string, userId: string) {
-    const count = await prisma.sentenceConstructionPair.count();
+    // Level Gate check
+    const userLevel = await getUserLevel(userId);
+    const lockMsg = checkLevelGate("COMPOSE_SENTENCE", userLevel);
+    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
 
-    if (count === 0) {
+    const numQ = GAME_TYPES.COMPOSE_SENTENCE.questionsPerRound;
+    const pairs = await getRandomSentencePairs(userId, numQ);
+
+    if (pairs.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ หรือลองเกมอื่น");
         return;
     }
 
-    const randomIndex = Math.floor(Math.random() * count);
-    const pair = await prisma.sentenceConstructionPair.findFirst({
-        skip: randomIndex,
-    });
+    const roundCount = await getDailyRoundCount(userId, "SENTENCE_WRITING");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("SENTENCE_WRITING", pairs.map(p => p.id), multiplier);
 
-    if (!pair) {
-        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
-        return;
-    }
+    const pair = pairs[0];
 
     await prisma.user.update({
         where: { lineUserId: userId },
-        data: { currentGameType: "SENTENCE_WRITING", currentQuestionId: pair.id },
+        data: {
+            currentGameType: "SENTENCE_WRITING",
+            currentQuestionId: pair.id,
+            gameData: JSON.stringify({ session }),
+        },
     });
 
     const sentenceFlex = createSentenceGameFlex({
         word1: pair.word1,
         word2: pair.word2,
-        questionNumber: randomIndex + 1,
+        questionNumber: 1,
     });
 
-    await lineClient.replyMessage({
-        replyToken,
-        messages: [sentenceFlex] as any,
-    });
+    const messages: any[] = [];
+    if (multiplier < 1) {
+        messages.push(createTextMessage(getDailyLimitMessage(roundCount, "แต่งประโยค")));
+    }
+    messages.push(sentenceFlex);
+    await lineClient.replyMessage({ replyToken, messages });
 }
 
 async function handleLeaderboard(replyToken: string, userId: string) {
@@ -1065,11 +1341,12 @@ async function handleLeaderboard(replyToken: string, userId: string) {
             thaiName: true,
             totalPoints: true,
             currentLevel: true,
+            title: true,
         },
     });
 
     if (topUsers.length === 0) {
-        await replyText(replyToken, "ยังไม่มีข้อมูลผู้ใช้ในระบบครับ");
+        await replyText(replyToken, `ยังไม่มีข้อมูลผู้ใช้ในระบบ${p(user?.gender)}`);
         return;
     }
 
@@ -1086,10 +1363,12 @@ async function handleLeaderboard(replyToken: string, userId: string) {
             thaiName: u.thaiName || "Unknown",
             totalPoints: u.totalPoints,
             currentLevel: u.currentLevel,
+            title: getDisplayTitle(u),
         })),
         myRank,
         myPoints: user.totalPoints,
         myLevel: user.currentLevel,
+        myTitle: getDisplayTitle(user),
     });
 
     await lineClient.replyMessage({
@@ -1132,18 +1411,26 @@ async function handleSpinWheel(replyToken: string, userId: string) {
         }
     }
 
+    // Update last spin time
     await prisma.user.update({
         where: { id: user.id },
-        data: {
-            totalPoints: { increment: reward.value },
-            lastSpinAt: now,
-        },
+        data: { lastSpinAt: now },
     });
+
+    // Award points with level-up detection
+    let levelUpMsg = "";
+    if (reward.value > 0) {
+        const result = await addPoints(user.id, reward.value, 'SPIN_WHEEL');
+        if (result.leveledUp && result.newLevel) {
+            const levelInfo = getLevelInfo(result.newLevel);
+            levelUpMsg = `\n\n🎉 เลเวลอัป! Lv.${result.newLevel} "${levelInfo.title}"`;
+        }
+    }
 
     const newTotal = user.totalPoints + reward.value;
 
     const spinFlex = createSpinWheelResultFlex({
-        reward: reward.name,
+        reward: reward.name + (levelUpMsg ? levelUpMsg : ""),
         points: reward.value,
         totalPoints: newTotal,
         isWin: reward.value > 0,
@@ -1159,7 +1446,7 @@ async function handleShowAnswer(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.currentGameType || !user?.currentQuestionId) {
-        await replyText(replyToken, "กรุณาเริ่มเล่นเกมก่อนครับ พิมพ์ \"ฝึกฝน\" เพื่อเลือกเกม");
+        await replyText(replyToken, `กรุณาเริ่มเล่นเกมก่อน${p(user?.gender)} พิมพ์ "ฝึกฝน" เพื่อเลือกเกม`);
         return;
     }
 
@@ -1216,7 +1503,7 @@ async function handleShowAnswer(replyToken: string, userId: string) {
             where: { id: user.currentQuestionId },
         });
         if (pair) {
-            answerText = `✍️ เกมเขียนประโยคไม่มีคำตอบตายตัว\n\nลองแต่งประโยคที่มีคำว่า "${pair.word1}" และ "${pair.word2}" ได้เลยครับ`;
+            answerText = `✍️ เกมเขียนประโยคไม่มีคำตอบตายตัว\n\nลองแต่งประโยคที่มีคำว่า "${pair.word1}" และ "${pair.word2}" ได้เลย${p(user?.gender)}`;
         }
     }
     else if (gameType === "SUMMARIZE") {
@@ -1242,67 +1529,658 @@ async function handleShowAnswer(replyToken: string, userId: string) {
         }
     }
 
-    // Reset game state after showing answer
-    await prisma.user.update({
-        where: { lineUserId: userId },
-        data: { currentGameType: null, currentQuestionId: null, gameData: null },
-    });
+    // Check for session
+    const session: GameSessionState | null = gameData.session || null;
+    const wasPendingWrong = gameData.pendingWrong === true;
 
-    await replyWithQuickReply(
-        replyToken,
-        answerText || "ไม่พบคำตอบครับ",
-        [
-            { label: "เล่นต่อ", text: getGameStartCommand(gameType) },
-            { label: "เกมอื่น", text: "ฝึกฝน" },
-            { label: "เมนู", text: "เมนู" },
-        ]
-    );
+    // Record question history (showed answer = wrong) — skip if already recorded via pendingWrong
+    if (!wasPendingWrong && user.currentQuestionId && gameType) {
+        try {
+            await recordQuestionAnswered(user.lineUserId, user.currentQuestionId, gameType, false);
+        } catch (e) {
+            console.error("Failed to record question history:", e);
+        }
+    }
+
+    if (session) {
+        // ===== SESSION MODE: show answer, advance session =====
+        // Clear pending state before advancing
+        delete gameData.pendingWrong;
+        delete gameData.hintUsedForCurrent;
+        const updatedSession = advanceSession(session, false);
+
+        if (isSessionComplete(updatedSession)) {
+            // Session complete
+            await prisma.user.update({
+                where: { lineUserId: userId },
+                data: { currentGameType: null, currentQuestionId: null, gameData: null },
+            });
+
+            try {
+                await prisma.languageGameSession.create({
+                    data: {
+                        odUserId: user.lineUserId,
+                        gameType: gameType as any,
+                        questions: updatedSession.questionIds,
+                        answers: updatedSession.answers.map(a => a.correct ? "correct" : "wrong"),
+                        currentIndex: updatedSession.totalQuestions,
+                        isCompleted: true,
+                        correctCount: updatedSession.correctCount,
+                        totalCount: updatedSession.totalQuestions,
+                        pointsEarned: updatedSession.pointsEarned,
+                        completedAt: new Date(),
+                    },
+                });
+            } catch (e) {
+                console.error("Failed to create game session record:", e);
+            }
+
+            let levelUpMsg = "";
+            if (updatedSession.pointsEarned > 0) {
+                const result = await addPoints(user.id, updatedSession.pointsEarned, 'GAME_CORRECT');
+                if (result.leveledUp && result.newLevel) {
+                    const levelInfo = getLevelInfo(result.newLevel);
+                    levelUpMsg = `\n\n🎉 เลเวลอัป! Lv.${result.newLevel} "${levelInfo.title}"`;
+                }
+            }
+
+            // Check for achievement title
+            let titleMsg = "";
+            try {
+                const titleResult = await checkAndAwardTitle(user.lineUserId, gameType);
+                if (titleResult) {
+                    titleMsg = `\n\n🏅 ได้รับฉายา "${titleResult.emoji} ${titleResult.newTitle}"!`;
+                }
+            } catch (e) {
+                console.error("Failed to check title:", e);
+            }
+
+            const summaryMsg = formatSessionSummary(updatedSession);
+            await replyWithQuickReply(
+                replyToken,
+                `${answerText || "ไม่พบคำตอบ"}\n\n${summaryMsg}${levelUpMsg}${titleMsg}`,
+                [
+                    { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
+                    { label: "เกมอื่น", text: "ฝึกฝน" },
+                    { label: "เมนู", text: "เมนู" },
+                ]
+            );
+        } else {
+            // Save updated session, show answer + "ข้อต่อไป"
+            await prisma.user.update({
+                where: { lineUserId: userId },
+                data: {
+                    gameData: JSON.stringify({ ...gameData, session: updatedSession }),
+                },
+            });
+
+            const progressMsg = `📊 ${getSessionProgress(updatedSession)} | ถูก ${updatedSession.correctCount}/${updatedSession.currentIndex}`;
+            await replyWithQuickReply(
+                replyToken,
+                `${answerText || "ไม่พบคำตอบ"}\n\n${progressMsg}`,
+                [
+                    { label: "ข้อต่อไป ▶", text: NEXT_QUESTION_CMD },
+                    { label: "ออก", text: "ฝึกฝน" },
+                ]
+            );
+        }
+    } else {
+        // ===== LEGACY MODE: reset game state after showing answer =====
+        await prisma.user.update({
+            where: { lineUserId: userId },
+            data: { currentGameType: null, currentQuestionId: null, gameData: null },
+        });
+
+        await replyWithQuickReply(
+            replyToken,
+            answerText || "ไม่พบคำตอบ",
+            [
+                { label: "เล่นต่อ", text: getGameStartCommand(gameType) },
+                { label: "เกมอื่น", text: "ฝึกฝน" },
+                { label: "เมนู", text: "เมนู" },
+            ]
+        );
+    }
 }
 
 async function handleSkipQuestion(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.currentGameType || !user?.currentQuestionId) {
-        await replyText(replyToken, "ไม่มีคำถามให้ข้ามครับ พิมพ์ \"ฝึกฝน\" เพื่อเริ่มเล่น");
+        await replyText(replyToken, `ไม่มีคำถามให้ข้าม${p(user?.gender)} พิมพ์ "ฝึกฝน" เพื่อเริ่มเล่น`);
         return;
     }
 
     const gameType = user.currentGameType;
+    let gameData: any = {};
+    try { gameData = user.gameData ? JSON.parse(user.gameData) : {}; } catch { gameData = {}; }
+    const wasPendingWrong = gameData.pendingWrong === true;
+    const session: GameSessionState | null = gameData.session || null;
 
-    // Reset current question and start a new one
+    if (session) {
+        // ===== SESSION MODE: skip = mark as wrong, advance =====
+        // Clear pending state before advancing
+        delete gameData.pendingWrong;
+        delete gameData.hintUsedForCurrent;
+        const updatedSession = advanceSession(session, false);
+
+        // Record question history (skipped = wrong) — skip if already recorded via pendingWrong
+        if (!wasPendingWrong) {
+            try {
+                await recordQuestionAnswered(user.lineUserId, user.currentQuestionId, gameType, false);
+            } catch (e) {
+                console.error("Failed to record question history:", e);
+            }
+        }
+
+        if (isSessionComplete(updatedSession)) {
+            // Session complete
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentGameType: null, currentQuestionId: null, gameData: null },
+            });
+
+            try {
+                await prisma.languageGameSession.create({
+                    data: {
+                        odUserId: user.lineUserId,
+                        gameType: gameType as any,
+                        questions: updatedSession.questionIds,
+                        answers: updatedSession.answers.map(a => a.correct ? "correct" : "wrong"),
+                        currentIndex: updatedSession.totalQuestions,
+                        isCompleted: true,
+                        correctCount: updatedSession.correctCount,
+                        totalCount: updatedSession.totalQuestions,
+                        pointsEarned: updatedSession.pointsEarned,
+                        completedAt: new Date(),
+                    },
+                });
+            } catch (e) {
+                console.error("Failed to create game session record:", e);
+            }
+
+            let levelUpMsg = "";
+            if (updatedSession.pointsEarned > 0) {
+                const result = await addPoints(user.id, updatedSession.pointsEarned, 'GAME_CORRECT');
+                if (result.leveledUp && result.newLevel) {
+                    const levelInfo = getLevelInfo(result.newLevel);
+                    levelUpMsg = `\n\n🎉 เลเวลอัป! Lv.${result.newLevel} "${levelInfo.title}"`;
+                }
+            }
+
+            // Check for achievement title
+            let titleMsg = "";
+            try {
+                const titleResult = await checkAndAwardTitle(user.lineUserId, gameType);
+                if (titleResult) {
+                    titleMsg = `\n\n🏅 ได้รับฉายา "${titleResult.emoji} ${titleResult.newTitle}"!`;
+                }
+            } catch (e) {
+                console.error("Failed to check title:", e);
+            }
+
+            const summaryMsg = formatSessionSummary(updatedSession);
+            await replyWithQuickReply(
+                replyToken,
+                `⏭️ ข้ามข้อนี้\n\n${summaryMsg}${levelUpMsg}${titleMsg}`,
+                [
+                    { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
+                    { label: "เกมอื่น", text: "ฝึกฝน" },
+                    { label: "เมนู", text: "เมนู" },
+                ]
+            );
+        } else {
+            // Save updated session, show "ข้อต่อไป"
+            await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    gameData: JSON.stringify({ ...gameData, session: updatedSession }),
+                },
+            });
+
+            const progressMsg = `📊 ${getSessionProgress(updatedSession)} | ถูก ${updatedSession.correctCount}/${updatedSession.currentIndex}`;
+            await replyWithQuickReply(
+                replyToken,
+                `⏭️ ข้ามข้อนี้\n\n${progressMsg}`,
+                [
+                    { label: "ข้อต่อไป ▶", text: NEXT_QUESTION_CMD },
+                    { label: "ออก", text: "ฝึกฝน" },
+                ]
+            );
+        }
+    } else {
+        // ===== LEGACY MODE: reset and start new question =====
+        await prisma.user.update({
+            where: { lineUserId: userId },
+            data: { currentGameType: null, currentQuestionId: null, gameData: null },
+        });
+
+        const gameHandlers: Record<string, () => Promise<void>> = {
+            "VOCAB_MATCH": () => handleVocabMatchGameStart(replyToken, userId),
+            "VOCAB_MEANING": () => handleVocabMeaningGameStart(replyToken, userId),
+            "VOCAB_OPPOSITE": () => handleVocabOppositeGameStart(replyToken, userId),
+            "VOCAB_SYNONYM": () => handleVocabSynonymGameStart(replyToken, userId),
+            "FILL_BLANK": () => handleFillBlankGameStart(replyToken, userId),
+            "FIX_SENTENCE": () => handleFixSentenceGameStart(replyToken, userId),
+            "ARRANGE_SENTENCE": () => handleArrangeSentenceGameStart(replyToken, userId),
+            "SPEED_GRAMMAR": () => handleSpeedGrammarGameStart(replyToken, userId),
+            "READ_ANSWER": () => handleReadAnswerGameStart(replyToken, userId),
+            "SENTENCE_WRITING": () => handleSentenceGameStart(replyToken, userId),
+            "SUMMARIZE": () => handleSummarizeGameStart(replyToken, userId),
+            "CONTINUE_STORY": () => handleContinueStoryGameStart(replyToken, userId),
+            "RACE_CLOCK": () => handleRaceClockGameStart(replyToken, userId),
+            "MULTIPLE_CHOICE": () => handleMultipleChoiceGameStart(replyToken, userId),
+        };
+
+        const handler = gameHandlers[gameType];
+        if (handler) {
+            await handler();
+        } else {
+            await replyText(replyToken, `ข้ามคำถามแล้ว${p(user?.gender)} พิมพ์ "ฝึกฝน" เพื่อเลือกเกม`);
+        }
+    }
+}
+
+// =====================
+// Hint Handler — Show hint for current question
+// =====================
+
+async function handleHint(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.currentGameType || !user?.currentQuestionId) {
+        await replyText(replyToken, `ไม่มีคำถามที่กำลังเล่นอยู่${p(user?.gender)}`);
+        return;
+    }
+
+    const gameType = user.currentGameType;
+    const questionId = user.currentQuestionId;
+    let gameData: any = {};
+    try { gameData = user.gameData ? JSON.parse(user.gameData) : {}; } catch { gameData = {}; }
+
+    // Look up hint from DB based on game type
+    let hintText: string | null = null;
+
+    if (gameType === "VOCAB_MATCH" || gameType === "VOCAB_MEANING") {
+        const q = await prisma.vocabMatchQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "VOCAB_OPPOSITE") {
+        const q = await prisma.vocabOppositeQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "VOCAB_SYNONYM") {
+        const q = await prisma.vocabSynonymQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "FILL_BLANK") {
+        const q = await prisma.fillBlankQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "FIX_SENTENCE") {
+        const q = await prisma.fixSentenceQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "ARRANGE_SENTENCE") {
+        const q = await prisma.arrangeSentenceQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "READ_ANSWER") {
+        const q = await prisma.readAnswerQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "THAI_IDIOM") {
+        const q = await prisma.thaiIdiomQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "THAI_CULTURE") {
+        const q = await prisma.thaiCultureQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "SPEED_GRAMMAR") {
+        const q = await prisma.speedGrammarQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "SUMMARIZE") {
+        const q = await prisma.summarizeQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    } else if (gameType === "CONTINUE_STORY") {
+        const q = await prisma.continueStoryQuestion.findUnique({ where: { id: questionId } });
+        hintText = q?.hint || null;
+    }
+
+    // Mark hint as used in gameData
+    gameData.hintUsedForCurrent = true;
     await prisma.user.update({
-        where: { lineUserId: userId },
-        data: { currentGameType: null, currentQuestionId: null, gameData: null },
+        where: { id: user.id },
+        data: { gameData: JSON.stringify(gameData) },
     });
 
-    // Redirect to the same game type to get a new question
-    const gameHandlers: Record<string, () => Promise<void>> = {
-        // Vocabulary Games
-        "VOCAB_MATCH": () => handleVocabMatchGameStart(replyToken, userId),
-        "VOCAB_MEANING": () => handleVocabMeaningGameStart(replyToken, userId),
-        "VOCAB_OPPOSITE": () => handleVocabOppositeGameStart(replyToken, userId),
-        "VOCAB_SYNONYM": () => handleVocabSynonymGameStart(replyToken, userId),
-        // Grammar Games
-        "FILL_BLANK": () => handleFillBlankGameStart(replyToken, userId),
-        "FIX_SENTENCE": () => handleFixSentenceGameStart(replyToken, userId),
-        "ARRANGE_SENTENCE": () => handleArrangeSentenceGameStart(replyToken, userId),
-        "SPEED_GRAMMAR": () => handleSpeedGrammarGameStart(replyToken, userId),
-        // Reading & Writing Games
-        "READ_ANSWER": () => handleReadAnswerGameStart(replyToken, userId),
-        "SENTENCE_WRITING": () => handleSentenceGameStart(replyToken, userId),
-        "SUMMARIZE": () => handleSummarizeGameStart(replyToken, userId),
-        "CONTINUE_STORY": () => handleContinueStoryGameStart(replyToken, userId),
-        // Fun Games
-        "RACE_CLOCK": () => handleRaceClockGameStart(replyToken, userId),
-        // Legacy
-        "MULTIPLE_CHOICE": () => handleMultipleChoiceGameStart(replyToken, userId),
-    };
+    const displayHint = hintText
+        ? `💡 คำใบ้: ${hintText}`
+        : `💡 ไม่มีคำใบ้สำหรับข้อนี้${p(user?.gender)}`;
+    const hintNote = hintText ? "\n\n⚠️ ถ้าตอบถูกหลังใช้คำใบ้ คะแนนจะลด 50%" : "";
 
-    const handler = gameHandlers[gameType];
-    if (handler) {
-        await handler();
-    } else {
-        await replyText(replyToken, "ข้ามคำถามแล้วครับ พิมพ์ \"ฝึกฝน\" เพื่อเลือกเกม");
+    await replyWithQuickReply(
+        replyToken,
+        `${displayHint}${hintNote}\n\nพิมพ์คำตอบใหม่ได้เลย${p(user?.gender)}`,
+        [
+            { label: "เฉลย", text: "เฉลย" },
+            { label: "ข้อต่อไป ▶", text: NEXT_QUESTION_CMD },
+            { label: "ออก", text: "ฝึกฝน" },
+        ]
+    );
+}
+
+// =====================
+// Session Next Question Handler
+// =====================
+
+async function handleSessionNext(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+    if (!user?.currentGameType || !user?.gameData) {
+        await replyText(replyToken, `ไม่มีเกมที่กำลังเล่นอยู่${p(user?.gender)}\n\nพิมพ์ "ฝึกฝน" เพื่อเริ่มเล่น`);
+        return;
+    }
+
+    let gameData: any = {};
+    try { gameData = JSON.parse(user.gameData); } catch { gameData = {}; }
+
+    let session: GameSessionState | null = gameData.session || null;
+
+    // Handle pendingWrong: advance session marking as wrong, then proceed to next question
+    if (session && gameData.pendingWrong) {
+        const gameType = user.currentGameType;
+        session = advanceSession(session, false);
+        delete gameData.pendingWrong;
+        delete gameData.hintUsedForCurrent;
+        gameData.session = session;
+
+        if (isSessionComplete(session)) {
+            // Session complete after this skipped wrong answer
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentGameType: null, currentQuestionId: null, gameData: null },
+            });
+
+            try {
+                await prisma.languageGameSession.create({
+                    data: {
+                        odUserId: user.lineUserId,
+                        gameType: gameType as any,
+                        questions: session.questionIds,
+                        answers: session.answers.map((a: any) => a.correct ? "correct" : "wrong"),
+                        currentIndex: session.totalQuestions,
+                        isCompleted: true,
+                        correctCount: session.correctCount,
+                        totalCount: session.totalQuestions,
+                        pointsEarned: session.pointsEarned,
+                        completedAt: new Date(),
+                    },
+                });
+            } catch (e) {
+                console.error("Failed to create game session record:", e);
+            }
+
+            let levelUpMsg = "";
+            if (session.pointsEarned > 0) {
+                const result = await addPoints(user.id, session.pointsEarned, 'GAME_CORRECT');
+                if (result.leveledUp && result.newLevel) {
+                    const levelInfo = getLevelInfo(result.newLevel);
+                    levelUpMsg = `\n\n🎉 เลเวลอัป! Lv.${result.newLevel} "${levelInfo.title}"`;
+                }
+            }
+
+            // Check for achievement title
+            let titleMsg = "";
+            try {
+                const titleResult = await checkAndAwardTitle(user.lineUserId, gameType);
+                if (titleResult) {
+                    titleMsg = `\n\n🏅 ได้รับฉายา "${titleResult.emoji} ${titleResult.newTitle}"!`;
+                }
+            } catch (e) {
+                console.error("Failed to check title:", e);
+            }
+
+            const summaryMsg = formatSessionSummary(session);
+            await replyWithQuickReply(
+                replyToken,
+                `${summaryMsg}${levelUpMsg}${titleMsg}`,
+                [
+                    { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
+                    { label: "เกมอื่น", text: "ฝึกฝน" },
+                    { label: "เมนู", text: "เมนู" },
+                ]
+            );
+            return;
+        }
+        // Not complete — session has been advanced, continue to load next question below
+    }
+
+    if (!session || isSessionComplete(session)) {
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { currentGameType: null, currentQuestionId: null, gameData: null },
+        });
+        await replyText(replyToken, `จบเกมแล้ว${p(user?.gender)}\n\nพิมพ์ "ฝึกฝน" เพื่อเล่นเกมอื่น`);
+        return;
+    }
+
+    const questionId = getCurrentQuestionId(session);
+    if (!questionId) {
+        await replyText(replyToken, `จบเกมแล้ว${p(user?.gender)}\n\nพิมพ์ "ฝึกฝน" เพื่อเล่นเกมอื่น`);
+        return;
+    }
+
+    const gameType = user.currentGameType;
+    const idx = session.currentIndex;
+    const total = session.totalQuestions;
+
+    try {
+        // Present question based on game type
+        if (gameType === "VOCAB_MATCH") {
+            const q = await prisma.vocabMatchQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            const options = getVocabMatchOptions(q as any);
+            const correctIndex = options.indexOf(q.meaning);
+            const correctAnswer = ['A', 'B', 'C', 'D'][correctIndex];
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, options, correctAnswer }) },
+            });
+            await replyWithQuickReply(replyToken, formatVocabMatchQuestion(q as any, options, idx, total), [
+                { label: "ก", text: "ก" }, { label: "ข", text: "ข" },
+                { label: "ค", text: "ค" }, { label: "ง", text: "ง" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "VOCAB_MEANING") {
+            const q = await prisma.vocabMatchQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, correctAnswer: q.meaning }) },
+            });
+            await replyWithQuickReply(replyToken, formatVocabMeaningQuestion(q as any, idx, total), [
+                { label: "ข้าม", text: "ข้าม" }, { label: "ออก", text: "ฝึกฝน" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "VOCAB_OPPOSITE") {
+            const q = await prisma.vocabOppositeQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            const options = getVocabOppositeOptions(q as any);
+            const correctIndex = options.indexOf(q.opposite);
+            const correctAnswer = ['A', 'B', 'C', 'D'][correctIndex];
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, options, correctAnswer, correctText: q.opposite }) },
+            });
+            await replyWithQuickReply(replyToken, formatVocabOppositeQuestion(q as any, options, idx, total), [
+                { label: "ก", text: "ก" }, { label: "ข", text: "ข" },
+                { label: "ค", text: "ค" }, { label: "ง", text: "ง" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "VOCAB_SYNONYM") {
+            const q = await prisma.vocabSynonymQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            const options = getVocabSynonymOptions(q as any);
+            const correctIndex = options.indexOf(q.synonym);
+            const correctAnswer = ['A', 'B', 'C', 'D'][correctIndex];
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, options, correctAnswer, correctText: q.synonym }) },
+            });
+            await replyWithQuickReply(replyToken, formatVocabSynonymQuestion(q as any, options, idx, total), [
+                { label: "ก", text: "ก" }, { label: "ข", text: "ข" },
+                { label: "ค", text: "ค" }, { label: "ง", text: "ง" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "FILL_BLANK") {
+            const q = await prisma.fillBlankQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session }) },
+            });
+            const fillBlankFlex = createFillBlankGameFlex({ sentence: q.sentence, questionNumber: idx + 1 });
+            const msgs: any[] = [];
+            if (q.imageUrl) { msgs.push({ type: "image", originalContentUrl: q.imageUrl, previewImageUrl: q.imageUrl }); }
+            msgs.push(fillBlankFlex);
+            await lineClient.replyMessage({ replyToken, messages: msgs });
+        }
+        else if (gameType === "FIX_SENTENCE") {
+            const q = await prisma.fixSentenceQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, correctSentence: q.correctSentence }) },
+            });
+            await replyWithQuickReply(replyToken, formatFixSentenceQuestion(q as any, idx, total), [
+                { label: "เฉลย", text: "เฉลย" }, { label: "ข้าม", text: "ข้าม" }, { label: "ออก", text: "ฝึกฝน" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "ARRANGE_SENTENCE") {
+            const q = await prisma.arrangeSentenceQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, correctSentence: q.correctSentence }) },
+            });
+            await replyWithQuickReply(replyToken, formatArrangeSentenceQuestion(q as any, idx, total), [
+                { label: "เฉลย", text: "เฉลย" }, { label: "ข้าม", text: "ข้าม" }, { label: "ออก", text: "ฝึกฝน" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "SPEED_GRAMMAR") {
+            const q = await prisma.speedGrammarQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, correctAnswer: q.correctAnswer, startTime: Date.now(), timeLimit: q.timeLimit }) },
+            });
+            await replyWithQuickReply(replyToken, formatSpeedGrammarQuestion(q as any, idx, total), [
+                { label: "ก", text: "ก" }, { label: "ข", text: "ข" },
+                { label: "ค", text: "ค" }, { label: "ง", text: "ง" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "READ_ANSWER") {
+            const q = await prisma.readAnswerQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, correctAnswer: q.correctAnswer }) },
+            });
+            await replyWithQuickReply(replyToken, formatReadAnswerQuestion(q as any, idx, total), [
+                { label: "ก", text: "ก" }, { label: "ข", text: "ข" },
+                { label: "ค", text: "ค" }, { label: "ง", text: "ง" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "SENTENCE_WRITING") {
+            const q = await prisma.sentenceConstructionPair.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session }) },
+            });
+            const sentenceFlex = createSentenceGameFlex({ word1: q.word1, word2: q.word2, questionNumber: idx + 1 });
+            await lineClient.replyMessage({ replyToken, messages: [sentenceFlex] as any });
+        }
+        else if (gameType === "SUMMARIZE") {
+            const q = await prisma.summarizeQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, passage: q.passage, keywords: q.keywords, sampleSummary: q.sampleSummary }) },
+            });
+            await replyWithQuickReply(replyToken, formatSummarizeQuestion(q as any, idx, total), [
+                { label: "ข้าม", text: "ข้าม" }, { label: "ออก", text: "ฝึกฝน" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "CONTINUE_STORY") {
+            const q = await prisma.continueStoryQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, keywords: q.keywords, minLength: q.minLength, storyStart: q.storyStart }) },
+            });
+            await replyWithQuickReply(replyToken, formatContinueStoryQuestion(q as any, idx, total), [
+                { label: "ข้าม", text: "ข้าม" }, { label: "ออก", text: "ฝึกฝน" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "THAI_IDIOM") {
+            const q = await prisma.thaiIdiomQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            const { getThaiIdiomOptions, formatThaiIdiomQuestion } = await import("@/lib/games/thaiIdiom");
+            const options = getThaiIdiomOptions(q as any);
+            (session as any).currentOptions = options;
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session }) },
+            });
+            await replyWithQuickReply(replyToken, formatThaiIdiomQuestion(q as any, options, idx, total), [
+                { label: "ก", text: "ก" }, { label: "ข", text: "ข" },
+                { label: "ค", text: "ค" }, { label: "ง", text: "ง" },
+                { label: "Hint 💡", text: HINT_CMD },
+                { label: "ออก", text: "ฝึกฝน" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "THAI_CULTURE") {
+            const q = await prisma.thaiCultureQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            const { getThaiCultureOptions, formatThaiCultureQuestion } = await import("@/lib/games/thaiCulture");
+            const options = getThaiCultureOptions(q as any);
+            (session as any).currentOptions = options;
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session }) },
+            });
+            await replyWithQuickReply(replyToken, formatThaiCultureQuestion(q as any, options, idx, total), [
+                { label: "ก", text: "ก" }, { label: "ข", text: "ข" },
+                { label: "ค", text: "ค" }, { label: "ง", text: "ง" },
+                { label: "Hint 💡", text: HINT_CMD },
+                { label: "ออก", text: "ฝึกฝน" },
+            ], q.imageUrl);
+        }
+        else if (gameType === "RACE_CLOCK") {
+            const q = await prisma.multipleChoiceQuestion.findFirst({ where: { id: questionId } })
+                || await prisma.speedGrammarQuestion.findFirst({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, correctAnswer: (q as any).correctAnswer, startTime: Date.now() }) },
+            });
+            await replyWithQuickReply(replyToken, formatRaceClockQuestion(q as any, idx, total), [
+                { label: "ก", text: "ก" }, { label: "ข", text: "ข" },
+                { label: "ค", text: "ค" }, { label: "ง", text: "ง" },
+            ], (q as any).imageUrl);
+        }
+        else if (gameType === "MULTIPLE_CHOICE") {
+            const q = await prisma.multipleChoiceQuestion.findUnique({ where: { id: questionId } });
+            if (!q) { await replyText(replyToken, "ไม่พบคำถาม กรุณาลองใหม่"); return; }
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { currentQuestionId: questionId, gameData: JSON.stringify({ session }) },
+            });
+            const mcFlex = createMultipleChoiceGameFlex({
+                question: q.question, optionA: q.optionA, optionB: q.optionB,
+                optionC: q.optionC, optionD: q.optionD, questionNumber: idx + 1, totalQuestions: total,
+            });
+            await lineClient.replyMessage({ replyToken, messages: [mcFlex] as any });
+        }
+        else {
+            await replyText(replyToken, "ไม่รองรับเกมนี้ พิมพ์ \"ฝึกฝน\" เพื่อเลือกเกมใหม่");
+        }
+    } catch (error) {
+        console.error("handleSessionNext error:", error);
+        await replyText(replyToken, `เกิดข้อผิดพลาด กรุณาลองใหม่${p(user?.gender)}`);
     }
 }
 
@@ -1371,7 +2249,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                 return;
             }
             correctAnswer = question.answer;
-            if (text.trim().toLowerCase() === question.answer.trim().toLowerCase()) {
+            if (checkFillBlankAnswer(text, question.answer)) {
                 isCorrect = true;
                 points = 10;
             } else {
@@ -1464,6 +2342,53 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
         }
 
         // ==================
+        // Culture Games
+        // ==================
+        else if (gameType === "THAI_IDIOM") {
+            const normalizedAnswer = answerMap[text.trim()] || text.trim().toUpperCase();
+            // Find correct answer from options
+            const question = await prisma.thaiIdiomQuestion.findUnique({ where: { id: user.currentQuestionId } });
+            if (!question) {
+                await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+                return;
+            }
+            const options = gameData.session?.currentOptions || gameData.currentOptions || [];
+            const answerIdx = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 }[normalizedAnswer] ?? -1;
+            const selectedOption = answerIdx >= 0 ? options[answerIdx] : text.trim();
+            isCorrect = selectedOption === question.meaning;
+            points = isCorrect ? 10 : 0;
+            if (!isCorrect) {
+                const correctIdx = options.indexOf(question.meaning);
+                const correctLabel = correctIdx >= 0 ? ['ก', 'ข', 'ค', 'ง'][correctIdx] : '';
+                message = `คำตอบที่ถูกคือ ${correctLabel}. ${question.meaning}`;
+            }
+            if (question.example) {
+                message = (message ? message + "\n\n" : "") + `📝 ตัวอย่าง: ${question.example}`;
+            }
+        }
+        else if (gameType === "THAI_CULTURE") {
+            const normalizedAnswer = answerMap[text.trim()] || text.trim().toUpperCase();
+            const question = await prisma.thaiCultureQuestion.findUnique({ where: { id: user.currentQuestionId } });
+            if (!question) {
+                await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+                return;
+            }
+            const options = gameData.session?.currentOptions || gameData.currentOptions || [];
+            const answerIdx = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 }[normalizedAnswer] ?? -1;
+            const selectedOption = answerIdx >= 0 ? options[answerIdx] : text.trim();
+            isCorrect = selectedOption === question.correct;
+            points = isCorrect ? 10 : 0;
+            if (!isCorrect) {
+                const correctIdx = options.indexOf(question.correct);
+                const correctLabel = correctIdx >= 0 ? ['ก', 'ข', 'ค', 'ง'][correctIdx] : '';
+                message = `คำตอบที่ถูกคือ ${correctLabel}. ${question.correct}`;
+            }
+            if (question.explanation) {
+                message = (message ? message + "\n\n" : "") + `💡 เพิ่มเติม: ${question.explanation}`;
+            }
+        }
+
+        // ==================
         // Fun Games
         // ==================
         else if (gameType === "RACE_CLOCK") {
@@ -1514,7 +2439,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
         }
 
         // ==================
-        // Handle Result
+        // Handle Result (Session-aware)
         // ==================
 
         // Record question history for all games (so questions don't repeat within 24h)
@@ -1526,65 +2451,177 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
             }
         }
 
-        if (isCorrect) {
-            await prisma.user.update({
-                where: { id: user.id },
-                data: {
-                    totalPoints: { increment: points },
-                    currentGameType: null,
-                    currentQuestionId: null,
-                    gameData: null,
+        // Parse session from gameData
+        const session: GameSessionState | null = gameData.session || null;
+
+        if (session) {
+            // ===== SESSION MODE: advance session and handle multi-question flow =====
+            const isPendingWrong = gameData.pendingWrong === true;
+            const wasHintUsed = gameData.hintUsedForCurrent === true;
+
+            if (isCorrect) {
+                // Correct answer (possibly after retry with hint)
+                const hintUsed = isPendingWrong && wasHintUsed;
+                const updatedSession = advanceSession(session, true, hintUsed);
+                const earnedThisQ = updatedSession.pointsEarned - session.pointsEarned;
+                const hintNote = hintUsed ? " (ใช้คำใบ้ -50%)" : "";
+
+                // Clear pending state
+                delete gameData.pendingWrong;
+                delete gameData.hintUsedForCurrent;
+
+                if (isSessionComplete(updatedSession)) {
+                    // Session complete — award total points + show summary
+                    await prisma.user.update({
+                        where: { id: user.id },
+                        data: { currentGameType: null, currentQuestionId: null, gameData: null },
+                    });
+
+                    // Record completed session for daily round tracking
+                    try {
+                        await prisma.languageGameSession.create({
+                            data: {
+                                odUserId: user.lineUserId,
+                                gameType: gameType as any,
+                                questions: updatedSession.questionIds,
+                                answers: updatedSession.answers.map(a => a.correct ? "correct" : "wrong"),
+                                currentIndex: updatedSession.totalQuestions,
+                                isCompleted: true,
+                                correctCount: updatedSession.correctCount,
+                                totalCount: updatedSession.totalQuestions,
+                                pointsEarned: updatedSession.pointsEarned,
+                                completedAt: new Date(),
+                            },
+                        });
+                    } catch (e) {
+                        console.error("Failed to create game session record:", e);
+                    }
+
+                    // Award total points
+                    let levelUpMsg = "";
+                    if (updatedSession.pointsEarned > 0) {
+                        const result = await addPoints(user.id, updatedSession.pointsEarned, 'GAME_CORRECT');
+                        if (result.leveledUp && result.newLevel) {
+                            const levelInfo = getLevelInfo(result.newLevel);
+                            levelUpMsg = `\n\n🎉 เลเวลอัป! Lv.${result.newLevel} "${levelInfo.title}"`;
+                        }
+                    }
+
+                    // Check for achievement title
+                    let titleMsg = "";
+                    try {
+                        const titleResult = await checkAndAwardTitle(user.lineUserId, gameType);
+                        if (titleResult) {
+                            titleMsg = `\n\n🏅 ได้รับฉายา "${titleResult.emoji} ${titleResult.newTitle}"!`;
+                        }
+                    } catch (e) {
+                        console.error("Failed to check title:", e);
+                    }
+
+                    const summaryMsg = formatSessionSummary(updatedSession);
+                    await replyWithQuickReply(
+                        replyToken,
+                        `✅ ${getCorrectMessage(message)} (+${earnedThisQ}${hintNote})\n\n${summaryMsg}${levelUpMsg}${titleMsg}`,
+                        [
+                            { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
+                            { label: "เกมอื่น", text: "ฝึกฝน" },
+                            { label: "เมนู", text: "เมนู" },
+                        ]
+                    );
+                } else {
+                    // Session not complete — save updated session, show result + "ข้อต่อไป"
+                    await prisma.user.update({
+                        where: { id: user.id },
+                        data: {
+                            gameData: JSON.stringify({ ...gameData, session: updatedSession }),
+                        },
+                    });
+
+                    const progressMsg = `\n\n📊 ${getSessionProgress(updatedSession)} | ถูก ${updatedSession.correctCount}/${updatedSession.currentIndex}`;
+                    await replyWithQuickReply(
+                        replyToken,
+                        `✅ ${getCorrectMessage(message)} (+${earnedThisQ}${hintNote})${progressMsg}`,
+                        [
+                            { label: "ข้อต่อไป ▶", text: NEXT_QUESTION_CMD },
+                            { label: "ออก", text: "ฝึกฝน" },
+                        ]
+                    );
                 }
-            });
-
-            const successMsg = `✅ ${message || "ถูกต้อง!"}\n\n+${points} คะแนน`;
-
-            await replyWithQuickReply(
-                replyToken,
-                successMsg,
-                [
-                    { label: "ข้อต่อไป", text: getGameStartCommand(gameType) },
-                    { label: "เกมอื่น", text: "ฝึกฝน" },
-                    { label: "เมนู", text: "เมนู" }
-                ]
-            );
-        } else {
-            // For AI-evaluated games (SUMMARIZE, CONTINUE_STORY), give partial credit
-            if ((gameType === "SUMMARIZE" || gameType === "CONTINUE_STORY") && points > 0) {
+            } else {
+                // Wrong answer — enter/stay in pendingWrong state (don't advance yet)
+                // User can: retry, use hint, see answer, or skip to next
+                gameData.pendingWrong = true;
                 await prisma.user.update({
                     where: { id: user.id },
-                    data: {
-                        totalPoints: { increment: points },
-                        currentGameType: null,
-                        currentQuestionId: null,
-                        gameData: null,
-                    }
+                    data: { gameData: JSON.stringify(gameData) },
                 });
+
+                const progressMsg = `📊 ${getSessionProgress(session)} | ถูก ${session.correctCount}/${session.currentIndex}`;
+                const retryMsg = getWrongMessage(message, isPendingWrong);
+
+                // Don't show Hint button if already used
+                const buttons = wasHintUsed
+                    ? [
+                        { label: "เฉลย", text: "เฉลย" },
+                        { label: "ข้อต่อไป ▶", text: NEXT_QUESTION_CMD },
+                        { label: "ออก", text: "ฝึกฝน" },
+                    ]
+                    : [
+                        { label: "Hint 💡", text: HINT_CMD },
+                        { label: "เฉลย", text: "เฉลย" },
+                        { label: "ข้อต่อไป ▶", text: NEXT_QUESTION_CMD },
+                        { label: "ออก", text: "ฝึกฝน" },
+                    ];
 
                 await replyWithQuickReply(
                     replyToken,
-                    `📝 ${message}\n\n+${points} คะแนน`,
+                    `❌ ${retryMsg}\n\n${progressMsg}`,
+                    buttons
+                );
+            }
+        } else {
+            // ===== LEGACY MODE: single-question flow (no session) =====
+            if (isCorrect || ((gameType === "SUMMARIZE" || gameType === "CONTINUE_STORY") && points > 0)) {
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { currentGameType: null, currentQuestionId: null, gameData: null },
+                });
+
+                let levelUpMsg = "";
+                if (points > 0) {
+                    const reason = isCorrect ? 'GAME_CORRECT' : 'GAME_PARTIAL';
+                    const result = await addPoints(user.id, points, reason);
+                    if (result.leveledUp && result.newLevel) {
+                        const levelInfo = getLevelInfo(result.newLevel);
+                        levelUpMsg = `\n\n🎉 เลเวลอัป! Lv.${result.newLevel} "${levelInfo.title}"`;
+                    }
+                }
+
+                const emoji = isCorrect ? "✅" : "📝";
+                await replyWithQuickReply(
+                    replyToken,
+                    `${emoji} ${getCorrectMessage(message)}\n\n+${points} คะแนน${levelUpMsg}`,
                     [
                         { label: "ข้อต่อไป", text: getGameStartCommand(gameType) },
                         { label: "เกมอื่น", text: "ฝึกฝน" },
-                        { label: "เมนู", text: "เมนู" }
+                        { label: "เมนู", text: "เมนู" },
                     ]
                 );
             } else {
                 await replyWithQuickReply(
                     replyToken,
-                    `❌ ${message || "ยังไม่ถูก"}\n\nลองใหม่ หรือพิมพ์ "เฉลย"`,
+                    `❌ ${getWrongMessage(message)}\n\nลองใหม่ หรือพิมพ์ "เฉลย"`,
                     [
                         { label: "เฉลย", text: "เฉลย" },
                         { label: "ข้าม", text: "ข้าม" },
-                        { label: "ออก", text: "ฝึกฝน" }
+                        { label: "ออก", text: "ฝึกฝน" },
                     ]
                 );
             }
         }
     } catch (error) {
         console.error("handleGameAnswer error:", error);
-        await replyText(replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งครับ");
+        await replyText(replyToken, `เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง${p(user?.gender)}`);
     }
 }
 
@@ -1608,7 +2645,7 @@ async function handleMyTask(replyToken: string, userId: string) {
     });
 
     if (activeTasks.length === 0) {
-        await replyText(replyToken, "ขณะนี้ยังไม่มีภาระงานที่เปิดรับครับ\n\nกรุณารอประกาศจากอาจารย์");
+        await replyText(replyToken, `ขณะนี้ยังไม่มีภาระงานที่เปิดรับ${p(user?.gender)}\n\nกรุณารอประกาศจากอาจารย์`);
         return;
     }
 
@@ -1702,16 +2739,350 @@ async function handleFunGamesMenu(replyToken: string, userId: string) {
 }
 
 // =====================
+// Culture Games Menu + Handlers
+// =====================
+
+async function handleCultureGamesMenu(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+
+    if (!user?.isRegistered) {
+        await replyText(replyToken, `กรุณาลงทะเบียนก่อน${p(user?.gender)} พิมพ์ "ลงทะเบียน"`);
+        return;
+    }
+
+    await replyWithQuickReply(
+        replyToken,
+        `🇹🇭 หมวดวัฒนธรรมไทย${p(user.gender)}\n\nเรียนรู้สำนวน มารยาท และวัฒนธรรมไทย\nเลือกเกมด้านล่าง:`,
+        [
+            { label: "🏮 สำนวนไทย", text: "สำนวนไทย" },
+            { label: "🙏 วัฒนธรรมไทย", text: "วัฒนธรรมไทย" },
+            { label: "🔙 กลับ", text: "ฝึกฝน" },
+        ]
+    );
+}
+
+async function handleThaiIdiomGameStart(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+    if (!user?.isRegistered) {
+        await replyText(replyToken, `กรุณาลงทะเบียนก่อน${p(user?.gender)} พิมพ์ "ลงทะเบียน"`);
+        return;
+    }
+
+    // Level gate check
+    const gameConfig = GAME_TYPES.THAI_IDIOM;
+    if (user.currentLevel < gameConfig.requiredLevel) {
+        await replyText(replyToken, `🔒 ต้อง Level ${gameConfig.requiredLevel} ขึ้นไป${p(user.gender)}\nตอนนี้คุณ Level ${user.currentLevel}\n\nเล่นเกมอื่นเพื่อเก็บคะแนนเลเวลอัป!`);
+        return;
+    }
+
+    // Daily round limit
+    const { getDailyRoundCount, calculatePointMultiplier, getDailyLimitMessage } = await import("@/lib/games/engine");
+    const roundCount = await getDailyRoundCount(user.lineUserId, "THAI_IDIOM");
+    const multiplier = calculatePointMultiplier(roundCount);
+
+    const { getRandomThaiIdiomQuestions, getThaiIdiomOptions, formatThaiIdiomQuestion } = await import("@/lib/games/thaiIdiom");
+    const questions = await getRandomThaiIdiomQuestions(userId, gameConfig.questionsPerRound);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, `ยังไม่มีคำถามสำนวนไทยในระบบ${p(user.gender)} กำลังเพิ่มเร็วๆ นี้`);
+        return;
+    }
+
+    const question = questions[0];
+    const options = getThaiIdiomOptions(question);
+
+    const sessionData = {
+        questionIds: questions.map(q => q.id),
+        currentIndex: 0,
+        correctCount: 0,
+        totalPoints: 0,
+        currentOptions: options,
+        multiplier,
+    };
+
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            currentGameType: "THAI_IDIOM",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify(sessionData),
+        },
+    });
+
+    const questionText = formatThaiIdiomQuestion(question, options, 0, questions.length);
+
+    let msgPrefix = "";
+    if (multiplier < 1) {
+        msgPrefix = getDailyLimitMessage(roundCount, "สำนวนไทย") + "\n\n";
+    }
+
+    await replyWithQuickReply(
+        replyToken,
+        msgPrefix + questionText,
+        [
+            { label: "ก", text: "ก" }, { label: "ข", text: "ข" },
+            { label: "ค", text: "ค" }, { label: "ง", text: "ง" },
+            { label: "Hint 💡", text: HINT_CMD },
+            { label: "ออก", text: "ฝึกฝน" },
+        ],
+        (question as any).imageUrl
+    );
+}
+
+async function handleThaiCultureGameStart(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+    if (!user?.isRegistered) {
+        await replyText(replyToken, `กรุณาลงทะเบียนก่อน${p(user?.gender)} พิมพ์ "ลงทะเบียน"`);
+        return;
+    }
+
+    // Level gate check
+    const gameConfig = GAME_TYPES.THAI_CULTURE;
+    if (user.currentLevel < gameConfig.requiredLevel) {
+        await replyText(replyToken, `🔒 ต้อง Level ${gameConfig.requiredLevel} ขึ้นไป${p(user.gender)}\nตอนนี้คุณ Level ${user.currentLevel}\n\nเล่นเกมอื่นเพื่อเก็บคะแนนเลเวลอัป!`);
+        return;
+    }
+
+    // Daily round limit
+    const { getDailyRoundCount, calculatePointMultiplier, getDailyLimitMessage } = await import("@/lib/games/engine");
+    const roundCount = await getDailyRoundCount(user.lineUserId, "THAI_CULTURE");
+    const multiplier = calculatePointMultiplier(roundCount);
+
+    const { getRandomThaiCultureQuestions, getThaiCultureOptions, formatThaiCultureQuestion } = await import("@/lib/games/thaiCulture");
+    const questions = await getRandomThaiCultureQuestions(userId, gameConfig.questionsPerRound);
+
+    if (questions.length === 0) {
+        await replyText(replyToken, `ยังไม่มีคำถามวัฒนธรรมไทยในระบบ${p(user.gender)} กำลังเพิ่มเร็วๆ นี้`);
+        return;
+    }
+
+    const question = questions[0];
+    const options = getThaiCultureOptions(question);
+
+    const sessionData = {
+        questionIds: questions.map(q => q.id),
+        currentIndex: 0,
+        correctCount: 0,
+        totalPoints: 0,
+        currentOptions: options,
+        multiplier,
+    };
+
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            currentGameType: "THAI_CULTURE",
+            currentQuestionId: question.id,
+            gameData: JSON.stringify(sessionData),
+        },
+    });
+
+    const questionText = formatThaiCultureQuestion(question, options, 0, questions.length);
+
+    let msgPrefix = "";
+    if (multiplier < 1) {
+        msgPrefix = getDailyLimitMessage(roundCount, "วัฒนธรรมไทย") + "\n\n";
+    }
+
+    await replyWithQuickReply(
+        replyToken,
+        msgPrefix + questionText,
+        [
+            { label: "ก", text: "ก" }, { label: "ข", text: "ข" },
+            { label: "ค", text: "ค" }, { label: "ง", text: "ง" },
+            { label: "Hint 💡", text: HINT_CMD },
+            { label: "ออก", text: "ฝึกฝน" },
+        ],
+        (question as any).imageUrl
+    );
+}
+
+// =====================
+// Lesson Handlers (สอนก่อนเล่น)
+// =====================
+
+const LESSON_CATEGORIES = [
+    { key: "vocabulary", emoji: "📝", label: "คำศัพท์", description: "เรียนรู้คำศัพท์พื้นฐาน" },
+    { key: "grammar", emoji: "✏️", label: "ไวยากรณ์", description: "เรียนรู้โครงสร้างประโยค" },
+    { key: "reading", emoji: "📖", label: "อ่าน-เขียน", description: "เรียนรู้การอ่านและเขียน" },
+];
+
+async function handleLessonMenu(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+    if (!user?.isRegistered) {
+        await replyText(replyToken, `กรุณาลงทะเบียนก่อน${p(user?.gender)} พิมพ์ "ลงทะเบียน"`);
+        return;
+    }
+
+    // Count lessons per category and user progress
+    const allLessons = await prisma.lesson.findMany({
+        where: { isActive: true },
+        select: { id: true, category: true },
+    });
+    const completedLessons = await prisma.lessonProgress.findMany({
+        where: { userId: user.id, isCompleted: true },
+        select: { lessonId: true },
+    });
+    const completedSet = new Set(completedLessons.map(l => l.lessonId));
+
+    if (allLessons.length === 0) {
+        await replyText(replyToken, `📚 ยังไม่มีบทเรียนในระบบ${np(user.gender)}\n\nลองเล่นเกมฝึกฝนไปก่อน พิมพ์ "ฝึกฝน"`);
+        return;
+    }
+
+    let menuText = `📚 บทเรียน — เลือกหมวดที่ต้องการเรียนรู้${np(user.gender)}\n\n`;
+    const quickReplyItems: Array<{ label: string; text: string }> = [];
+
+    for (const cat of LESSON_CATEGORIES) {
+        const total = allLessons.filter(l => l.category === cat.key).length;
+        if (total === 0) continue;
+        const done = allLessons.filter(l => l.category === cat.key && completedSet.has(l.id)).length;
+        menuText += `${cat.emoji} ${cat.label}: ${done}/${total} บทเรียน\n`;
+        quickReplyItems.push({ label: `${cat.emoji} ${cat.label}`, text: `บทเรียน:${cat.key}` });
+    }
+
+    menuText += `\nเลือกหมวดด้านล่างเพื่อดูบทเรียน`;
+    quickReplyItems.push({ label: "🎮 ฝึกฝน", text: "ฝึกฝน" });
+
+    await replyWithQuickReply(replyToken, menuText, quickReplyItems);
+}
+
+async function handleLessonCategory(replyToken: string, userId: string, category: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+    if (!user?.isRegistered) {
+        await replyText(replyToken, `กรุณาลงทะเบียนก่อน${p(user?.gender)} พิมพ์ "ลงทะเบียน"`);
+        return;
+    }
+
+    const lessons = await prisma.lesson.findMany({
+        where: { isActive: true, category },
+        orderBy: [{ difficulty: "asc" }, { orderIndex: "asc" }],
+    });
+
+    if (lessons.length === 0) {
+        await replyText(replyToken, `ยังไม่มีบทเรียนในหมวดนี้${np(user.gender)}`);
+        return;
+    }
+
+    const completedLessons = await prisma.lessonProgress.findMany({
+        where: { userId: user.id, isCompleted: true },
+        select: { lessonId: true },
+    });
+    const completedSet = new Set(completedLessons.map(l => l.lessonId));
+
+    const catInfo = LESSON_CATEGORIES.find(c => c.key === category);
+    let text = `${catInfo?.emoji || "📚"} บทเรียน: ${catInfo?.label || category}\n\n`;
+
+    const quickReplyItems: Array<{ label: string; text: string }> = [];
+    for (let i = 0; i < lessons.length && i < 10; i++) {
+        const lesson = lessons[i];
+        const done = completedSet.has(lesson.id);
+        const icon = done ? "✅" : "📘";
+        const diffLabel = lesson.difficulty === "EASY" ? "ง่าย" : lesson.difficulty === "MEDIUM" ? "กลาง" : "ยาก";
+        text += `${icon} ${i + 1}. ${lesson.title} [${diffLabel}]\n`;
+        quickReplyItems.push({ label: `${i + 1}. ${lesson.title.slice(0, 15)}`, text: `ดูบทเรียน:${lesson.id}` });
+    }
+
+    text += `\nเลือกบทเรียนด้านล่าง`;
+    quickReplyItems.push({ label: "🔙 กลับ", text: "บทเรียน" });
+
+    await replyWithQuickReply(replyToken, text, quickReplyItems.slice(0, 13));
+}
+
+async function handleLessonView(replyToken: string, userId: string, lessonId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+    if (!user?.isRegistered) {
+        await replyText(replyToken, `กรุณาลงทะเบียนก่อน${p(user?.gender)} พิมพ์ "ลงทะเบียน"`);
+        return;
+    }
+
+    const lesson = await prisma.lesson.findUnique({ where: { id: lessonId } });
+    if (!lesson) {
+        await replyText(replyToken, `ไม่พบบทเรียนนี้${p(user.gender)}`);
+        return;
+    }
+
+    // Build lesson content message
+    let text = `📚 ${lesson.title}\n`;
+    text += `━━━━━━━━━━━━━━━\n\n`;
+    text += lesson.content;
+
+    if (lesson.examples) {
+        text += `\n\n💡 ตัวอย่าง:\n${lesson.examples}`;
+    }
+
+    if (lesson.tips) {
+        text += `\n\n🔑 เคล็ดลับ:\n${lesson.tips}`;
+    }
+
+    // Mark as completed
+    await prisma.lessonProgress.upsert({
+        where: { userId_lessonId: { userId: user.id, lessonId: lesson.id } },
+        update: { isCompleted: true, completedAt: new Date() },
+        create: { userId: user.id, lessonId: lesson.id, isCompleted: true, completedAt: new Date() },
+    });
+
+    // Give bonus points for first time
+    const existingProgress = await prisma.lessonProgress.findUnique({
+        where: { userId_lessonId: { userId: user.id, lessonId: lesson.id } },
+    });
+    // If this is a newly completed lesson, award 5 points
+    let pointsMsg = "";
+    if (existingProgress?.completedAt && (new Date().getTime() - existingProgress.completedAt.getTime()) < 5000) {
+        const result = await addPoints(user.id, 5, 'GAME_CORRECT');
+        pointsMsg = `\n\n🎉 +5 คะแนน สำหรับการเรียนบทเรียนนี้!`;
+        if (result.leveledUp && result.newLevel) {
+            const levelInfo = getLevelInfo(result.newLevel);
+            pointsMsg += `\n🎊 เลเวลอัป! Lv.${result.newLevel} "${levelInfo.title}"`;
+        }
+    }
+
+    // Determine which game category relates to this lesson
+    const catInfo = LESSON_CATEGORIES.find(c => c.key === lesson.category);
+    const gameKeyword = lesson.category === "vocabulary" ? "เกมคำศัพท์"
+        : lesson.category === "grammar" ? "เกมไวยากรณ์"
+        : "เกมอ่าน";
+
+    text += `${pointsMsg}\n\n✅ บทเรียนนี้เสร็จแล้ว${np(user.gender)}`;
+
+    // Send image if available, then text
+    if (lesson.imageUrl) {
+        await lineClient.replyMessage({
+            replyToken,
+            messages: [
+                { type: "image", originalContentUrl: lesson.imageUrl, previewImageUrl: lesson.imageUrl } as any,
+                createTextMessage(text, createQuickReply([
+                    { label: `🎮 ${gameKeyword}`, text: gameKeyword },
+                    { label: "📚 บทเรียนอื่น", text: `บทเรียน:${lesson.category}` },
+                    { label: "🏠 เมนู", text: "เมนู" },
+                ])),
+            ],
+        });
+    } else {
+        await replyWithQuickReply(replyToken, text, [
+            { label: `🎮 ${gameKeyword}`, text: gameKeyword },
+            { label: "📚 บทเรียนอื่น", text: `บทเรียน:${lesson.category}` },
+            { label: "🏠 เมนู", text: "เมนู" },
+        ]);
+    }
+}
+
+// =====================
 // Vocabulary Game Handlers
 // =====================
 
 async function handleVocabMatchGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomVocabMatchQuestions(userId, 1);
+    const numQ = GAME_TYPES.VOCAB_MATCH.questionsPerRound;
+    const questions = await getRandomVocabMatchQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "VOCAB_MATCH");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("VOCAB_MATCH", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
     const options = getVocabMatchOptions(question);
@@ -1723,26 +3094,32 @@ async function handleVocabMatchGameStart(replyToken: string, userId: string) {
         data: {
             currentGameType: "VOCAB_MATCH",
             currentQuestionId: question.id,
-            gameData: JSON.stringify({ options, correctAnswer }),
+            gameData: JSON.stringify({ session, options, correctAnswer }),
         },
     });
 
-    const questionText = formatVocabMatchQuestion(question, options, 0, 1);
+    let questionText = formatVocabMatchQuestion(question, options, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "จับคู่คำ") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "ก", text: "ก" },
         { label: "ข", text: "ข" },
         { label: "ค", text: "ค" },
         { label: "ง", text: "ง" },
-    ]);
+    ], (question as any).imageUrl);
 }
 
 async function handleVocabMeaningGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomVocabMeaningQuestions(userId, 1);
+    const numQ = GAME_TYPES.VOCAB_MEANING.questionsPerRound;
+    const questions = await getRandomVocabMeaningQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "VOCAB_MEANING");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("VOCAB_MEANING", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
 
@@ -1751,24 +3128,30 @@ async function handleVocabMeaningGameStart(replyToken: string, userId: string) {
         data: {
             currentGameType: "VOCAB_MEANING",
             currentQuestionId: question.id,
-            gameData: JSON.stringify({ correctAnswer: question.meaning }),
+            gameData: JSON.stringify({ session, correctAnswer: question.meaning }),
         },
     });
 
-    const questionText = formatVocabMeaningQuestion(question, 0, 1);
+    let questionText = formatVocabMeaningQuestion(question, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "ความหมายคำศัพท์") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "ข้าม", text: "ข้าม" },
         { label: "ออก", text: "ฝึกฝน" },
-    ]);
+    ], (question as any).imageUrl);
 }
 
 async function handleVocabOppositeGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomVocabOppositeQuestions(userId, 1);
+    const numQ = GAME_TYPES.VOCAB_OPPOSITE.questionsPerRound;
+    const questions = await getRandomVocabOppositeQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "VOCAB_OPPOSITE");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("VOCAB_OPPOSITE", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
     const options = getVocabOppositeOptions(question);
@@ -1780,26 +3163,32 @@ async function handleVocabOppositeGameStart(replyToken: string, userId: string) 
         data: {
             currentGameType: "VOCAB_OPPOSITE",
             currentQuestionId: question.id,
-            gameData: JSON.stringify({ options, correctAnswer, correctText: question.opposite }),
+            gameData: JSON.stringify({ session, options, correctAnswer, correctText: question.opposite }),
         },
     });
 
-    const questionText = formatVocabOppositeQuestion(question, options, 0, 1);
+    let questionText = formatVocabOppositeQuestion(question, options, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "คำตรงข้าม") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "ก", text: "ก" },
         { label: "ข", text: "ข" },
         { label: "ค", text: "ค" },
         { label: "ง", text: "ง" },
-    ]);
+    ], (question as any).imageUrl);
 }
 
 async function handleVocabSynonymGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomVocabSynonymQuestions(userId, 1);
+    const numQ = GAME_TYPES.VOCAB_SYNONYM.questionsPerRound;
+    const questions = await getRandomVocabSynonymQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "VOCAB_SYNONYM");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("VOCAB_SYNONYM", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
     const options = getVocabSynonymOptions(question);
@@ -1811,17 +3200,18 @@ async function handleVocabSynonymGameStart(replyToken: string, userId: string) {
         data: {
             currentGameType: "VOCAB_SYNONYM",
             currentQuestionId: question.id,
-            gameData: JSON.stringify({ options, correctAnswer, correctText: question.synonym }),
+            gameData: JSON.stringify({ session, options, correctAnswer, correctText: question.synonym }),
         },
     });
 
-    const questionText = formatVocabSynonymQuestion(question, options, 0, 1);
+    let questionText = formatVocabSynonymQuestion(question, options, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "คำพ้องความหมาย") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "ก", text: "ก" },
         { label: "ข", text: "ข" },
         { label: "ค", text: "ค" },
         { label: "ง", text: "ง" },
-    ]);
+    ], (question as any).imageUrl);
 }
 
 // =====================
@@ -1829,12 +3219,22 @@ async function handleVocabSynonymGameStart(replyToken: string, userId: string) {
 // =====================
 
 async function handleFixSentenceGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomFixSentenceQuestions(userId, 1);
+    // Level Gate check
+    const userLevel = await getUserLevel(userId);
+    const lockMsg = checkLevelGate("FIX_SENTENCE", userLevel);
+    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+
+    const numQ = GAME_TYPES.FIX_SENTENCE.questionsPerRound;
+    const questions = await getRandomFixSentenceQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "FIX_SENTENCE");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("FIX_SENTENCE", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
 
@@ -1843,25 +3243,36 @@ async function handleFixSentenceGameStart(replyToken: string, userId: string) {
         data: {
             currentGameType: "FIX_SENTENCE",
             currentQuestionId: question.id,
-            gameData: JSON.stringify({ correctSentence: question.correctSentence }),
+            gameData: JSON.stringify({ session, correctSentence: question.correctSentence }),
         },
     });
 
-    const questionText = formatFixSentenceQuestion(question, 0, 1);
+    let questionText = formatFixSentenceQuestion(question, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "แก้ประโยค") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "เฉลย", text: "เฉลย" },
         { label: "ข้าม", text: "ข้าม" },
         { label: "ออก", text: "ฝึกฝน" },
-    ]);
+    ], (question as any).imageUrl);
 }
 
 async function handleArrangeSentenceGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomArrangeSentenceQuestions(userId, 1);
+    // Level Gate check
+    const userLevel = await getUserLevel(userId);
+    const lockMsg = checkLevelGate("ARRANGE_SENTENCE", userLevel);
+    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+
+    const numQ = GAME_TYPES.ARRANGE_SENTENCE.questionsPerRound;
+    const questions = await getRandomArrangeSentenceQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "ARRANGE_SENTENCE");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("ARRANGE_SENTENCE", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
 
@@ -1870,25 +3281,36 @@ async function handleArrangeSentenceGameStart(replyToken: string, userId: string
         data: {
             currentGameType: "ARRANGE_SENTENCE",
             currentQuestionId: question.id,
-            gameData: JSON.stringify({ correctSentence: question.correctSentence }),
+            gameData: JSON.stringify({ session, correctSentence: question.correctSentence }),
         },
     });
 
-    const questionText = formatArrangeSentenceQuestion(question, 0, 1);
+    let questionText = formatArrangeSentenceQuestion(question, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "เรียงประโยค") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "เฉลย", text: "เฉลย" },
         { label: "ข้าม", text: "ข้าม" },
         { label: "ออก", text: "ฝึกฝน" },
-    ]);
+    ], (question as any).imageUrl);
 }
 
 async function handleSpeedGrammarGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomSpeedGrammarQuestions(userId, 1);
+    // Level Gate check
+    const userLevel = await getUserLevel(userId);
+    const lockMsg = checkLevelGate("SPEED_GRAMMAR", userLevel);
+    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+
+    const numQ = GAME_TYPES.SPEED_GRAMMAR.questionsPerRound;
+    const questions = await getRandomSpeedGrammarQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "SPEED_GRAMMAR");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("SPEED_GRAMMAR", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
 
@@ -1898,6 +3320,7 @@ async function handleSpeedGrammarGameStart(replyToken: string, userId: string) {
             currentGameType: "SPEED_GRAMMAR",
             currentQuestionId: question.id,
             gameData: JSON.stringify({
+                session,
                 correctAnswer: question.correctAnswer,
                 startTime: Date.now(),
                 timeLimit: question.timeLimit,
@@ -1905,13 +3328,14 @@ async function handleSpeedGrammarGameStart(replyToken: string, userId: string) {
         },
     });
 
-    const questionText = formatSpeedGrammarQuestion(question, 0, 1);
+    let questionText = formatSpeedGrammarQuestion(question, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "Speed Grammar") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "ก", text: "ก" },
         { label: "ข", text: "ข" },
         { label: "ค", text: "ค" },
         { label: "ง", text: "ง" },
-    ]);
+    ], (question as any).imageUrl);
 }
 
 // =====================
@@ -1919,12 +3343,22 @@ async function handleSpeedGrammarGameStart(replyToken: string, userId: string) {
 // =====================
 
 async function handleReadAnswerGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomReadAnswerQuestions(userId, 1);
+    // Level Gate check
+    const userLevel = await getUserLevel(userId);
+    const lockMsg = checkLevelGate("READ_ANSWER", userLevel);
+    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+
+    const numQ = GAME_TYPES.READ_ANSWER.questionsPerRound;
+    const questions = await getRandomReadAnswerQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "READ_ANSWER");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("READ_ANSWER", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
 
@@ -1933,26 +3367,37 @@ async function handleReadAnswerGameStart(replyToken: string, userId: string) {
         data: {
             currentGameType: "READ_ANSWER",
             currentQuestionId: question.id,
-            gameData: JSON.stringify({ correctAnswer: question.correctAnswer }),
+            gameData: JSON.stringify({ session, correctAnswer: question.correctAnswer }),
         },
     });
 
-    const questionText = formatReadAnswerQuestion(question, 0, 1);
+    let questionText = formatReadAnswerQuestion(question, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "อ่านตอบ") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "ก", text: "ก" },
         { label: "ข", text: "ข" },
         { label: "ค", text: "ค" },
         { label: "ง", text: "ง" },
-    ]);
+    ], (question as any).imageUrl);
 }
 
 async function handleSummarizeGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomSummarizeQuestions(userId, 1);
+    // Level Gate check
+    const userLevel = await getUserLevel(userId);
+    const lockMsg = checkLevelGate("SUMMARIZE", userLevel);
+    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+
+    const numQ = GAME_TYPES.SUMMARIZE.questionsPerRound;
+    const questions = await getRandomSummarizeQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "SUMMARIZE");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("SUMMARIZE", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
 
@@ -1962,6 +3407,7 @@ async function handleSummarizeGameStart(replyToken: string, userId: string) {
             currentGameType: "SUMMARIZE",
             currentQuestionId: question.id,
             gameData: JSON.stringify({
+                session,
                 passage: question.passage,
                 keywords: question.keywords,
                 sampleSummary: question.sampleSummary,
@@ -1969,20 +3415,31 @@ async function handleSummarizeGameStart(replyToken: string, userId: string) {
         },
     });
 
-    const questionText = formatSummarizeQuestion(question, 0, 1);
+    let questionText = formatSummarizeQuestion(question, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "สรุปเรื่อง") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "ข้าม", text: "ข้าม" },
         { label: "ออก", text: "ฝึกฝน" },
-    ]);
+    ], (question as any).imageUrl);
 }
 
 async function handleContinueStoryGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomContinueStoryQuestions(userId, 1);
+    // Level Gate check
+    const userLevel = await getUserLevel(userId);
+    const lockMsg = checkLevelGate("CONTINUE_STORY", userLevel);
+    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+
+    const numQ = GAME_TYPES.CONTINUE_STORY.questionsPerRound;
+    const questions = await getRandomContinueStoryQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "CONTINUE_STORY");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("CONTINUE_STORY", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
 
@@ -1992,6 +3449,7 @@ async function handleContinueStoryGameStart(replyToken: string, userId: string) 
             currentGameType: "CONTINUE_STORY",
             currentQuestionId: question.id,
             gameData: JSON.stringify({
+                session,
                 keywords: question.keywords,
                 minLength: question.minLength,
                 storyStart: question.storyStart,
@@ -1999,11 +3457,12 @@ async function handleContinueStoryGameStart(replyToken: string, userId: string) 
         },
     });
 
-    const questionText = formatContinueStoryQuestion(question, 0, 1);
+    let questionText = formatContinueStoryQuestion(question, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "เขียนต่อเรื่อง") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "ข้าม", text: "ข้าม" },
         { label: "ออก", text: "ฝึกฝน" },
-    ]);
+    ], (question as any).imageUrl);
 }
 
 // =====================
@@ -2030,7 +3489,7 @@ async function handleDailyVocabGameStart(replyToken: string, userId: string) {
     if (alreadyLearned) {
         await replyText(
             replyToken,
-            `คุณได้เรียนคำศัพท์วันนี้แล้ว!\n\n📖 "${todayVocab.word}"\n💡 ${todayVocab.meaning}\n📝 ${todayVocab.example}\n\nกลับมาพรุ่งนี้เพื่อเรียนคำใหม่นะครับ`
+            `คุณได้เรียนคำศัพท์วันนี้แล้ว!\n\n📖 "${todayVocab.word}"\n💡 ${todayVocab.meaning}\n📝 ${todayVocab.example}\n\nกลับมาพรุ่งนี้เพื่อเรียนคำใหม่${np(user?.gender)}`
         );
         return;
     }
@@ -2046,12 +3505,17 @@ async function handleDailyVocabGameStart(replyToken: string, userId: string) {
 }
 
 async function handleRaceClockGameStart(replyToken: string, userId: string) {
-    const questions = await getRandomRaceClockQuestions(userId, 1);
+    const numQ = GAME_TYPES.RACE_CLOCK.questionsPerRound;
+    const questions = await getRandomRaceClockQuestions(userId, numQ);
 
     if (questions.length === 0) {
         await replyText(replyToken, "ขออภัย ยังไม่มีคำถามในระบบ\n\nกรุณาติดต่อผู้ดูแลระบบ");
         return;
     }
+
+    const roundCount = await getDailyRoundCount(userId, "RACE_CLOCK");
+    const multiplier = calculatePointMultiplier(roundCount);
+    const session = createSessionData("RACE_CLOCK", questions.map(q => q.id), multiplier);
 
     const question = questions[0];
 
@@ -2061,13 +3525,15 @@ async function handleRaceClockGameStart(replyToken: string, userId: string) {
             currentGameType: "RACE_CLOCK",
             currentQuestionId: question.id,
             gameData: JSON.stringify({
+                session,
                 correctAnswer: question.correctAnswer,
                 startTime: Date.now(),
             }),
         },
     });
 
-    const questionText = formatRaceClockQuestion(question, 0, 1);
+    let questionText = formatRaceClockQuestion(question, 0, questions.length);
+    if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "แข่งเวลา") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
         { label: "ก", text: "ก" },
         { label: "ข", text: "ข" },
@@ -2087,7 +3553,7 @@ async function handleVocabGachaGameStart(replyToken: string, userId: string) {
     const canPull = await canPullGacha(user.id);
 
     if (!canPull) {
-        await replyText(replyToken, "🎰 หมดโควต้าสุ่มวันนี้แล้ว!\n\nสุ่มได้ 3 ครั้งต่อวัน\nกลับมาพรุ่งนี้นะครับ");
+        await replyText(replyToken, `🎰 หมดโควต้าสุ่มวันนี้แล้ว!\n\nสุ่มได้ 3 ครั้งต่อวัน\nกลับมาพรุ่งนี้${np(user?.gender)}`);
         return;
     }
 
@@ -2137,6 +3603,9 @@ function getGameStartCommand(gameType: string): string {
         case "DAILY_VOCAB": return "คำศัพท์วันนี้";
         case "RACE_CLOCK": return "แข่งเวลา";
         case "VOCAB_GACHA": return "กาชา";
+        // Culture Games
+        case "THAI_IDIOM": return "สำนวนไทย";
+        case "THAI_CULTURE": return "วัฒนธรรมไทย";
         // Legacy
         case "MULTIPLE_CHOICE": return "เลือกตอบ";
         default: return "ฝึกฝน";

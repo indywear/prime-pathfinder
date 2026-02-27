@@ -103,7 +103,8 @@ export async function evaluateContinuation(
 
     // Keywords check
     const { found, missing } = checkContinueStoryKeywords(userContinuation, keywords);
-    const hasKeywords = found.length >= Math.ceil(keywords.length * 0.5);
+    // Lowered from 50% to 30% — creative writing shouldn't require strict keyword matching
+    const hasKeywords = found.length >= Math.ceil(keywords.length * 0.3);
 
     // Basic validation
     if (!isLongEnough) {
@@ -153,7 +154,7 @@ export async function evaluateContinuation(
                     }
                 ],
                 temperature: 0.3,
-                max_tokens: 150,
+                max_tokens: 200,
             },
             {
                 headers: {
@@ -167,7 +168,9 @@ export async function evaluateContinuation(
         );
 
         const aiResponse = response.data.choices[0]?.message?.content || "";
-        const jsonMatch = aiResponse.match(/\{[\s\S]*?\}/);
+        // Strip markdown code blocks if AI wraps JSON in ```json...```
+        const cleanedResponse = aiResponse.replace(/```(?:json)?\s*/g, '').replace(/```/g, '').trim();
+        const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
 
         if (jsonMatch) {
             const result = JSON.parse(jsonMatch[0]);
@@ -185,26 +188,41 @@ export async function evaluateContinuation(
             };
         }
 
-        // Fallback
+        // Fallback: AI responded but couldn't parse — give benefit of doubt if long enough
+        if (isLongEnough) {
+            return {
+                correct: true,
+                hasKeywords,
+                isLongEnough,
+                isCoherent: true,
+                feedback: `✅ เขียนต่อเรื่องได้! +20 คะแนน\n(AI ไม่สามารถตรวจได้ ให้คะแนนพื้นฐาน)`,
+            };
+        }
         return {
-            correct: isLongEnough && hasKeywords,
+            correct: false,
             hasKeywords,
             isLongEnough,
-            isCoherent: true,
-            feedback: isLongEnough && hasKeywords
-                ? `✅ เขียนต่อเรื่องได้ดี! +20 คะแนน`
-                : `❌ ลองเขียนใหม่`,
+            isCoherent: false,
+            feedback: `❌ เขียนต่อสั้นเกินไป กรุณาเขียนอย่างน้อย ${minLength} ตัวอักษร`,
         };
     } catch (error) {
         console.error("[ContinueStory] AI error:", error);
+        // AI fallback: if length is enough, give base pass + inform user AI couldn't evaluate
+        if (isLongEnough) {
+            return {
+                correct: true,
+                hasKeywords,
+                isLongEnough,
+                isCoherent: true,
+                feedback: `✅ เขียนต่อเรื่องได้! +20 คะแนน\n(AI ไม่สามารถตรวจได้ ให้คะแนนพื้นฐาน)`,
+            };
+        }
         return {
-            correct: isLongEnough && hasKeywords,
+            correct: false,
             hasKeywords,
             isLongEnough,
-            isCoherent: true,
-            feedback: isLongEnough && hasKeywords
-                ? `✅ เขียนต่อเรื่องได้ดี! +20 คะแนน`
-                : `❌ ลองเขียนใหม่`,
+            isCoherent: false,
+            feedback: `❌ เขียนต่อสั้นเกินไป กรุณาเขียนอย่างน้อย ${minLength} ตัวอักษร`,
         };
     }
 }

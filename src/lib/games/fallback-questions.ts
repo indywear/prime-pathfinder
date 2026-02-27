@@ -5,15 +5,15 @@ export const FALLBACK_QUESTIONS: Record<string, Question[]> = {
     vocab: [
         {
             question: "'Hello' ภาษาไทยว่าอะไร?",
-            options: ["สวัสดี", "ขอบคุณ", "ลาก่อน", "ขอโทษ"],
-            correctAnswer: 0,
+            options: ["ขอบคุณ", "สวัสดี", "ลาก่อน", "ขอโทษ"],
+            correctAnswer: 1,
             explanation: "Hello ภาษาไทยคือ สวัสดี",
             points: 10
         },
         {
             question: "'Thank you' ภาษาไทยว่าอะไร?",
-            options: ["ขอบคุณ", "ครับ/ค่ะ", "ขอโทษ", "สวัสดี"],
-            correctAnswer: 0,
+            options: ["ครับ/ค่ะ", "ขอโทษ", "ขอบคุณ", "สวัสดี"],
+            correctAnswer: 2,
             explanation: "Thank you ภาษาไทยคือ ขอบคุณ",
             points: 10
         },
@@ -26,15 +26,15 @@ export const FALLBACK_QUESTIONS: Record<string, Question[]> = {
         },
         {
             question: "'Rice' ภาษาไทยว่าอะไร?",
-            options: ["ข้าว", "ก๋วยเตี๋ยว", "ขนมปัง", "ซุป"],
-            correctAnswer: 0,
+            options: ["ก๋วยเตี๋ยว", "ขนมปัง", "ซุป", "ข้าว"],
+            correctAnswer: 3,
             explanation: "Rice ภาษาไทยคือ ข้าว",
             points: 10
         },
         {
             question: "'House/Home' ภาษาไทยว่าอะไร?",
-            options: ["บ้าน", "โรงเรียน", "ร้าน", "สำนักงาน"],
-            correctAnswer: 0,
+            options: ["โรงเรียน", "บ้าน", "ร้าน", "สำนักงาน"],
+            correctAnswer: 1,
             explanation: "House/Home ภาษาไทยคือ บ้าน",
             points: 10
         }
@@ -43,8 +43,8 @@ export const FALLBACK_QUESTIONS: Record<string, Question[]> = {
     fillblank: [
         {
             question: "ฉัน ___ ไปโรงเรียน",
-            options: ["ไป", "มา", "กลับ", "อยู่"],
-            correctAnswer: 0,
+            options: ["มา", "กลับ", "ไป", "อยู่"],
+            correctAnswer: 2,
             explanation: "ใช้ 'ไป' เพราะหมายถึงเดินทางจากที่หนึ่งไปอีกที่",
             points: 10
         },
@@ -57,22 +57,22 @@ export const FALLBACK_QUESTIONS: Record<string, Question[]> = {
         },
         {
             question: "ผม ___ กินข้าว",
-            options: ["ชอบ", "เกลียด", "รัก", "หวง"],
-            correctAnswer: 0,
+            options: ["เกลียด", "รัก", "หวง", "ชอบ"],
+            correctAnswer: 3,
             explanation: "ชอบ = like",
             points: 10
         },
         {
             question: "เขา ___ หนังสือทุกวัน",
-            options: ["อ่าน", "เขียน", "พูด", "ฟัง"],
-            correctAnswer: 0,
+            options: ["เขียน", "อ่าน", "พูด", "ฟัง"],
+            correctAnswer: 1,
             explanation: "อ่านหนังสือ = read books",
             points: 10
         },
         {
             question: "แมว ___ นมตอนเช้า",
-            options: ["ดื่ม", "กิน", "นอน", "วิ่ง"],
-            correctAnswer: 0,
+            options: ["กิน", "นอน", "ดื่ม", "วิ่ง"],
+            correctAnswer: 2,
             explanation: "ดื่มนม = drink milk",
             points: 10
         }

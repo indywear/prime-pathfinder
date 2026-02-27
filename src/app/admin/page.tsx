@@ -129,14 +129,14 @@ export default async function AdminDashboard() {
                                     <div
                                         className="bg-gradient-to-r from-indigo-500 to-purple-600 h-full flex items-center justify-end px-3 text-white text-sm font-medium"
                                         style={{
-                                            width: `${(level._count.currentLevel / userCount) * 100}%`,
+                                            width: `${userCount > 0 ? (level._count.currentLevel / userCount) * 100 : 0}%`,
                                         }}
                                     >
                                         {level._count.currentLevel}
                                     </div>
                                 </div>
                                 <span className="text-sm text-gray-500 w-12 text-right">
-                                    {((level._count.currentLevel / userCount) * 100).toFixed(0)}%
+                                    {userCount > 0 ? ((level._count.currentLevel / userCount) * 100).toFixed(0) : 0}%
                                 </span>
                             </div>
                         ))}

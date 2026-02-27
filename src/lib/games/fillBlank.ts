@@ -1,5 +1,6 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import { levenshteinDistance } from "@/lib/utils/similarity";
 import {
     getDifficultiesForLevel,
     getRecentlyAnsweredQuestionIds,
@@ -50,13 +51,26 @@ export async function getRandomFillBlankQuestions(
     }));
 }
 
+
 /**
- * Check if the user's answer is correct (exact match)
+ * Check if the user's answer is correct
+ * - Short words (≤3 chars): exact match only (prevents "น้ำ" matching "นำ")
+ * - Longer words: 90%+ similarity (tolerates minor Thai typos like wrong tone marks)
  */
 export function checkFillBlankAnswer(userAnswer: string, correctAnswer: string): boolean {
     const normalized = userAnswer.trim();
     const correct = correctAnswer.trim();
-    return normalized === correct;
+    if (normalized === correct) return true;
+
+    // Short words must be exact match — similarity is too lenient for 1-3 char Thai words
+    if (correct.length <= 3) return false;
+
+    // Allow 90%+ similarity for longer words
+    const maxLen = Math.max(normalized.length, correct.length);
+    if (maxLen === 0) return true;
+    const distance = levenshteinDistance(normalized, correct);
+    const similarity = 1 - distance / maxLen;
+    return similarity >= 0.9;
 }
 
 /**

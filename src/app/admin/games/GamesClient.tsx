@@ -129,6 +129,7 @@ export default function AdminGamesClient() {
                                     <td className="px-6 py-4">
                                         <button
                                             onClick={() => toggleGame(game.gameType, game.isEnabled)}
+                                            aria-label={`${game.displayName}: ${game.isEnabled ? 'ปิดการใช้งาน' : 'เปิดการใช้งาน'}`}
                                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${game.isEnabled ? 'bg-indigo-600' : 'bg-gray-200'
                                                 }`}
                                         >

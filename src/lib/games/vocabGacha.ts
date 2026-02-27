@@ -1,5 +1,7 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
+import { addPoints } from "@/lib/gamification";
+import { getBangkokStartOfDay } from "@/lib/utils/timezone";
 
 export interface GachaVocab {
     id: string;
@@ -91,13 +93,8 @@ export async function pullGacha(userId: string): Promise<GachaResult | null> {
         });
     }
 
-    // Award points (userId is internal user.id, not lineUserId)
-    await prisma.user.update({
-        where: { id: userId },
-        data: {
-            totalPoints: { increment: points },
-        },
-    });
+    // Award points through gamification system (handles level-ups, badges, etc.)
+    await addPoints(userId, points, 'VOCAB_GACHA');
 
     return {
         vocab: {
@@ -145,8 +142,7 @@ export async function getUserCollection(userId: string): Promise<{
  * Check if user can pull (e.g., daily limit)
  */
 export async function canPullGacha(userId: string): Promise<boolean> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getBangkokStartOfDay();
 
     // Count pulls today
     const pullsToday = await prisma.practiceSession.count({

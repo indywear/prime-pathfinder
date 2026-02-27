@@ -1,4 +1,5 @@
 import prisma from '@/lib/db/prisma'
+import { getBangkokStartOfDay, getBangkokDateString, getBangkokHour } from '@/lib/utils/timezone'
 
 export const LEVEL_CONFIG = [
     { level: 1, title: 'มือใหม่หัดพิมพ์', titleEn: 'Typing Newbie', xpRequired: 0 },
@@ -84,8 +85,7 @@ export function calculateLevel(totalPoints: number): number {
 }
 
 export async function updateStreak(userId: string): Promise<{ streak: number; bonusPoints: number }> {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const today = getBangkokStartOfDay()
 
     const thirtyDaysAgo = new Date(today)
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
@@ -109,21 +109,17 @@ export async function updateStreak(userId: string): Promise<{ streak: number; bo
 
     const activeDays = new Set<string>()
     sessions.forEach((s) => {
-        const date = new Date(s.completedAt)
-        date.setHours(0, 0, 0, 0)
-        activeDays.add(date.toISOString().split('T')[0])
+        activeDays.add(getBangkokDateString(new Date(s.completedAt)))
     })
     submissions.forEach((s) => {
-        const date = new Date(s.submittedAt)
-        date.setHours(0, 0, 0, 0)
-        activeDays.add(date.toISOString().split('T')[0])
+        activeDays.add(getBangkokDateString(new Date(s.submittedAt)))
     })
 
     let streak = 0
     const checkDate = new Date(today)
 
     while (true) {
-        const dateStr = checkDate.toISOString().split('T')[0]
+        const dateStr = getBangkokDateString(checkDate)
         if (activeDays.has(dateStr)) {
             streak++
             checkDate.setDate(checkDate.getDate() - 1)
@@ -162,6 +158,7 @@ export function calculateProgress(currentPoints: number, currentLevel: number): 
     const nextLevelXP = getNextLevelXP(currentLevel)
     const xpInCurrentLevel = currentPoints - currentLevelXP
     const xpNeededForNextLevel = nextLevelXP - currentLevelXP
+    if (xpNeededForNextLevel <= 0) return 100
     return Math.min((xpInCurrentLevel / xpNeededForNextLevel) * 100, 100)
 }
 
@@ -316,9 +313,8 @@ function getDailyChallengeIndex(): number {
 }
 
 export async function getDailyChallenge(userId: string) {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const todayStr = today.toISOString().split('T')[0]
+    const today = getBangkokStartOfDay()
+    const todayStr = getBangkokDateString()
 
     const challengeIndex = getDailyChallengeIndex()
     const challenge = DAILY_CHALLENGES[challengeIndex]
@@ -396,10 +392,169 @@ export async function updateChallengeProgress(
 ): Promise<{ completed: boolean; reward?: number }> {
     const { challenge, progress, completed } = await getDailyChallenge(userId)
 
-    if (completed && progress === challenge.target) {
+    if (completed && progress >= challenge.target) {
         await addPoints(userId, challenge.reward, 'DAILY_CHALLENGE', challenge.id, `Daily Challenge: ${challenge.title}`)
         return { completed: true, reward: challenge.reward }
     }
 
     return { completed }
+}
+
+// ==================== ACHIEVEMENT TITLES ====================
+
+/**
+ * ฉายาพิเศษที่ผู้เรียนได้รับจากความสำเร็จเฉพาะด้าน
+ * แตกต่างจาก LEVEL_CONFIG.title ที่เป็นฉายาตาม Level
+ */
+export const ACHIEVEMENT_TITLES = [
+    // Vocabulary Achievements
+    { id: 'VOCAB_BEGINNER', title: 'นักสะสมคำ', emoji: '📝', gameCategory: 'vocab', gamesRequired: 10, description: 'เล่นเกมคำศัพท์ 10 รอบ' },
+    { id: 'VOCAB_EXPERT', title: 'จอมคำศัพท์', emoji: '📚', gameCategory: 'vocab', gamesRequired: 50, description: 'เล่นเกมคำศัพท์ 50 รอบ' },
+    { id: 'VOCAB_MASTER', title: 'ราชาคำศัพท์', emoji: '👑', gameCategory: 'vocab', gamesRequired: 100, description: 'เล่นเกมคำศัพท์ 100 รอบ' },
+
+    // Grammar Achievements
+    { id: 'GRAMMAR_BEGINNER', title: 'นักไวยากรณ์', emoji: '✏️', gameCategory: 'grammar', gamesRequired: 10, description: 'เล่นเกมไวยากรณ์ 10 รอบ' },
+    { id: 'GRAMMAR_EXPERT', title: 'เจ้าแห่งไวยากรณ์', emoji: '🔤', gameCategory: 'grammar', gamesRequired: 50, description: 'เล่นเกมไวยากรณ์ 50 รอบ' },
+    { id: 'GRAMMAR_MASTER', title: 'ปรมาจารย์ไวยากรณ์', emoji: '🏆', gameCategory: 'grammar', gamesRequired: 100, description: 'เล่นเกมไวยากรณ์ 100 รอบ' },
+
+    // Reading/Writing Achievements
+    { id: 'WRITER_BEGINNER', title: 'นักเขียนหน้าใหม่', emoji: '📖', gameCategory: 'reading', gamesRequired: 10, description: 'เล่นเกมอ่าน-เขียน 10 รอบ' },
+    { id: 'WRITER_EXPERT', title: 'นักเขียนตัวยง', emoji: '✍️', gameCategory: 'reading', gamesRequired: 50, description: 'เล่นเกมอ่าน-เขียน 50 รอบ' },
+    { id: 'WRITER_MASTER', title: 'เทพแห่งอักษรา', emoji: '🌟', gameCategory: 'reading', gamesRequired: 100, description: 'เล่นเกมอ่าน-เขียน 100 รอบ' },
+
+    // All-rounder
+    { id: 'ALL_ROUNDER', title: 'นักภาษารอบรู้', emoji: '💎', gameCategory: 'all', gamesRequired: 200, description: 'เล่นเกมทุกหมวดรวม 200 รอบ' },
+
+    // Accuracy Achievements
+    { id: 'SHARPSHOOTER', title: 'แม่นยำไร้พ่าย', emoji: '🎯', gameCategory: 'accuracy', gamesRequired: 20, description: 'ตอบถูก 20 ข้อติดต่อกัน' },
+]
+
+// Mapping game types to categories
+const GAME_CATEGORY_MAP: Record<string, string> = {
+    VOCAB_MATCH: 'vocab',
+    VOCAB_MEANING: 'vocab',
+    VOCAB_OPPOSITE: 'vocab',
+    VOCAB_SYNONYM: 'vocab',
+    FILL_BLANK: 'grammar',
+    FIX_SENTENCE: 'grammar',
+    ARRANGE_SENTENCE: 'grammar',
+    SPEED_GRAMMAR: 'grammar',
+    READ_ANSWER: 'reading',
+    COMPOSE_SENTENCE: 'reading',
+    SUMMARIZE: 'reading',
+    CONTINUE_STORY: 'reading',
+    DAILY_VOCAB: 'vocab',
+    RACE_CLOCK: 'grammar',
+    VOCAB_GACHA: 'vocab',
+}
+
+/**
+ * Check and award achievement titles after a game session completes.
+ * Returns the newly earned title if any.
+ * @param lineUserId - LINE user ID (stored in languageGameSession.odUserId)
+ * @param gameType - Game type string (e.g. "VOCAB_MATCH")
+ */
+export async function checkAndAwardTitle(
+    lineUserId: string,
+    gameType: string
+): Promise<{ newTitle: string; emoji: string } | null> {
+    const category = GAME_CATEGORY_MAP[gameType] || 'vocab'
+
+    // Count completed game sessions by category
+    const allSessions = await prisma.languageGameSession.findMany({
+        where: {
+            odUserId: lineUserId,
+            isCompleted: true,
+        },
+        select: { gameType: true },
+    })
+
+    // Count by category
+    const categoryCounts: Record<string, number> = { vocab: 0, grammar: 0, reading: 0, all: 0 }
+    for (const session of allSessions) {
+        const cat = GAME_CATEGORY_MAP[session.gameType] || 'vocab'
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1
+        categoryCounts['all'] = (categoryCounts['all'] || 0) + 1
+    }
+
+    // Find the highest title earned for the current category
+    const relevantTitles = ACHIEVEMENT_TITLES.filter(
+        t => t.gameCategory === category || t.gameCategory === 'all'
+    )
+
+    // Sort by gamesRequired descending to find highest first
+    const sortedTitles = [...relevantTitles].sort((a, b) => b.gamesRequired - a.gamesRequired)
+
+    for (const titleDef of sortedTitles) {
+        const count = categoryCounts[titleDef.gameCategory] || 0
+        if (count >= titleDef.gamesRequired) {
+            // Check if user already has this title
+            const user = await prisma.user.findUnique({
+                where: { lineUserId },
+                select: { title: true },
+            })
+
+            if (user?.title === titleDef.title) {
+                return null // Already has this title
+            }
+
+            // Award the new title!
+            await prisma.user.update({
+                where: { lineUserId },
+                data: { title: titleDef.title },
+            })
+
+            return { newTitle: titleDef.title, emoji: titleDef.emoji }
+        }
+    }
+
+    return null
+}
+
+/**
+ * Get user's current achievement title with emoji.
+ * Falls back to level title if no achievement title.
+ */
+export function getDisplayTitle(user: { title?: string | null; currentLevel: number }): string {
+    if (user.title) {
+        const titleDef = ACHIEVEMENT_TITLES.find(t => t.title === user.title)
+        return titleDef ? `${titleDef.emoji} ${titleDef.title}` : user.title
+    }
+    // Fallback to level title
+    const levelInfo = getLevelInfo(user.currentLevel)
+    return levelInfo.title
+}
+
+/**
+ * List all achievement titles with progress for a user.
+ * @param lineUserId - LINE user ID (stored in languageGameSession.odUserId)
+ */
+export async function getUserTitleProgress(
+    lineUserId: string
+): Promise<Array<{ title: string; emoji: string; description: string; progress: number; required: number; earned: boolean }>> {
+    const allSessions = await prisma.languageGameSession.findMany({
+        where: {
+            odUserId: lineUserId,
+            isCompleted: true,
+        },
+        select: { gameType: true },
+    })
+
+    const categoryCounts: Record<string, number> = { vocab: 0, grammar: 0, reading: 0, all: 0 }
+    for (const session of allSessions) {
+        const cat = GAME_CATEGORY_MAP[session.gameType] || 'vocab'
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1
+        categoryCounts['all'] = (categoryCounts['all'] || 0) + 1
+    }
+
+    return ACHIEVEMENT_TITLES
+        .filter(t => t.gameCategory !== 'accuracy') // exclude accuracy for now
+        .map(t => ({
+            title: t.title,
+            emoji: t.emoji,
+            description: t.description,
+            progress: categoryCounts[t.gameCategory] || 0,
+            required: t.gamesRequired,
+            earned: (categoryCounts[t.gameCategory] || 0) >= t.gamesRequired,
+        }))
 }

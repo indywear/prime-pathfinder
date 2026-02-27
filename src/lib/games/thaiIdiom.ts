@@ -7,63 +7,62 @@ import {
     getUserLevel,
 } from "./questionHistory";
 
-export interface VocabOppositeQuestion {
+export interface ThaiIdiomQuestion {
     id: string;
-    word: string;
-    opposite: string;
+    idiom: string;
+    meaning: string;
     wrongA: string;
     wrongB: string;
     wrongC: string;
+    example: string | null;
 }
 
 /**
- * Get random vocab opposite questions (with difficulty and history filtering)
+ * Get random Thai idiom questions (with difficulty and history filtering)
  */
-export async function getRandomVocabOppositeQuestions(
+export async function getRandomThaiIdiomQuestions(
     userId?: string,
     count: number = 5
-): Promise<VocabOppositeQuestion[]> {
+): Promise<ThaiIdiomQuestion[]> {
     const userLevel = userId ? await getUserLevel(userId) : 1;
     const difficulties = getDifficultiesForLevel(userLevel);
     const answeredIds = userId
-        ? await getRecentlyAnsweredQuestionIds(userId, "VOCAB_OPPOSITE", 24)
+        ? await getRecentlyAnsweredQuestionIds(userId, "THAI_IDIOM", 24)
         : [];
 
-    const allQuestions = await prisma.vocabOppositeQuestion.findMany({
+    const allQuestions = await prisma.thaiIdiomQuestion.findMany({
         where: { difficulty: { in: difficulties } },
     });
 
     if (allQuestions.length === 0) {
-        const fallback = await prisma.vocabOppositeQuestion.findMany();
+        const fallback = await prisma.thaiIdiomQuestion.findMany();
         if (fallback.length === 0) return [];
         return shuffle(fallback).slice(0, count).map(q => ({
-            id: q.id, word: q.word, opposite: q.opposite,
+            id: q.id, idiom: q.idiom, meaning: q.meaning,
             wrongA: q.wrongA, wrongB: q.wrongB, wrongC: q.wrongC,
+            example: q.example,
         }));
     }
 
     const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
     return filtered.map(q => ({
-        id: q.id, word: q.word, opposite: q.opposite,
+        id: q.id, idiom: q.idiom, meaning: q.meaning,
         wrongA: q.wrongA, wrongB: q.wrongB, wrongC: q.wrongC,
+        example: q.example,
     }));
 }
 
 /**
  * Get shuffled options for a question
- * Also validates that distractors don't duplicate the correct answer
  */
-export function getVocabOppositeOptions(question: VocabOppositeQuestion): string[] {
-    const correct = question.opposite.trim();
-    // Filter out any distractor that matches the correct answer (prevents duplicate options)
+export function getThaiIdiomOptions(question: ThaiIdiomQuestion): string[] {
+    const correct = question.meaning.trim();
     const distractors = [question.wrongA, question.wrongB, question.wrongC]
         .map(d => d?.trim())
         .filter(d => d && d !== correct);
 
-    // Always include the correct answer + up to 3 unique distractors
     const options = [correct, ...distractors.slice(0, 3)];
 
-    // Pad with placeholder if we lost distractors due to duplicates
     while (options.length < 4) {
         options.push("(ไม่มีตัวเลือก)");
     }
@@ -74,7 +73,7 @@ export function getVocabOppositeOptions(question: VocabOppositeQuestion): string
 /**
  * Check if the answer is correct
  */
-export function checkVocabOppositeAnswer(userAnswer: string, correctAnswer: string): boolean {
+export function checkThaiIdiomAnswer(userAnswer: string, correctAnswer: string): boolean {
     const normalized = userAnswer.trim().toUpperCase();
     const correct = correctAnswer.trim().toUpperCase();
 
@@ -90,24 +89,18 @@ export function checkVocabOppositeAnswer(userAnswer: string, correctAnswer: stri
 }
 
 /**
- * Calculate points
- */
-export function calculateVocabOppositePoints(correctCount: number): number {
-    return correctCount * 10;
-}
-
-/**
  * Format question for LINE message
  */
-export function formatVocabOppositeQuestion(
-    question: VocabOppositeQuestion,
+export function formatThaiIdiomQuestion(
+    question: ThaiIdiomQuestion,
     options: string[],
     currentIndex: number,
     totalCount: number
 ): string {
-    return `🔄 ข้อ ${currentIndex + 1}/${totalCount}
+    return `🏮 ข้อ ${currentIndex + 1}/${totalCount}
 
-คำตรงข้ามของ: "${question.word}"
+สำนวน: "${question.idiom}"
+ความหมายคืออะไร?
 
 ก. ${options[0]}
 ข. ${options[1]}
@@ -118,22 +111,32 @@ export function formatVocabOppositeQuestion(
 }
 
 /**
- * Format result message
+ * Format result message (with example usage)
  */
-export function formatVocabOppositeResult(correct: boolean, correctAnswer: string): string {
+export function formatThaiIdiomResult(
+    correct: boolean,
+    correctAnswer: string,
+    example: string | null
+): string {
     if (correct) {
-        return `✅ ถูกต้อง! +10 คะแนน`;
+        let msg = `✅ ถูกต้อง! +10 คะแนน`;
+        if (example) {
+            msg += `\n\n📝 ตัวอย่าง: ${example}`;
+        }
+        return msg;
     } else {
-        return `❌ ไม่ถูกต้อง
-
-คำตอบที่ถูกคือ: ${correctAnswer}`;
+        let msg = `❌ ไม่ถูกต้อง\n\nคำตอบที่ถูกคือ: ${correctAnswer}`;
+        if (example) {
+            msg += `\n\n📝 ตัวอย่าง: ${example}`;
+        }
+        return msg;
     }
 }
 
 /**
  * Format game summary
  */
-export function formatVocabOppositeGameSummary(
+export function formatThaiIdiomGameSummary(
     correctCount: number,
     totalCount: number,
     pointsEarned: number
@@ -150,12 +153,12 @@ export function formatVocabOppositeGameSummary(
         message = "ดีมาก!";
     }
 
-    return `${emoji} จบเกมคำตรงข้ามแล้ว! ${message}
+    return `${emoji} จบเกมสำนวนไทยแล้ว! ${message}
 
 📊 ผลคะแนน:
 ✅ ถูก: ${correctCount}/${totalCount} ข้อ
 📈 ได้คะแนน: +${pointsEarned} แต้ม
 🎯 อัตราถูก: ${percentage}%
 
-พิมพ์ "ฝึกฝน" เพื่อเล่นเกมอื่น หรือ "คำตรงข้าม" เพื่อเล่นใหม่`;
+พิมพ์ "ฝึกฝน" เพื่อเล่นเกมอื่น หรือ "สำนวนไทย" เพื่อเล่นใหม่`;
 }

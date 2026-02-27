@@ -1,5 +1,6 @@
 import prisma from '@/lib/db/prisma'
 import { addPoints } from '@/lib/gamification'
+import { getBangkokStartOfDay, getBangkokHour } from '@/lib/utils/timezone'
 
 interface EasterEgg {
     id: string
@@ -105,8 +106,7 @@ export async function spinWheel(
         select: { lastSpinAt: true },
     })
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const today = getBangkokStartOfDay()
 
     if (user?.lastSpinAt && user.lastSpinAt >= today) {
         return { success: false, message: 'คุณหมุนแล้ววันนี้! มาใหม่พรุ่งนี้นะ 🎰' }
@@ -183,7 +183,7 @@ const AI_COMPANION = {
 }
 
 export function getCompanionGreeting(name: string): string {
-    const hour = new Date().getHours()
+    const hour = getBangkokHour()
     let timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night'
 
     if (hour >= 5 && hour < 12) timeOfDay = 'morning'

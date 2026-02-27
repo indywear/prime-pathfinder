@@ -12,9 +12,21 @@ export async function POST(request: NextRequest) {
     try {
         const formData = await request.formData();
         const file = formData.get("image") as File;
-        
+
         if (!file) {
             return NextResponse.json({ error: "Image file required" }, { status: 400 });
+        }
+
+        // Validate file type
+        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+        if (!allowedTypes.includes(file.type)) {
+            return NextResponse.json({ error: "Only PNG and JPEG images are allowed" }, { status: 400 });
+        }
+
+        // Validate file size (max 10MB for LINE rich menu)
+        const maxSize = 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+            return NextResponse.json({ error: "Image must be less than 10MB" }, { status: 400 });
         }
 
         const buffer = Buffer.from(await file.arrayBuffer());

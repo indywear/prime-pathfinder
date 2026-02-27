@@ -59,6 +59,7 @@ export function createDashboardFlex(data: {
     totalTasks: number;
     vocabularyCount: number;
     nextLevelPoints: number;
+    title?: string;
 }): FlexMessage {
     const progressPercent = Math.min(
         100,
@@ -102,9 +103,9 @@ export function createDashboardFlex(data: {
                         contents: [
                             {
                                 type: "text",
-                                text: `Level ${data.level}`,
+                                text: `Lv.${data.level} ${data.title || ''}`,
                                 weight: "bold",
-                                size: "xxl",
+                                size: "xl",
                                 flex: 0,
                             },
                             {
@@ -225,6 +226,9 @@ export function createProfileFlex(data: {
     email: string;
     nationality: string;
     thaiLevel: string;
+    level?: number;
+    title?: string;
+    totalPoints?: number;
 }): FlexMessage {
     return {
         type: "flex",
@@ -257,6 +261,10 @@ export function createProfileFlex(data: {
                     createProfileRow("Email", data.email),
                     createProfileRow("Nationality", data.nationality),
                     createProfileRow("Thai Level", data.thaiLevel),
+                    ...(data.level ? [
+                        createProfileRow("Level", `Lv.${data.level} ${data.title || ''}`),
+                        createProfileRow("Points", `${data.totalPoints || 0} pts`),
+                    ] : []),
                 ],
                 paddingAll: "20px",
                 spacing: "md",
@@ -503,7 +511,7 @@ export function createPracticeMenuFlex(): FlexMessage {
                     },
                     {
                         type: "text",
-                        text: "เลือกหมวดที่ต้องการ (15 เกม)",
+                        text: "เลือกหมวดที่ต้องการ (17 เกม)",
                         size: "sm",
                         color: "#FFFFFF",
                     },
@@ -519,6 +527,7 @@ export function createPracticeMenuFlex(): FlexMessage {
                     createGameButton("ไวยากรณ์", "เติมคำ, แก้ประโยค, เรียงคำ, Speed", "เกมไวยากรณ์", "#9B59B6"),
                     createGameButton("อ่าน-เขียน", "อ่านตอบ, แต่งประโยค, สรุป, เขียนต่อ", "เกมอ่าน", "#1ABC9C"),
                     createGameButton("เกมสนุก", "คำศัพท์วันนี้, แข่งเวลา, กาชา", "เกมสนุก", "#E74C3C"),
+                    createGameButton("วัฒนธรรม", "สำนวนไทย, มารยาท, คำต้องห้าม", "เกมวัฒนธรรม", "#F39C12"),
                 ],
                 paddingAll: "20px",
                 spacing: "md",
@@ -577,10 +586,11 @@ function createGameButton(title: string, desc: string, command: string, color: s
 }
 
 export function createLeaderboardFlex(data: {
-    topUsers: { thaiName: string; totalPoints: number; currentLevel: number }[];
+    topUsers: { thaiName: string; totalPoints: number; currentLevel: number; title?: string }[];
     myRank: number;
     myPoints: number;
     myLevel: number;
+    myTitle?: string;
 }): FlexMessage {
     const medals = ["🥇", "🥈", "🥉"];
     
@@ -1520,11 +1530,21 @@ export async function replyText(replyToken: string, text: string) {
 export async function replyWithQuickReply(
     replyToken: string,
     text: string,
-    options: Array<{ label: string; text: string }>
+    options: Array<{ label: string; text: string }>,
+    imageUrl?: string | null
 ) {
+    const messages: any[] = [];
+    if (imageUrl) {
+        messages.push({
+            type: "image",
+            originalContentUrl: imageUrl,
+            previewImageUrl: imageUrl,
+        });
+    }
+    messages.push(createTextMessage(text, createQuickReply(options)));
     await lineClient.replyMessage({
         replyToken,
-        messages: [createTextMessage(text, createQuickReply(options))] as any,
+        messages,
     });
 }
 

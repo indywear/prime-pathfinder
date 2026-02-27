@@ -1,47 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { lineClient } from "@/lib/line/client";
+import { RICH_MENU_TEMPLATE } from "@/lib/line/richMenuTemplate";
 
 export const dynamic = 'force-dynamic';
 
-const RICH_MENU_TEMPLATE = {
-    size: {
-        width: 2500,
-        height: 1686,
-    },
-    selected: true,
-    name: "ProficienThAI Menu",
-    chatBarText: "เมนู",
-    areas: [
-        {
-            bounds: { x: 0, y: 0, width: 833, height: 843 },
-            action: { type: "message" as const, text: "ส่งงาน" },
-        },
-        {
-            bounds: { x: 833, y: 0, width: 834, height: 843 },
-            action: { type: "message" as const, text: "ขอผลป้อนกลับ" },
-        },
-        {
-            bounds: { x: 1667, y: 0, width: 833, height: 843 },
-            action: { type: "message" as const, text: "ฝึกฝน" },
-        },
-        {
-            bounds: { x: 0, y: 843, width: 833, height: 843 },
-            action: { type: "message" as const, text: "แดชบอร์ด" },
-        },
-        {
-            bounds: { x: 833, y: 843, width: 834, height: 843 },
-            action: { type: "message" as const, text: "leaderboard" },
-        },
-        {
-            bounds: { x: 1667, y: 843, width: 833, height: 843 },
-            action: { type: "message" as const, text: "spin wheel" },
-        },
-    ],
-};
-
 export async function POST(request: NextRequest) {
     try {
-        const richMenuId = await lineClient.createRichMenu(RICH_MENU_TEMPLATE);
+        const richMenuResult = await lineClient.createRichMenu(RICH_MENU_TEMPLATE);
+        const richMenuId = richMenuResult.richMenuId;
         
         return NextResponse.json({
             success: true,

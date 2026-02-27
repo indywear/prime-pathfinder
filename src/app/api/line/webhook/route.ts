@@ -5,6 +5,7 @@ import { handlePostback } from './handlers/postback'
 import { handleFollow } from './handlers/follow'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 30 // Allow up to 30 seconds for AI evaluation calls
 
 const channelSecret = process.env.LINE_CHANNEL_SECRET
 
@@ -20,26 +21,28 @@ export async function POST(request: NextRequest) {
         const body = await request.text()
         const signature = request.headers.get('x-line-signature')
 
-        console.log('[Webhook] Body length:', body.length)
-        console.log('[Webhook] Has signature:', !!signature)
-
-        // Handle LINE verification request (empty events array)
-        const parsedBody = JSON.parse(body)
+        // Parse body safely
+        let parsedBody: any
+        try {
+            parsedBody = JSON.parse(body)
+        } catch {
+            return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+        }
         if (parsedBody.events && parsedBody.events.length === 0) {
             console.log('[Webhook] Verification request - returning 200')
             return NextResponse.json({ success: true })
         }
 
-        // Temporarily skip signature validation for debugging
-        // TODO: Re-enable after fixing
-        if (signature) {
-            const isValid = validateSignature(body, channelSecret, signature)
-            console.log('[Webhook] Signature valid:', isValid)
-            if (!isValid) {
-                console.warn('[Webhook] Signature mismatch - continuing anyway for debug')
-            }
-        } else {
-            console.warn('[Webhook] No signature - continuing anyway for debug')
+        // Validate LINE signature (REQUIRED for security)
+        if (!signature) {
+            console.error('[Webhook] Missing signature - rejecting request')
+            return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
+        }
+
+        const isValid = validateSignature(body, channelSecret, signature)
+        if (!isValid) {
+            console.error('[Webhook] Invalid signature - rejecting request')
+            return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
         }
 
         const events: WebhookEvent[] = parsedBody.events
@@ -61,7 +64,7 @@ export async function POST(request: NextRequest) {
                             await handleFollow(event)
                             break
                         case 'unfollow':
-                            console.log('[Webhook] User unfollowed:', event.source.userId)
+                            console.log('[Webhook] User unfollowed:', event.source?.userId ?? 'unknown')
                             break
                         default:
                             console.log('[Webhook] Unhandled event type:', event.type)
@@ -83,10 +86,5 @@ export async function GET() {
     return NextResponse.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
-        hasSecret: !!process.env.LINE_CHANNEL_SECRET,
-        hasToken: !!process.env.LINE_CHANNEL_ACCESS_TOKEN,
-        hasDb: !!process.env.DATABASE_URL,
-        hasOpenRouter: !!process.env.OPENROUTER_API_KEY,
-        openRouterKeyPrefix: process.env.OPENROUTER_API_KEY?.substring(0, 10) || 'not set',
     })
 }

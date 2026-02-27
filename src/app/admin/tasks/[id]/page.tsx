@@ -190,6 +190,7 @@ export default function TaskSubmissionsPage({ params }: { params: Promise<{ id: 
                             </h2>
                             <button
                                 onClick={() => setSelectedSubmission(null)}
+                                aria-label="Close submission detail"
                                 className="text-gray-400 hover:text-gray-600 text-2xl"
                             >
                                 &times;

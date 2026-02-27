@@ -1,6 +1,7 @@
 import { FollowEvent } from '@line/bot-sdk'
 import prisma from '@/lib/db/prisma'
 import { replyText } from '@/lib/line/client'
+import { getNewUserWelcome, getReturningUserWelcome } from '@/lib/line/botCharacter'
 
 export async function handleFollow(event: FollowEvent) {
     const userId = event.source.userId
@@ -11,14 +12,19 @@ export async function handleFollow(event: FollowEvent) {
     })
 
     if (existingUser?.isRegistered) {
+        // Returning user — welcome back with time greeting
         await replyText(
             event.replyToken,
-            `ยินดีต้อนรับกลับ คุณ${existingUser.thaiName}!\n\nพิมพ์ "เมนู" เพื่อดูคำสั่งทั้งหมด`
+            getReturningUserWelcome(
+                existingUser.thaiName || "เพื่อน",
+                existingUser.gender
+            )
         )
     } else {
+        // New user — full welcome introduction
         await replyText(
             event.replyToken,
-            `ยินดีต้อนรับสู่ ProficienThAI!\n\nพิมพ์ "ลงทะเบียน" เพื่อเริ่มต้นใช้งาน`
+            getNewUserWelcome()
         )
     }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import RichTextEditor from '../components/RichTextEditor'
 
 interface Task {
     id: string
@@ -23,6 +24,7 @@ export default function TasksPage() {
     const [tasks, setTasks] = useState<Task[]>([])
     const [loading, setLoading] = useState(true)
     const [showCreateForm, setShowCreateForm] = useState(false)
+    const [formError, setFormError] = useState<string | null>(null)
 
     useEffect(() => {
         fetchTasks()
@@ -73,30 +75,44 @@ export default function TasksPage() {
             {showCreateForm && (
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <h2 className="text-xl font-bold mb-4">Create New Task</h2>
+                    {formError && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                            {formError}
+                        </div>
+                    )}
                     <form
                         onSubmit={async (e) => {
                             e.preventDefault()
-                            const formData = new FormData(e.currentTarget)
-                            const weekNum = parseInt(formData.get('weekNumber') as string)
-                            const res = await fetch('/api/tasks', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    weekNumber: weekNum,
-                                    title: formData.get('title'),
-                                    description: formData.get('description'),
-                                    contentHtml: formData.get('contentHtml'),
-                                    bestPractice: formData.get('bestPractice'),
-                                    generalPractice: formData.get('generalPractice'),
-                                    badPractice: formData.get('badPractice'),
-                                    minWords: parseInt(formData.get('minWords') as string),
-                                    maxWords: parseInt(formData.get('maxWords') as string),
-                                    deadline: formData.get('deadline'),
-                                }),
-                            })
-                            if (res.ok) {
-                                setShowCreateForm(false)
-                                fetchTasks()
+                            setFormError(null)
+                            try {
+                                const formData = new FormData(e.currentTarget)
+                                const weekNum = parseInt(formData.get('weekNumber') as string)
+                                const res = await fetch('/api/tasks', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        weekNumber: weekNum,
+                                        title: formData.get('title'),
+                                        description: formData.get('description'),
+                                        contentHtml: formData.get('contentHtml'),
+                                        bestPractice: formData.get('bestPractice'),
+                                        generalPractice: formData.get('generalPractice'),
+                                        badPractice: formData.get('badPractice'),
+                                        minWords: parseInt(formData.get('minWords') as string),
+                                        maxWords: parseInt(formData.get('maxWords') as string),
+                                        deadline: formData.get('deadline'),
+                                    }),
+                                })
+                                if (res.ok) {
+                                    setShowCreateForm(false)
+                                    setFormError(null)
+                                    fetchTasks()
+                                } else {
+                                    const data = await res.json().catch(() => ({}))
+                                    setFormError(data.error || `Failed to create task (${res.status})`)
+                                }
+                            } catch (err: any) {
+                                setFormError(err.message || 'Network error')
                             }
                         }}
                         className="space-y-4"
@@ -144,13 +160,11 @@ export default function TasksPage() {
                                 Reading Content (เนื้อหาบทอ่านสำหรับนักเรียน)
                             </label>
                             <p className="text-xs text-gray-500 mb-2">
-                                พิมพ์เนื้อหาบทอ่านที่นี่ ระบบจะสร้างหน้าเว็บให้อัตโนมัติ รองรับ HTML (เช่น &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;strong&gt;)
+                                พิมพ์เนื้อหาบทอ่านที่นี่ ใช้ปุ่มด้านบนเพื่อจัดรูปแบบ (ตัวหนา, หัวข้อ, สี ฯลฯ) หรือกด &lt;/&gt; เพื่อแก้ไข HTML โดยตรง
                             </p>
-                            <textarea
+                            <RichTextEditor
                                 name="contentHtml"
-                                rows={10}
-                                placeholder={"<h2>หัวข้อบทอ่าน</h2>\n<p>เนื้อหาย่อหน้าแรก...</p>\n<p>เนื้อหาย่อหน้าที่สอง...</p>"}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"
+                                placeholder="พิมพ์เนื้อหาบทอ่านที่นี่..."
                             />
                         </div>
                         {/* Practice Examples for AI Grading */}

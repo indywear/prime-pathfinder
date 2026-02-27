@@ -11,8 +11,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const lineUserId = searchParams.get("userId");
 
-    if (!lineUserId) {
-        return NextResponse.json({ error: "userId is required" }, { status: 400 });
+    if (!lineUserId || lineUserId.length < 10) {
+        return NextResponse.json({ error: "Invalid userId" }, { status: 400 });
     }
 
     try {
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
             tasks: {
                 total: totalTasks,
                 completed: totalSubmissions,
-                pending: totalTasks - totalSubmissions,
+                pending: Math.max(0, totalTasks - totalSubmissions),
                 activeTasks: activeTasks.map((t) => ({
                     id: t.id,
                     weekNumber: t.weekNumber,

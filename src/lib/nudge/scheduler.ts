@@ -43,7 +43,7 @@ function getRandomMessage(messages: string[]): string {
 function formatMessage(template: string, vars: Record<string, string>): string {
     let result = template
     Object.entries(vars).forEach(([key, value]) => {
-        result = result.replace(`{${key}}`, value)
+        result = result.replaceAll(`{${key}}`, value)
     })
     return result
 }

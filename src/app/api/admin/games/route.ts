@@ -81,6 +81,10 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: 'gameType is required' }, { status: 400 })
         }
 
+        if (typeof isEnabled !== 'boolean') {
+            return NextResponse.json({ error: 'isEnabled must be a boolean' }, { status: 400 })
+        }
+
         // Save to database
         await prisma.systemConfig.upsert({
             where: { key: `game_enabled_${gameType}` },

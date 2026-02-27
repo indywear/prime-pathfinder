@@ -1,98 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db/prisma";
-import axios from "axios";
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+    // Only allow in development or when auth is provided (middleware handles auth)
     const searchParams = request.nextUrl.searchParams;
-    const testAI = searchParams.get("testAI") === "true";
+    const testDB = searchParams.get("testDB") === "true";
 
-    const dbUrl = process.env.DATABASE_URL;
-    // Trim to remove any accidental whitespace/newlines
-    const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
-
+    // Safe env status - no secrets exposed
     const envStatus = {
-        DATABASE_URL: dbUrl ? `Set (length: ${dbUrl.length}, starts: ${dbUrl.substring(0, 25)}...)` : "NOT SET",
         LINE_CHANNEL_ACCESS_TOKEN: process.env.LINE_CHANNEL_ACCESS_TOKEN ? "Set" : "NOT SET",
         LINE_CHANNEL_SECRET: process.env.LINE_CHANNEL_SECRET ? "Set" : "NOT SET",
-        OPENROUTER_API_KEY: openRouterKey ? `Set (${openRouterKey.substring(0, 15)}...)` : "NOT SET",
-        ADMIN_EMAIL: process.env.ADMIN_EMAIL ? `Set (value: "${process.env.ADMIN_EMAIL}")` : "NOT SET",
-        ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ? `Set (length: ${process.env.ADMIN_PASSWORD.length}, first3: "${process.env.ADMIN_PASSWORD.substring(0, 3)}...")` : "NOT SET",
+        OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ? "Set" : "NOT SET",
+        DATABASE_URL: process.env.DATABASE_URL ? "Set" : "NOT SET",
         NODE_ENV: process.env.NODE_ENV,
     };
 
-    // Test OpenRouter API if requested
-    let aiTestResult = null;
-    if (testAI && openRouterKey) {
-        try {
-            const startTime = Date.now();
-            const response = await axios.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                {
-                    model: "anthropic/claude-haiku-4.5",
-                    messages: [{ role: "user", content: "Say hi in Thai" }],
-                    max_tokens: 50,
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${openRouterKey}`,
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://proficienthai.vercel.app",
-                        "X-Title": "ProficienThAI",
-                    },
-                    timeout: 30000,
-                }
-            );
-            const endTime = Date.now();
-            aiTestResult = {
-                success: true,
-                responseTime: `${endTime - startTime}ms`,
-                model: response.data.model,
-                content: response.data.choices[0]?.message?.content,
-            };
-        } catch (error: any) {
-            aiTestResult = {
-                success: false,
-                error: error.message,
-                status: error.response?.status,
-                data: error.response?.data,
-            };
-        }
-    }
-
-    if (!dbUrl) {
+    if (!testDB) {
         return NextResponse.json({
-            status: "error",
-            message: "DATABASE_URL not set",
+            status: "ok",
             env: envStatus,
-            aiTest: aiTestResult,
-            timestamp: new Date().toISOString()
-        }, { status: 500 });
+            timestamp: new Date().toISOString(),
+        });
     }
 
     try {
         const userCount = await prisma.user.count();
+        const taskCount = await prisma.task.count();
         return NextResponse.json({
             status: "ok",
             userCount,
+            taskCount,
             env: envStatus,
-            aiTest: aiTestResult,
             timestamp: new Date().toISOString(),
-            prismaVersion: "5.22.0"
         });
     } catch (error: any) {
-        console.error("Database Error:", error);
-
         return NextResponse.json({
             status: "error",
             message: error.message,
-            code: error.code,
-            errorName: error.name,
-            stack: error.stack?.split('\n').slice(0, 5),
             env: envStatus,
-            aiTest: aiTestResult,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
         }, { status: 500 });
     }
 }
