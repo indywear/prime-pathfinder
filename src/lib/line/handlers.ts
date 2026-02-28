@@ -934,7 +934,7 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
             feedbackMsg = "\n\n(AI กำลังประเมินงาน รอสักครู่...)";
         }
 
-        // === Build teasing messages ===
+        // === Build teasing or praise messages ===
         let teaseMsg = "";
         if (suspectedFast && submissionSpeed != null) {
             teaseMsg += `\n\n⚡ ว้าว! ใช้เวลาแค่ ${submissionSpeed} วินาทีเอง...\nน้องไทยพิมพ์ยังไม่ทันเลย 🤖\nถ้าเขียนเอง เก่งมากจริงๆ! ถ้าไม่ใช่... ลองเขียนใหม่ด้วยตัวเองนะ ✍️`;
@@ -944,6 +944,10 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
         }
         if (suspectedAI) {
             teaseMsg += `\n\n🤖 น้องไทยสังเกตว่า...\nเขียนดีเกินไปหน่อยนะ! สวยจนสงสัยว่า AI ตัวไหนมาช่วย 🧐\nถ้าเขียนเองจริงก็เก่งมาก! แต่ถ้าไม่... จำไว้ว่าเราฝึกเพื่อตัวเองนะ 💪`;
+        }
+        // ชมเชยถ้าไม่โดน flag อะไรเลย — เขียนเองจริงๆ!
+        if (!suspectedFast && !suspectedCopy && !suspectedAI) {
+            teaseMsg += `\n\n🌟 น้องไทยเห็นว่าเขียนเองจริงๆ เลยนะ!\nตั้งใจแบบนี้เก่งมาก${p(user?.gender)} ทำต่อไปเรื่อยๆ แล้วจะเก่งขึ้นแน่นอน! 💯`;
         }
 
         await prisma.submission.update({
