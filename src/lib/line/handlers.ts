@@ -50,6 +50,7 @@ import {
     createRegistrationCompleteFlex,
     createWelcomeNewUserFlex,
     createSubmissionResultFlex,
+    createHintFlex,
     type FlexMessage,
 } from "@/lib/line/client";
 import { generateWritingFeedback, generateConversationResponse, generateSimpleFeedback } from "@/lib/ai/feedback";
@@ -302,7 +303,7 @@ export async function handleTextMessage(
 
         // Reject extremely long messages to prevent abuse
         if (text.length > 5000) {
-            await replyText(event.replyToken, "ข้อความยาวเกินไปครับ กรุณาส่งข้อความไม่เกิน 5,000 ตัวอักษร");
+            { const flex = createErrorFlex("ข้อความยาวเกินไป กรุณาส่งข้อความไม่เกิน 5,000 ตัวอักษร", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken: event.replyToken, messages: [flex] as any }); }
             return;
         }
 
@@ -577,7 +578,7 @@ export async function handleTextMessage(
         await handleGeneralConversation(event.replyToken, userId, text);
     } catch (error) {
         console.error(`[handleTextMessage] Error for user ${event.source.userId}:`, error);
-        await replyText(event.replyToken, "ขออภัยครับ ระบบขัดข้องในขณะนี้ กรุณาลองใหม่อีกครั้ง หรือพิมพ์ 'เมนู' เพื่อเริ่มใหม่");
+        { const flex = createErrorFlex("ระบบขัดข้องในขณะนี้ กรุณาลองใหม่อีกครั้ง", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken: event.replyToken, messages: [flex] as any }); }
     }
 }
 
@@ -601,7 +602,7 @@ async function handleRegisterStart(replyToken: string, userId: string) {
 
     await replyText(
         replyToken,
-        `สวัสดีครับ! ยินดีต้อนรับสู่ ProficienThAI\n\nเริ่มลงทะเบียนกันเลย\n\n${firstStep.question}`
+        `สวัสดี! ยินดีต้อนรับสู่ ProficienThAI\n\nเริ่มลงทะเบียนกันเลย\n\n${firstStep.question}`
     );
 }
 
@@ -676,10 +677,7 @@ async function handleFeedbackStart(replyToken: string, userId: string) {
         return;
     }
 
-    await replyText(
-        replyToken,
-        `สวัสดี${p(user.gender)} คุณ${user.thaiName}!\n\n📝 ส่งข้อความภาษาไทยที่ต้องการให้ตรวจมาได้เลย${p(user.gender)}\n\nจะช่วยตรวจและให้คำแนะนำ${p(user.gender)}`
-    );
+    { const flex = createConfirmationFlex({ icon: "📝", message: `สวัสดี คุณ${user.thaiName}!\n\nส่งข้อความภาษาไทยที่ต้องการให้ตรวจมาได้เลย\n\nจะช่วยตรวจและให้คำแนะนำ`, buttons: [{ label: "เมนู", text: "เมนู" }] }); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
 }
 
 async function handleSubmitStart(replyToken: string, userId: string) {
@@ -724,19 +722,13 @@ async function handleSubmitStart(replyToken: string, userId: string) {
 
         if (!task) {
             // ไม่มี Task สำหรับ Week นี้ = ทำครบทุก Week แล้ว
-            await replyText(
-                replyToken,
-                `คุณทำครบทุกสัปดาห์แล้ว${p(user.gender)}! เก่งมาก!\n\nรอภาระงานใหม่จากอาจารย์${np(user.gender)}\n\nพิมพ์ "แดชบอร์ด" เพื่อดูความก้าวหน้า`
-            );
+            { const flex = createConfirmationFlex({ icon: "🎉", message: "คุณทำครบทุกสัปดาห์แล้ว! เก่งมาก!\n\nรอภาระงานใหม่จากอาจารย์", buttons: [{ label: "แดชบอร์ด", text: "แดชบอร์ด" }, { label: "เมนู", text: "เมนู" }] }); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
             return;
         }
 
         if (!task.isActive) {
             // Task มีแต่ยังไม่เปิด
-            await replyText(
-                replyToken,
-                `ภาระงานสัปดาห์ที่ ${currentWeek} ยังไม่เปิดรับ${p(user.gender)}\n\nกรุณารอประกาศจากอาจารย์${np(user.gender)}`
-            );
+            { const flex = createConfirmationFlex({ icon: "📋", message: `ภาระงานสัปดาห์ที่ ${currentWeek} ยังไม่เปิดรับ\n\nกรุณารอประกาศจากอาจารย์`, buttons: [{ label: "แดชบอร์ด", text: "แดชบอร์ด" }, { label: "เมนู", text: "เมนู" }] }); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
             return;
         }
 
@@ -817,7 +809,7 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
         // Get the task for deadline check
         const task = await prisma.task.findUnique({ where: { id: taskId } });
         if (!task) {
-            await replyText(replyToken, `ไม่พบภาระงานนี้แล้ว${p(user?.gender)} กรุณาลองใหม่`);
+            { const flex = createErrorFlex("ไม่พบภาระงานนี้แล้ว กรุณาลองใหม่", [{ label: "ส่งงาน", text: "ส่งงาน" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
             await prisma.user.update({
                 where: { id: user.id },
                 data: { currentGameType: null, currentQuestionId: null, gameData: null },
@@ -1155,7 +1147,7 @@ async function handleGeneralConversation(replyToken: string, userId: string, tex
         console.log("[handleGeneralConversation] Reply sent successfully");
     } catch (error) {
         console.error("[handleGeneralConversation] Error:", error);
-        await replyText(replyToken, "ขอโทษครับ ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง");
+        { const flex = createErrorFlex("ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
     }
 }
 
@@ -1203,7 +1195,7 @@ async function handleEditFieldStart(replyToken: string, userId: string, fieldNam
 
     const fieldInfo = FIELD_MAP[fieldName];
     if (!fieldInfo) {
-        await replyText(replyToken, "ไม่พบข้อมูลที่ต้องการแก้ไข พิมพ์ 'แก้ไข' เพื่อดูตัวเลือก");
+        { const flex = createErrorFlex("ไม่พบข้อมูลที่ต้องการแก้ไข", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -1227,7 +1219,7 @@ async function handleEditFieldSubmit(replyToken: string, user: any, newValue: st
             where: { id: user.id },
             data: { currentGameType: null },
         });
-        await replyText(replyToken, `ยกเลิกการแก้ไขแล้ว${p(user?.gender)}`);
+        { const flex = createConfirmationFlex({ icon: "✏️", message: "ยกเลิกการแก้ไขแล้ว", suggestion: "พิมพ์ 'แก้ไข' เพื่อแก้ไขข้อมูลใหม่", buttons: [{ label: "แก้ไข", text: "แก้ไข" }, { label: "เมนู", text: "เมนู" }] }); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -1260,7 +1252,7 @@ async function handleFillBlankGameStart(replyToken: string, userId: string) {
     // Level Gate check
     const userLevel = await getUserLevel(userId);
     const lockMsg = checkLevelGate("FILL_BLANK", userLevel);
-    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+    if (lockMsg) { const flex = createErrorFlex(lockMsg, [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); return; }
 
     const numQ = GAME_TYPES.FILL_BLANK.questionsPerRound;
 
@@ -1366,7 +1358,7 @@ async function handleSentenceGameStart(replyToken: string, userId: string) {
     // Level Gate check
     const userLevel = await getUserLevel(userId);
     const lockMsg = checkLevelGate("COMPOSE_SENTENCE", userLevel);
-    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+    if (lockMsg) { const flex = createErrorFlex(lockMsg, [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); return; }
 
     const numQ = GAME_TYPES.COMPOSE_SENTENCE.questionsPerRound;
     const pairs = await getRandomSentencePairs(userId, numQ);
@@ -1427,7 +1419,7 @@ async function handleLeaderboard(replyToken: string, userId: string) {
     });
 
     if (topUsers.length === 0) {
-        await replyText(replyToken, `ยังไม่มีข้อมูลผู้ใช้ในระบบ${p(user?.gender)}`);
+        { const flex = createErrorFlex("ยังไม่มีข้อมูลผู้ใช้ในระบบ", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -1476,7 +1468,7 @@ async function handleSpinWheel(replyToken: string, userId: string) {
         const hoursSinceLastSpin = (now.getTime() - lastSpin.getTime()) / (1000 * 60 * 60);
         if (hoursSinceLastSpin < SPIN_COOLDOWN_HOURS) {
             const hoursRemaining = Math.ceil(SPIN_COOLDOWN_HOURS - hoursSinceLastSpin);
-            await replyText(replyToken, `🎡 หมุนวงล้อได้วันละ 1 ครั้ง\n\n⏰ กรุณารออีก ${hoursRemaining} ชั่วโมง`);
+            { const flex = createErrorFlex(`หมุนวงล้อได้วันละ 1 ครั้ง\n\nกรุณารออีก ${hoursRemaining} ชั่วโมง`, [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
             return;
         }
     }
@@ -1528,7 +1520,7 @@ async function handleShowAnswer(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.currentGameType || !user?.currentQuestionId) {
-        await replyText(replyToken, `กรุณาเริ่มเล่นเกมก่อน${p(user?.gender)} พิมพ์ "ฝึกฝน" เพื่อเลือกเกม`);
+        { const flex = createErrorFlex("กรุณาเริ่มเล่นเกมก่อน", [{ label: "เลือกเกม", text: "ฝึกฝน" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -1729,7 +1721,7 @@ async function handleSkipQuestion(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.currentGameType || !user?.currentQuestionId) {
-        await replyText(replyToken, `ไม่มีคำถามให้ข้าม${p(user?.gender)} พิมพ์ "ฝึกฝน" เพื่อเริ่มเล่น`);
+        { const flex = createErrorFlex("ไม่มีคำถามให้ข้าม", [{ label: "เลือกเกม", text: "ฝึกฝน" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -1858,7 +1850,7 @@ async function handleSkipQuestion(replyToken: string, userId: string) {
         if (handler) {
             await handler();
         } else {
-            await replyText(replyToken, `ข้ามคำถามแล้ว${p(user?.gender)} พิมพ์ "ฝึกฝน" เพื่อเลือกเกม`);
+            { const flex = createConfirmationFlex({ icon: "⏭️", message: "ข้ามคำถามแล้ว", suggestion: "เลือกเกมใหม่เพื่อเล่นต่อ", buttons: [{ label: "เลือกเกม", text: "ฝึกฝน" }, { label: "เมนู", text: "เมนู" }] }); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         }
     }
 }
@@ -1871,7 +1863,7 @@ async function handleHint(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
 
     if (!user?.currentGameType || !user?.currentQuestionId) {
-        await replyText(replyToken, `ไม่มีคำถามที่กำลังเล่นอยู่${p(user?.gender)}`);
+        { const flex = createErrorFlex("ไม่มีคำถามที่กำลังเล่นอยู่", [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -1928,20 +1920,22 @@ async function handleHint(replyToken: string, userId: string) {
         data: { gameData: JSON.stringify(gameData) },
     });
 
-    const displayHint = hintText
-        ? `💡 คำใบ้: ${hintText}`
-        : `💡 ไม่มีคำใบ้สำหรับข้อนี้${p(user?.gender)}`;
-    const hintNote = hintText ? "\n\n⚠️ ถ้าตอบถูกหลังใช้คำใบ้ คะแนนจะลด 50%" : "";
+    // Determine answer instruction based on game type
+    const mcGames = ["MULTIPLE_CHOICE", "VOCAB_OPPOSITE", "VOCAB_SYNONYM", "VOCAB_MATCH", "THAI_IDIOM", "THAI_CULTURE", "SPEED_GRAMMAR", "READ_ANSWER"];
+    const answerInstruction = mcGames.includes(gameType)
+        ? "เลือก ก, ข, ค หรือ ง ได้เลย"
+        : "พิมพ์คำตอบได้เลย";
 
-    await replyWithQuickReply(
-        replyToken,
-        `${displayHint}${hintNote}\n\nพิมพ์คำตอบใหม่ได้เลย${p(user?.gender)}`,
-        [
-            { label: "เฉลย", text: "เฉลย" },
-            { label: "ข้อต่อไป ▶", text: NEXT_QUESTION_CMD },
-            { label: "ออก", text: "ออกจากเกม" },
-        ]
-    );
+    const hintFlex = createHintFlex({
+        hintText,
+        penaltyNote: !!hintText,
+        answerInstruction,
+    });
+
+    // After hint: user should TRY to answer first (no เฉลย/ข้อต่อไป yet)
+    await replyFlexWithQuickReply(replyToken, [hintFlex], [
+        { label: "ออก", text: "ออกจากเกม" },
+    ]);
 }
 
 // =====================
@@ -1951,7 +1945,7 @@ async function handleHint(replyToken: string, userId: string) {
 async function handleSessionNext(replyToken: string, userId: string) {
     const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
     if (!user?.currentGameType || !user?.gameData) {
-        await replyText(replyToken, `ไม่มีเกมที่กำลังเล่นอยู่${p(user?.gender)}\n\nพิมพ์ "ฝึกฝน" เพื่อเริ่มเล่น`);
+        { const flex = createErrorFlex("ไม่มีเกมที่กำลังเล่นอยู่", [{ label: "เลือกเกม", text: "ฝึกฝน" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -2034,13 +2028,13 @@ async function handleSessionNext(replyToken: string, userId: string) {
             where: { id: user.id },
             data: { currentGameType: null, currentQuestionId: null, gameData: null },
         });
-        await replyText(replyToken, `จบเกมแล้ว${p(user?.gender)}\n\nพิมพ์ "เลือกเกม" เพื่อเล่นเกมอื่น`);
+        { const flex = createConfirmationFlex({ icon: "🎮", message: "จบเกมแล้ว", suggestion: "เลือกเกมใหม่เพื่อเล่นต่อ", buttons: [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }] }); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
     const questionId = getCurrentQuestionId(session);
     if (!questionId) {
-        await replyText(replyToken, `จบเกมแล้ว${p(user?.gender)}\n\nพิมพ์ "เลือกเกม" เพื่อเล่นเกมอื่น`);
+        { const flex = createConfirmationFlex({ icon: "🎮", message: "จบเกมแล้ว", suggestion: "เลือกเกมใหม่เพื่อเล่นต่อ", buttons: [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }] }); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -2258,11 +2252,11 @@ async function handleSessionNext(replyToken: string, userId: string) {
             await lineClient.replyMessage({ replyToken, messages: [mcFlex] as any });
         }
         else {
-            await replyText(replyToken, "ไม่รองรับเกมนี้ พิมพ์ \"ฝึกฝน\" เพื่อเลือกเกมใหม่");
+            { const flex = createErrorFlex("ไม่รองรับเกมนี้", [{ label: "เลือกเกม", text: "ฝึกฝน" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         }
     } catch (error) {
         console.error("handleSessionNext error:", error);
-        await replyText(replyToken, `เกิดข้อผิดพลาด กรุณาลองใหม่${p(user?.gender)}`);
+        { const flex = createErrorFlex("เกิดข้อผิดพลาด กรุณาลองใหม่", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
     }
 }
 
@@ -2327,7 +2321,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
         else if (gameType === "FILL_BLANK") {
             const question = await prisma.fillBlankQuestion.findUnique({ where: { id: user.currentQuestionId } });
             if (!question) {
-                await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+                { const flex = createErrorFlex("เกิดข้อผิดพลาด ไม่พบคำถาม", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
                 return;
             }
             correctAnswer = question.answer;
@@ -2395,7 +2389,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
         else if (gameType === "SENTENCE_WRITING") {
             const question = await prisma.sentenceConstructionPair.findUnique({ where: { id: user.currentQuestionId } });
             if (!question) {
-                await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+                { const flex = createErrorFlex("เกิดข้อผิดพลาด ไม่พบคำถาม", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
                 return;
             }
             const evaluation = await evaluateSentence(text, question.word1, question.word2);
@@ -2431,7 +2425,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
             // Find correct answer from options
             const question = await prisma.thaiIdiomQuestion.findUnique({ where: { id: user.currentQuestionId } });
             if (!question) {
-                await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+                { const flex = createErrorFlex("เกิดข้อผิดพลาด ไม่พบคำถาม", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
                 return;
             }
             const options = gameData.session?.currentOptions || gameData.currentOptions || [];
@@ -2452,7 +2446,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
             const normalizedAnswer = answerMap[text.trim()] || text.trim().toUpperCase();
             const question = await prisma.thaiCultureQuestion.findUnique({ where: { id: user.currentQuestionId } });
             if (!question) {
-                await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+                { const flex = createErrorFlex("เกิดข้อผิดพลาด ไม่พบคำถาม", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
                 return;
             }
             const options = gameData.session?.currentOptions || gameData.currentOptions || [];
@@ -2498,7 +2492,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
         else if (gameType === "MULTIPLE_CHOICE") {
             const question = await prisma.multipleChoiceQuestion.findUnique({ where: { id: user.currentQuestionId } });
             if (!question) {
-                await replyText(replyToken, "เกิดข้อผิดพลาด ไม่พบคำถาม");
+                { const flex = createErrorFlex("เกิดข้อผิดพลาด ไม่พบคำถาม", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
                 return;
             }
 
@@ -2688,7 +2682,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
         }
     } catch (error) {
         console.error("handleGameAnswer error:", error);
-        await replyText(replyToken, `เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง${p(user?.gender)}`);
+        { const flex = createErrorFlex("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
     }
 }
 
@@ -2713,7 +2707,7 @@ async function handleMyTask(replyToken: string, userId: string) {
     });
 
     if (activeTasks.length === 0) {
-        await replyText(replyToken, `ขณะนี้ยังไม่มีภาระงานที่เปิดรับ${p(user?.gender)}\n\nกรุณารอประกาศจากอาจารย์`);
+        { const flex = createErrorFlex("ขณะนี้ยังไม่มีภาระงานที่เปิดรับ\n\nกรุณารอประกาศจากอาจารย์", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -2845,7 +2839,7 @@ async function handleThaiIdiomGameStart(replyToken: string, userId: string) {
     // Level gate check
     const gameConfig = GAME_TYPES.THAI_IDIOM;
     if (user.currentLevel < gameConfig.requiredLevel) {
-        await replyText(replyToken, `🔒 ต้อง Level ${gameConfig.requiredLevel} ขึ้นไป${p(user.gender)}\nตอนนี้คุณ Level ${user.currentLevel}\n\nเล่นเกมอื่นเพื่อเก็บคะแนนเลเวลอัป!`);
+        { const flex = createErrorFlex(`ต้อง Level ${gameConfig.requiredLevel} ขึ้นไปถึงจะเล่นได้ (ตอนนี้ Level ${user.currentLevel})`, [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -2858,7 +2852,7 @@ async function handleThaiIdiomGameStart(replyToken: string, userId: string) {
     const questions = await getRandomThaiIdiomQuestions(userId, gameConfig.questionsPerRound);
 
     if (questions.length === 0) {
-        await replyText(replyToken, `ยังไม่มีคำถามสำนวนไทยในระบบ${p(user.gender)} กำลังเพิ่มเร็วๆ นี้`);
+        { const flex = createErrorFlex("ยังไม่มีคำถามสำนวนไทยในระบบ กำลังเพิ่มเร็วๆ นี้", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -2906,7 +2900,7 @@ async function handleThaiCultureGameStart(replyToken: string, userId: string) {
     // Level gate check
     const gameConfig = GAME_TYPES.THAI_CULTURE;
     if (user.currentLevel < gameConfig.requiredLevel) {
-        await replyText(replyToken, `🔒 ต้อง Level ${gameConfig.requiredLevel} ขึ้นไป${p(user.gender)}\nตอนนี้คุณ Level ${user.currentLevel}\n\nเล่นเกมอื่นเพื่อเก็บคะแนนเลเวลอัป!`);
+        { const flex = createErrorFlex(`ต้อง Level ${gameConfig.requiredLevel} ขึ้นไปถึงจะเล่นได้ (ตอนนี้ Level ${user.currentLevel})`, [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -2919,7 +2913,7 @@ async function handleThaiCultureGameStart(replyToken: string, userId: string) {
     const questions = await getRandomThaiCultureQuestions(userId, gameConfig.questionsPerRound);
 
     if (questions.length === 0) {
-        await replyText(replyToken, `ยังไม่มีคำถามวัฒนธรรมไทยในระบบ${p(user.gender)} กำลังเพิ่มเร็วๆ นี้`);
+        { const flex = createErrorFlex("ยังไม่มีคำถามวัฒนธรรมไทยในระบบ กำลังเพิ่มเร็วๆ นี้", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -2986,7 +2980,7 @@ async function handleLessonMenu(replyToken: string, userId: string) {
     const completedSet = new Set(completedLessons.map(l => l.lessonId));
 
     if (allLessons.length === 0) {
-        await replyText(replyToken, `📚 ยังไม่มีบทเรียนในระบบ${np(user.gender)}\n\nลองเล่นเกมฝึกฝนไปก่อน พิมพ์ "ฝึกฝน"`);
+        { const flex = createErrorFlex("ยังไม่มีบทเรียนในระบบ\n\nลองเล่นเกมฝึกฝนไปก่อน", [{ label: "ฝึกฝน", text: "ฝึกฝน" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -3021,7 +3015,7 @@ async function handleLessonCategory(replyToken: string, userId: string, category
     });
 
     if (lessons.length === 0) {
-        await replyText(replyToken, `ยังไม่มีบทเรียนในหมวดนี้${np(user.gender)}`);
+        { const flex = createErrorFlex("ยังไม่มีบทเรียนในหมวดนี้", [{ label: "บทเรียน", text: "บทเรียน" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -3060,7 +3054,7 @@ async function handleLessonView(replyToken: string, userId: string, lessonId: st
 
     const lesson = await prisma.lesson.findUnique({ where: { id: lessonId } });
     if (!lesson) {
-        await replyText(replyToken, `ไม่พบบทเรียนนี้${p(user.gender)}`);
+        { const flex = createErrorFlex("ไม่พบบทเรียนนี้", [{ label: "บทเรียน", text: "บทเรียน" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -3284,7 +3278,7 @@ async function handleFixSentenceGameStart(replyToken: string, userId: string) {
     // Level Gate check
     const userLevel = await getUserLevel(userId);
     const lockMsg = checkLevelGate("FIX_SENTENCE", userLevel);
-    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+    if (lockMsg) { const flex = createErrorFlex(lockMsg, [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); return; }
 
     const numQ = GAME_TYPES.FIX_SENTENCE.questionsPerRound;
     const questions = await getRandomFixSentenceQuestions(userId, numQ);
@@ -3322,7 +3316,7 @@ async function handleArrangeSentenceGameStart(replyToken: string, userId: string
     // Level Gate check
     const userLevel = await getUserLevel(userId);
     const lockMsg = checkLevelGate("ARRANGE_SENTENCE", userLevel);
-    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+    if (lockMsg) { const flex = createErrorFlex(lockMsg, [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); return; }
 
     const numQ = GAME_TYPES.ARRANGE_SENTENCE.questionsPerRound;
     const questions = await getRandomArrangeSentenceQuestions(userId, numQ);
@@ -3360,7 +3354,7 @@ async function handleSpeedGrammarGameStart(replyToken: string, userId: string) {
     // Level Gate check
     const userLevel = await getUserLevel(userId);
     const lockMsg = checkLevelGate("SPEED_GRAMMAR", userLevel);
-    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+    if (lockMsg) { const flex = createErrorFlex(lockMsg, [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); return; }
 
     const numQ = GAME_TYPES.SPEED_GRAMMAR.questionsPerRound;
     const questions = await getRandomSpeedGrammarQuestions(userId, numQ);
@@ -3408,7 +3402,7 @@ async function handleReadAnswerGameStart(replyToken: string, userId: string) {
     // Level Gate check
     const userLevel = await getUserLevel(userId);
     const lockMsg = checkLevelGate("READ_ANSWER", userLevel);
-    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+    if (lockMsg) { const flex = createErrorFlex(lockMsg, [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); return; }
 
     const numQ = GAME_TYPES.READ_ANSWER.questionsPerRound;
     const questions = await getRandomReadAnswerQuestions(userId, numQ);
@@ -3447,7 +3441,7 @@ async function handleSummarizeGameStart(replyToken: string, userId: string) {
     // Level Gate check
     const userLevel = await getUserLevel(userId);
     const lockMsg = checkLevelGate("SUMMARIZE", userLevel);
-    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+    if (lockMsg) { const flex = createErrorFlex(lockMsg, [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); return; }
 
     const numQ = GAME_TYPES.SUMMARIZE.questionsPerRound;
     const questions = await getRandomSummarizeQuestions(userId, numQ);
@@ -3489,7 +3483,7 @@ async function handleContinueStoryGameStart(replyToken: string, userId: string) 
     // Level Gate check
     const userLevel = await getUserLevel(userId);
     const lockMsg = checkLevelGate("CONTINUE_STORY", userLevel);
-    if (lockMsg) { await replyText(replyToken, lockMsg); return; }
+    if (lockMsg) { const flex = createErrorFlex(lockMsg, [{ label: "เลือกเกม", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); return; }
 
     const numQ = GAME_TYPES.CONTINUE_STORY.questionsPerRound;
     const questions = await getRandomContinueStoryQuestions(userId, numQ);
@@ -3550,10 +3544,7 @@ async function handleDailyVocabGameStart(replyToken: string, userId: string) {
     const alreadyLearned = await hasLearnedToday(user.id);
 
     if (alreadyLearned) {
-        await replyText(
-            replyToken,
-            `คุณได้เรียนคำศัพท์วันนี้แล้ว!\n\n📖 "${todayVocab.word}"\n💡 ${todayVocab.meaning}\n📝 ${todayVocab.example}\n\nกลับมาพรุ่งนี้เพื่อเรียนคำใหม่${np(user?.gender)}`
-        );
+        { const flex = createConfirmationFlex({ icon: "📖", message: `เรียนคำศัพท์วันนี้แล้ว!\n\n"${todayVocab.word}"\n💡 ${todayVocab.meaning}\n📝 ${todayVocab.example}\n\nกลับมาพรุ่งนี้เพื่อเรียนคำใหม่`, buttons: [{ label: "เมนู", text: "เมนู" }] }); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -3617,7 +3608,7 @@ async function handleVocabGachaGameStart(replyToken: string, userId: string) {
     const canPull = await canPullGacha(user.id);
 
     if (!canPull) {
-        await replyText(replyToken, `🎰 หมดโควต้าสุ่มวันนี้แล้ว!\n\nสุ่มได้ 3 ครั้งต่อวัน\nกลับมาพรุ่งนี้${np(user?.gender)}`);
+        { const flex = createErrorFlex("หมดโควต้าสุ่มวันนี้แล้ว!\n\nสุ่มได้ 3 ครั้งต่อวัน\nกลับมาพรุ่งนี้", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 

@@ -3899,4 +3899,78 @@ export function createSubmissionResultFlex(data: {
     };
 }
 
+export function createHintFlex(data: {
+    hintText: string | null;
+    penaltyNote: boolean;
+    answerInstruction: string;
+}): FlexMessage {
+    const bodyContents: any[] = [];
+
+    if (data.hintText) {
+        bodyContents.push({
+            type: "text",
+            text: data.hintText,
+            size: "md",
+            color: "#333333",
+            wrap: true,
+            weight: "bold",
+        });
+    } else {
+        bodyContents.push({
+            type: "text",
+            text: "ไม่มีคำใบ้สำหรับข้อนี้",
+            size: "md",
+            color: "#999999",
+            wrap: true,
+        });
+    }
+
+    if (data.penaltyNote) {
+        bodyContents.push({
+            type: "box",
+            layout: "horizontal",
+            contents: [
+                { type: "text", text: "⚠️", size: "sm", flex: 0 },
+                { type: "text", text: "ตอบถูกหลังใช้คำใบ้ คะแนนจะลด 50%", size: "xs", color: "#E74C3C", flex: 1, wrap: true },
+            ],
+            margin: "lg",
+            spacing: "sm",
+        });
+    }
+
+    bodyContents.push({
+        type: "text",
+        text: data.answerInstruction,
+        size: "sm",
+        color: "#999999",
+        margin: "lg",
+    });
+
+    return {
+        type: "flex",
+        altText: "💡 คำใบ้",
+        contents: {
+            type: "bubble",
+            size: "kilo",
+            header: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    { type: "text", text: "💡", size: "xl", flex: 0 },
+                    { type: "text", text: "คำใบ้", weight: "bold", size: "lg", color: "#FFFFFF", flex: 1 },
+                ],
+                spacing: "md",
+                paddingAll: "16px",
+                backgroundColor: "#F39C12",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: bodyContents,
+                paddingAll: "16px",
+            },
+        } as FlexBubble,
+    };
+}
+
 export type { WebhookEvent, TextMessage, FlexMessage };
