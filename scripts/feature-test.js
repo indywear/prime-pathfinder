@@ -148,10 +148,15 @@ async function setup() {
     await wait(2000);
     assert(res8.status === 200, 'Gender → 200');
 
-    // Step 7: ระดับภาษาไทย (last step → isRegistered = true)
+    // Step 7: ระดับภาษาไทย
     const res9 = await sendWebhook('INTERMEDIATE');
     await wait(2000);
     assert(res9.status === 200, 'Thai level → 200');
+
+    // Step 8: ยินยอม (last step → isRegistered = true)
+    const res10 = await sendWebhook('YES');
+    await wait(4000);
+    assert(res10.status === 200, 'Consent → 200');
 
     const user = await getUser();
     assert(user?.isRegistered === true, 'User is registered');
