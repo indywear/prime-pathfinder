@@ -128,7 +128,13 @@ model Submission {
   pointsEarned Int      @default(0)
   onTime       Boolean  @default(true)
   earlyBonus   Boolean  @default(false)
-  
+
+  // Cheating Detection
+  submissionSpeed   Int?      // วินาทีจากเริ่ม→ส่ง
+  suspectedAI       Boolean   @default(false)
+  suspectedCopy     Boolean   @default(false)
+  suspectedFast     Boolean   @default(false)
+
   submittedAt  DateTime @default(now())
   
   // Relations

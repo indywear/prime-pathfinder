@@ -743,6 +743,7 @@ async function handleSubmitStart(replyToken: string, userId: string) {
                     minWords: task.minWords,
                     maxWords: task.maxWords,
                     title: task.title,
+                    startTime: Date.now(),
                 }),
             },
         });
@@ -793,6 +794,17 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
             return;
         }
 
+        // === Speed Detection ===
+        let suspectedFast = false;
+        let submissionSpeed: number | null = null;
+        if (gameData.startTime) {
+            submissionSpeed = Math.round((Date.now() - gameData.startTime) / 1000);
+            const speedThreshold = Math.max(30, Math.floor(minWords / 2));
+            if (submissionSpeed < speedThreshold) {
+                suspectedFast = true;
+            }
+        }
+
         // Get the task for deadline check
         const task = await prisma.task.findUnique({ where: { id: taskId } });
         if (!task) {
@@ -807,6 +819,31 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
         const onTime = new Date() <= new Date(task.deadline);
         const earlyBonus = new Date() < new Date(new Date(task.deadline).getTime() - 24 * 60 * 60 * 1000);
 
+        // === Copy Detection (trigram similarity vs examples) ===
+        let suspectedCopy = false;
+        let copySimilarity = 0;
+        const normalizeText = (t: string) => t.replace(/\s+/g, '').toLowerCase();
+        const getTrigrams = (t: string) => {
+            const n = normalizeText(t);
+            const trigrams = new Set<string>();
+            for (let i = 0; i <= n.length - 3; i++) trigrams.add(n.substring(i, i + 3));
+            return trigrams;
+        };
+        const calcSimilarity = (a: string, b: string) => {
+            if (!a || !b || a.length < 10 || b.length < 10) return 0;
+            const triA = getTrigrams(a);
+            const triB = getTrigrams(b);
+            let overlap = 0;
+            triA.forEach(t => { if (triB.has(t)) overlap++; });
+            return Math.round((overlap / Math.min(triA.size, triB.size)) * 100);
+        };
+        const examples = [task.bestPractice, task.generalPractice, task.badPractice].filter(Boolean) as string[];
+        for (const example of examples) {
+            const sim = calcSimilarity(text, example);
+            if (sim > copySimilarity) copySimilarity = sim;
+        }
+        if (copySimilarity >= 70) suspectedCopy = true;
+
         // Create submission
         const submission = await prisma.submission.create({
             data: {
@@ -816,6 +853,9 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
                 wordCount: wordCount,
                 onTime: onTime,
                 earlyBonus: earlyBonus,
+                submissionSpeed: submissionSpeed,
+                suspectedFast: suspectedFast,
+                suspectedCopy: suspectedCopy,
             },
         });
 
@@ -845,6 +885,7 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
 
         // Try to generate AI feedback with practice examples
         let feedbackMsg = "";
+        let suspectedAI = false;
         try {
             const feedback = await generateWritingFeedback(
                 text,
@@ -857,6 +898,8 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
                 }
             );
             if (feedback) {
+                suspectedAI = feedback.suspectedAI === true;
+
                 // Scale 1-4 per criterion to 0-14 each (total 0-100 from 7 criteria)
                 const scaleScore = (raw: number) => Math.round((raw / 4) * 14);
                 const scores = {
@@ -873,7 +916,7 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
 
                 await prisma.submission.update({
                     where: { id: submission.id },
-                    data: scores,
+                    data: { ...scores, suspectedAI },
                 });
 
                 feedbackMsg = `\n\n📊 คะแนนรวม: ${scores.totalScore}/100\n` +
@@ -891,6 +934,18 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
             feedbackMsg = "\n\n(AI กำลังประเมินงาน รอสักครู่...)";
         }
 
+        // === Build teasing messages ===
+        let teaseMsg = "";
+        if (suspectedFast && submissionSpeed != null) {
+            teaseMsg += `\n\n⚡ ว้าว! ใช้เวลาแค่ ${submissionSpeed} วินาทีเอง...\nน้องไทยพิมพ์ยังไม่ทันเลย 🤖\nถ้าเขียนเอง เก่งมากจริงๆ! ถ้าไม่ใช่... ลองเขียนใหม่ด้วยตัวเองนะ ✍️`;
+        }
+        if (suspectedCopy) {
+            teaseMsg += `\n\n🔍 อืม... น้องไทยอ่านแล้วคุ้นๆ นะ\nคล้ายตัวอย่างที่ให้ไปเลย ${copySimilarity}%!\nลองเขียนด้วยสำนวนของตัวเองดูนะ จะได้ฝึกจริงๆ ✏️`;
+        }
+        if (suspectedAI) {
+            teaseMsg += `\n\n🤖 น้องไทยสังเกตว่า...\nเขียนดีเกินไปหน่อยนะ! สวยจนสงสัยว่า AI ตัวไหนมาช่วย 🧐\nถ้าเขียนเองจริงก็เก่งมาก! แต่ถ้าไม่... จำไว้ว่าเราฝึกเพื่อตัวเองนะ 💪`;
+        }
+
         await prisma.submission.update({
             where: { id: submission.id },
             data: { pointsEarned },
@@ -899,7 +954,7 @@ async function handleSubmitWriting(replyToken: string, user: any, text: string) 
         const nextWeek = (gameData.weekNumber || 1) + 1;
         await replyWithQuickReply(
             replyToken,
-            `✅ ส่งงานสัปดาห์ที่ ${gameData.weekNumber} เรียบร้อยแล้ว${p(user?.gender)}!\n\n📝 จำนวนคำ: ${wordCount}\n${onTime ? "⏰ ส่งตรงเวลา" : "⚠️ ส่งเลยกำหนด"}\n${earlyBonus ? "🌟 โบนัสส่งก่อนเวลา!" : ""}\n💰 +${pointsEarned} คะแนน${levelUpMsg}${feedbackMsg}\n\n🔓 ปลดล็อคสัปดาห์ที่ ${nextWeek} แล้ว!\nพิมพ์ "ส่งงาน" เพื่อดูภาระงานถัดไป`,
+            `✅ ส่งงานสัปดาห์ที่ ${gameData.weekNumber} เรียบร้อยแล้ว${p(user?.gender)}!\n\n📝 จำนวนคำ: ${wordCount}\n${onTime ? "⏰ ส่งตรงเวลา" : "⚠️ ส่งเลยกำหนด"}\n${earlyBonus ? "🌟 โบนัสส่งก่อนเวลา!" : ""}\n💰 +${pointsEarned} คะแนน${levelUpMsg}${feedbackMsg}${teaseMsg}\n\n🔓 ปลดล็อคสัปดาห์ที่ ${nextWeek} แล้ว!\nพิมพ์ "ส่งงาน" เพื่อดูภาระงานถัดไป`,
             [
                 { label: "ส่งงานต่อ", text: "ส่งงาน" },
                 { label: "แดชบอร์ด", text: "แดชบอร์ด" },

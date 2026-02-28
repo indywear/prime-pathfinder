@@ -48,6 +48,8 @@ interface FeedbackResult {
         languageUse: string;
         mechanics: string;
     };
+    suspectedAI: boolean;
+    aiReason: string | null;
 }
 
 interface PracticeExamples {
@@ -153,6 +155,13 @@ Your personality:
    - 2 (พอใช้): สะกดคำผิดบ่อย วางวรรณยุกต์ผิดที่ เว้นวรรคไม่ถูกต้อง
    - 1 (ต้องปรับปรุง): สะกดคำผิดเป็นส่วนใหญ่ ไม่เว้นวรรค อ่านยาก
 
+นอกจากการประเมิน 7 เกณฑ์แล้ว ให้ตรวจสอบว่างานเขียนนี้มีลักษณะเหมือนเขียนโดย AI หรือไม่
+สังเกตจาก:
+- ภาษาสละสลวยเกินระดับนักเรียนต่างชาติ (ระดับกลาง-สูง)
+- ไม่มี error ทั่วไปของผู้เรียนภาษาไทย (เช่น สะกดผิด วรรณยุกต์ผิด โครงสร้างติดภาษาจีน)
+- โครงสร้างประโยคสมบูรณ์แบบเกินไป ขาดความเป็นธรรมชาติ
+- ใช้คำศัพท์ขั้นสูงที่ไม่สอดคล้องกับระดับของนักเรียนต่างชาติ
+
 IMPORTANT: Always respond in Thai language.`;
 
     // Build practice examples section if available
@@ -207,7 +216,9 @@ ${content}
     "<คำแนะนำข้อ 2>",
     "<คำแนะนำข้อ 3>"
   ],
-  "encouragement": "<ข้อความให้กำลังใจ>"
+  "encouragement": "<ข้อความให้กำลังใจ>",
+  "suspectedAI": false,
+  "aiReason": "<เหตุผลที่สงสัยว่าใช้ AI เขียน หรือ null ถ้าไม่สงสัย>"
 }`;
 
     try {
@@ -270,6 +281,8 @@ ${content}
                 languageUse: result.criteriaFeedback?.languageUse || "",
                 mechanics: result.criteriaFeedback?.mechanics || "",
             },
+            suspectedAI: result.suspectedAI === true,
+            aiReason: result.aiReason || null,
         };
     } catch (error) {
         logApiError("WritingFeedback", error);
@@ -293,6 +306,8 @@ ${content}
                 languageUse: "รอการตรวจจากอาจารย์",
                 mechanics: "รอการตรวจจากอาจารย์",
             },
+            suspectedAI: false,
+            aiReason: null,
         };
     }
 }
