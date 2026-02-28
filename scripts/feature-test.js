@@ -108,39 +108,50 @@ async function setup() {
     console.log(`   Webhook: ${WEBHOOK_URL}`);
 
     // Register via webhook
+    // Steps: chineseName → thaiName → studentId → university → email → nationality → gender → thaiLevel
     const res1 = await sendWebhook('ลงทะเบียน');
     await wait(2000);
     assert(res1.status === 200, 'Registration start → 200');
 
-    // ชื่อไทย
-    const res2 = await sendWebhook('ทดสอบฟีเจอร์');
+    // Step 0: ชื่อจีน
+    const res2 = await sendWebhook('测试功能');
     await wait(2000);
-    assert(res2.status === 200, 'Thai name → 200');
+    assert(res2.status === 200, 'Chinese name → 200');
 
-    // ชื่อจีน
-    const res3 = await sendWebhook('测试功能');
+    // Step 1: ชื่อไทย
+    const res3 = await sendWebhook('ทดสอบฟีเจอร์');
     await wait(2000);
-    assert(res3.status === 200, 'Chinese name → 200');
+    assert(res3.status === 200, 'Thai name → 200');
 
-    // รหัสนักศึกษา
+    // Step 2: รหัสนักศึกษา
     const res4 = await sendWebhook('F99999');
     await wait(2000);
     assert(res4.status === 200, 'Student ID → 200');
 
-    // มหาวิทยาลัย
+    // Step 3: มหาวิทยาลัย
     const res5 = await sendWebhook('北京大学');
     await wait(2000);
     assert(res5.status === 200, 'University → 200');
 
-    // เพศ
-    const res6 = await sendWebhook('ชาย');
+    // Step 4: อีเมล
+    const res6 = await sendWebhook('feat-test@test.com');
     await wait(2000);
-    assert(res6.status === 200, 'Gender → 200');
+    assert(res6.status === 200, 'Email → 200');
 
-    // Email (auto → skip in register)
-    const res7 = await sendWebhook('feat-test@test.com');
+    // Step 5: สัญชาติ
+    const res7 = await sendWebhook('Chinese');
     await wait(2000);
-    assert(res7.status === 200, 'Email → 200');
+    assert(res7.status === 200, 'Nationality → 200');
+
+    // Step 6: เพศ
+    const res8 = await sendWebhook('male');
+    await wait(2000);
+    assert(res8.status === 200, 'Gender → 200');
+
+    // Step 7: ระดับภาษาไทย (last step → isRegistered = true)
+    const res9 = await sendWebhook('INTERMEDIATE');
+    await wait(2000);
+    assert(res9.status === 200, 'Thai level → 200');
 
     const user = await getUser();
     assert(user?.isRegistered === true, 'User is registered');
@@ -350,13 +361,14 @@ async function testGacha() {
     console.log('\n🎰 C. Gacha Tests');
     await resetGameState();
 
-    // Reset gacha pulls for today
+    // Reset gacha pulls for today (gacha uses practiceSession with activityType='VOCAB_GACHA')
     const user = await getUser();
     try {
-        await prisma.gachaPull.deleteMany({
+        await prisma.practiceSession.deleteMany({
             where: {
                 userId: user.id,
-                pulledAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+                activityType: 'VOCAB_GACHA',
+                completedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
             },
         });
     } catch { }
@@ -367,9 +379,9 @@ async function testGacha() {
     await wait(4000);
     assert(r1.status === 200, 'Gacha pull → 200');
 
-    // Check collection
-    const pullCount = await prisma.gachaPull.count({
-        where: { userId: user.id },
+    // Check collection (gacha records in practiceSession)
+    const pullCount = await prisma.practiceSession.count({
+        where: { userId: user.id, activityType: 'VOCAB_GACHA' },
     });
     assert(pullCount >= 1, `Gacha pulls recorded: ${pullCount}`);
 }
@@ -379,18 +391,19 @@ async function testDailyVocab() {
     console.log('\n📖 D. Daily Vocab Tests');
     await resetGameState();
 
-    // Reset daily vocab for today
+    // Reset daily vocab for today (uses practiceSession with activityType='DAILY_VOCAB')
     const user = await getUser();
     try {
-        await prisma.dailyVocabLog.deleteMany({
+        await prisma.practiceSession.deleteMany({
             where: {
                 userId: user.id,
-                learnedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+                activityType: 'DAILY_VOCAB',
+                completedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
             },
         });
     } catch { }
 
-    const vocabCount = await prisma.vocabulary.count();
+    const vocabCount = await prisma.dailyVocab.count();
     if (vocabCount === 0) {
         skip('No vocab in DB — skip daily vocab test');
         return;
