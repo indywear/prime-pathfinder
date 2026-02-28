@@ -81,7 +81,7 @@ export const QUICK_REPLIES = {
     // After answer
     AFTER_ANSWER: [
         { label: "ข้อต่อไป", text: "ข้อต่อไป" },
-        { label: "กลับเมนู", text: "ฝึกฝน" },
+        { label: "กลับเมนู", text: "เลือกเกม" },
     ],
 
     // Main menu

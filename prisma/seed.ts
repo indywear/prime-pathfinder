@@ -213,6 +213,37 @@ async function main() {
     }
     console.log(`✅ Seeded ${thaiCultureQuestions.length} Thai culture questions`);
 
+    // Seed Fix Sentence Questions (แก้ไขประโยค)
+    console.log("🔧 Seeding fix sentence questions...");
+    const fixSentenceQuestions = [
+        // EASY
+        { wrongSentence: "ฉันไปตลาดเมื่อวานนี้กับเพื่อนของฉันเพื่อซื้อผัก", correctSentence: "ฉันไปตลาดเมื่อวานนี้กับเพื่อนเพื่อซื้อผัก", hint: "คำซ้ำที่ไม่จำเป็น", difficulty: "EASY" },
+        { wrongSentence: "เขาชอบกินข้าวผัดมากที่สุดเลย", correctSentence: "เขาชอบกินข้าวผัดมากที่สุด", hint: "คำฟุ่มเฟือย", difficulty: "EASY" },
+        { wrongSentence: "แม่ของฉันทำอาหารอร่อยมากๆ เลยค่ะ", correctSentence: "แม่ทำอาหารอร่อยมากค่ะ", hint: "คำซ้ำและคำฟุ่มเฟือย", difficulty: "EASY" },
+        { wrongSentence: "นักเรียนทุกๆ คนต้องมาโรงเรียนทุกวัน", correctSentence: "นักเรียนทุกคนต้องมาโรงเรียนทุกวัน", hint: "คำซ้ำ ทุกๆ → ทุก", difficulty: "EASY" },
+        { wrongSentence: "วันนี้อากาศดีมากเลยนะครับ ดีจริงๆ", correctSentence: "วันนี้อากาศดีมากครับ", hint: "คำฟุ่มเฟือยและซ้ำความ", difficulty: "EASY" },
+        // MEDIUM
+        { wrongSentence: "เขาเดินทางไปกรุงเทพโดยรถไฟตั้งแต่เมื่อวาน", correctSentence: "เขาเดินทางไปกรุงเทพฯ โดยรถไฟตั้งแต่เมื่อวาน", hint: "ชื่อเฉพาะต้องมี ฯ", difficulty: "MEDIUM" },
+        { wrongSentence: "ครูบอกให้นักเรียนส่งการบ้านในวันจันทร์หน้า", correctSentence: "ครูบอกให้นักเรียนส่งการบ้านวันจันทร์หน้า", hint: "คำบุพบทไม่จำเป็น", difficulty: "MEDIUM" },
+        { wrongSentence: "ผมรู้สึกดีใจมากที่ได้พบกับคุณในวันนี้ครับ", correctSentence: "ผมดีใจมากที่ได้พบคุณวันนี้ครับ", hint: "คำฟุ่มเฟือย: รู้สึก, กับ, ใน", difficulty: "MEDIUM" },
+        { wrongSentence: "เธอเป็นคนที่สวยที่สุดในห้องเรียนของเรา", correctSentence: "เธอสวยที่สุดในห้องเรียน", hint: "โครงสร้างภาษาจีน: เป็นคนที่...", difficulty: "MEDIUM" },
+        { wrongSentence: "พรุ่งนี้ฉันจะไปที่ห้างสรรพสินค้าเพื่อจะซื้อเสื้อผ้า", correctSentence: "พรุ่งนี้ฉันจะไปห้างสรรพสินค้าเพื่อซื้อเสื้อผ้า", hint: "คำบุพบทและกริยาซ้ำ", difficulty: "MEDIUM" },
+        // HARD
+        { wrongSentence: "ถึงแม้ว่าฝนจะตกหนักมาก แต่ว่าเขาก็ยังคงออกไปทำงาน", correctSentence: "ถึงแม้ฝนจะตกหนัก เขาก็ยังออกไปทำงาน", hint: "สันธานซ้ำ: ว่า, แต่ว่า, ยังคง", difficulty: "HARD" },
+        { wrongSentence: "สาเหตุที่ทำให้เกิดปัญหานี้ขึ้นมาก็เพราะว่าเขาไม่ได้เตรียมตัว", correctSentence: "ปัญหานี้เกิดขึ้นเพราะเขาไม่ได้เตรียมตัว", hint: "ประโยคยาวเกินไป ตัดคำฟุ่มเฟือย", difficulty: "HARD" },
+        { wrongSentence: "ในปัจจุบันนี้คนไทยส่วนใหญ่มักจะนิยมชอบกินอาหารฟาสต์ฟู้ด", correctSentence: "ปัจจุบันคนไทยส่วนใหญ่นิยมกินอาหารฟาสต์ฟู้ด", hint: "คำซ้ำความ: นิยม+ชอบ, มักจะ+นิยม", difficulty: "HARD" },
+        { wrongSentence: "เขาเป็นคนที่มีความรับผิดชอบต่อหน้าที่การงานของเขาเป็นอย่างดี", correctSentence: "เขามีความรับผิดชอบต่อหน้าที่การงานเป็นอย่างดี", hint: "สไตล์ภาษาจีน + คำซ้ำ", difficulty: "HARD" },
+        { wrongSentence: "จากการที่ได้มีโอกาสไปเที่ยวต่างประเทศทำให้ฉันได้เรียนรู้วัฒนธรรมใหม่ๆ", correctSentence: "การไปเที่ยวต่างประเทศทำให้ฉันเรียนรู้วัฒนธรรมใหม่ๆ", hint: "คำนำฟุ่มเฟือย: จากการที่ได้มีโอกาส", difficulty: "HARD" },
+    ];
+    for (const q of fixSentenceQuestions) {
+        await sql`
+            INSERT INTO "FixSentenceQuestion" ("id", "wrongSentence", "correctSentence", "hint", "difficulty", "createdAt")
+            VALUES (gen_random_uuid(), ${q.wrongSentence}, ${q.correctSentence}, ${q.hint}, ${q.difficulty}::"Difficulty", now())
+            ON CONFLICT DO NOTHING
+        `;
+    }
+    console.log(`✅ Seeded ${fixSentenceQuestions.length} fix sentence questions`);
+
     console.log("🎉 Seed completed successfully!");
 }
 

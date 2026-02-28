@@ -29,11 +29,11 @@ export const RICH_MENU_TEMPLATE = {
         },
         {
             bounds: { x: 833, y: 843, width: 834, height: 843 },
-            action: { type: "message" as const, text: "leaderboard" },
+            action: { type: "message" as const, text: "อันดับ" },
         },
         {
             bounds: { x: 1667, y: 843, width: 833, height: 843 },
-            action: { type: "message" as const, text: "spin wheel" },
+            action: { type: "message" as const, text: "หมุนวงล้อ" },
         },
     ],
 }

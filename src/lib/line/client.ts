@@ -418,7 +418,7 @@ export function createMenuFlex(): FlexMessage {
                             },
                             {
                                 type: "button",
-                                action: { type: "message", label: "ดูทั้งหมด", text: "ฝึกฝน" },
+                                action: { type: "message", label: "ดูทั้งหมด", text: "เลือกเกม" },
                                 style: "secondary",
                                 height: "sm",
                             },
@@ -1745,7 +1745,7 @@ export function createGameResultFlex(data: {
                     },
                     {
                         type: "button",
-                        action: { type: "message", label: "เกมอื่น", text: "ฝึกฝน" },
+                        action: { type: "message", label: "เกมอื่น", text: "เลือกเกม" },
                         style: "secondary",
                         height: "sm",
                     },
@@ -1890,7 +1890,7 @@ export function createVocabGamesMenuFlex(): FlexMessage {
                 contents: [
                     {
                         type: "button",
-                        action: { type: "message", label: "กลับ", text: "ฝึกฝน" },
+                        action: { type: "message", label: "🔙 กลับ", text: "เลือกเกม" },
                         style: "secondary",
                         height: "sm",
                     },
@@ -1945,7 +1945,7 @@ export function createGrammarGamesMenuFlex(): FlexMessage {
                 contents: [
                     {
                         type: "button",
-                        action: { type: "message", label: "กลับ", text: "ฝึกฝน" },
+                        action: { type: "message", label: "🔙 กลับ", text: "เลือกเกม" },
                         style: "secondary",
                         height: "sm",
                     },
@@ -2000,7 +2000,7 @@ export function createReadingGamesMenuFlex(): FlexMessage {
                 contents: [
                     {
                         type: "button",
-                        action: { type: "message", label: "กลับ", text: "ฝึกฝน" },
+                        action: { type: "message", label: "🔙 กลับ", text: "เลือกเกม" },
                         style: "secondary",
                         height: "sm",
                     },
@@ -2054,7 +2054,7 @@ export function createFunGamesMenuFlex(): FlexMessage {
                 contents: [
                     {
                         type: "button",
-                        action: { type: "message", label: "กลับ", text: "ฝึกฝน" },
+                        action: { type: "message", label: "🔙 กลับ", text: "เลือกเกม" },
                         style: "secondary",
                         height: "sm",
                     },
@@ -2931,7 +2931,7 @@ export function createGachaResultFlex(data: {
                     },
                     {
                         type: "button",
-                        action: { type: "message", label: "เกมอื่น", text: "ฝึกฝน" },
+                        action: { type: "message", label: "เกมอื่น", text: "เลือกเกม" },
                         style: "secondary",
                         height: "sm",
                     },
@@ -3064,6 +3064,835 @@ export function createMyTaskFlex(data: {
                         height: "sm",
                     },
                 ],
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+// =====================
+// Reply Flex + Quick Reply Helper
+// =====================
+
+export async function replyFlexWithQuickReply(
+    replyToken: string,
+    flexMessages: FlexMessage[],
+    options?: Array<{ label: string; text: string }>
+) {
+    const messages: any[] = flexMessages.map((flex, i) => {
+        if (options && i === flexMessages.length - 1) {
+            return { ...flex, quickReply: createQuickReply(options) };
+        }
+        return flex;
+    });
+    await lineClient.replyMessage({ replyToken, messages });
+}
+
+// =====================
+// Correct Answer Flex
+// =====================
+
+export function createCorrectAnswerFlex(data: {
+    message: string;
+    points: number;
+    hintNote?: string;
+    currentIndex?: number;
+    totalQuestions?: number;
+    correctCount?: number;
+    isLastQuestion?: boolean;
+    summaryMsg?: string;
+}): FlexMessage {
+    const contents: any[] = [
+        {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+                {
+                    type: "text",
+                    text: data.message || "ถูกต้อง!",
+                    size: "md",
+                    color: "#FFFFFF",
+                    weight: "bold",
+                    flex: 3,
+                    wrap: true,
+                },
+                {
+                    type: "text",
+                    text: `+${data.points}${data.hintNote || ""}`,
+                    size: "lg",
+                    color: "#FFFFFF",
+                    weight: "bold",
+                    align: "end",
+                    flex: 2,
+                },
+            ],
+        },
+    ];
+
+    const bodyContents: any[] = [];
+
+    // Progress bar (if mid-game)
+    if (data.currentIndex && data.totalQuestions) {
+        const progress = Math.round((data.currentIndex / data.totalQuestions) * 10);
+        const bar = "█".repeat(progress) + "░".repeat(10 - progress);
+        bodyContents.push(
+            {
+                type: "text",
+                text: `${bar} ${data.currentIndex}/${data.totalQuestions}`,
+                size: "sm",
+                color: "#27AE60",
+                margin: "sm",
+            },
+            {
+                type: "text",
+                text: `ถูก ${data.correctCount || 0}/${data.currentIndex}`,
+                size: "xs",
+                color: "#999999",
+                margin: "xs",
+            }
+        );
+    }
+
+    // Summary (if last question)
+    if (data.isLastQuestion && data.summaryMsg) {
+        bodyContents.push({
+            type: "text",
+            text: data.summaryMsg,
+            size: "sm",
+            color: "#333333",
+            wrap: true,
+            margin: "md",
+        });
+    }
+
+    if (bodyContents.length === 0) {
+        bodyContents.push({ type: "text", text: "✅", size: "sm", color: "#27AE60" });
+    }
+
+    return {
+        type: "flex",
+        altText: `✅ ${data.message} (+${data.points})`,
+        contents: {
+            type: "bubble",
+            size: "kilo",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents,
+                paddingAll: "15px",
+                backgroundColor: "#27AE60",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: bodyContents,
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+// =====================
+// Wrong Answer Flex
+// =====================
+
+export function createWrongAnswerFlex(data: {
+    message: string;
+    currentIndex?: number;
+    totalQuestions?: number;
+    correctCount?: number;
+}): FlexMessage {
+    const bodyContents: any[] = [
+        {
+            type: "text",
+            text: data.message || "ลองใหม่อีกครั้ง!",
+            size: "md",
+            color: "#333333",
+            wrap: true,
+        },
+    ];
+
+    if (data.currentIndex && data.totalQuestions) {
+        const progress = Math.round((data.currentIndex / data.totalQuestions) * 10);
+        const bar = "█".repeat(progress) + "░".repeat(10 - progress);
+        bodyContents.push(
+            {
+                type: "separator",
+                margin: "md",
+            },
+            {
+                type: "text",
+                text: `${bar} ${data.currentIndex}/${data.totalQuestions}`,
+                size: "sm",
+                color: "#E74C3C",
+                margin: "md",
+            },
+            {
+                type: "text",
+                text: `ถูก ${data.correctCount || 0}/${data.currentIndex}`,
+                size: "xs",
+                color: "#999999",
+                margin: "xs",
+            }
+        );
+    }
+
+    return {
+        type: "flex",
+        altText: `❌ ${data.message}`,
+        contents: {
+            type: "bubble",
+            size: "kilo",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "❌ ลองอีกครั้ง!",
+                        weight: "bold",
+                        size: "lg",
+                        color: "#FFFFFF",
+                    },
+                ],
+                paddingAll: "15px",
+                backgroundColor: "#E74C3C",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: bodyContents,
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+// =====================
+// Level Up Flex
+// =====================
+
+export function createLevelUpFlex(newLevel: number, title: string): FlexMessage {
+    return {
+        type: "flex",
+        altText: `🎉 เลเวลอัป! Lv.${newLevel} "${title}"`,
+        contents: {
+            type: "bubble",
+            size: "kilo",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "🎉 LEVEL UP!",
+                        weight: "bold",
+                        size: "xl",
+                        color: "#FFFFFF",
+                        align: "center",
+                    },
+                ],
+                paddingAll: "15px",
+                backgroundColor: "#F39C12",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: `Lv.${newLevel}`,
+                        size: "3xl",
+                        weight: "bold",
+                        align: "center",
+                        color: "#F39C12",
+                    },
+                    {
+                        type: "text",
+                        text: `"${title}"`,
+                        size: "lg",
+                        align: "center",
+                        color: "#333333",
+                        margin: "sm",
+                        weight: "bold",
+                    },
+                ],
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+// =====================
+// Title Achievement Flex
+// =====================
+
+export function createTitleAchievementFlex(emoji: string, title: string): FlexMessage {
+    return {
+        type: "flex",
+        altText: `🏅 ได้รับฉายา "${emoji} ${title}"!`,
+        contents: {
+            type: "bubble",
+            size: "kilo",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "🏅 ฉายาใหม่!",
+                        weight: "bold",
+                        size: "lg",
+                        color: "#FFFFFF",
+                        align: "center",
+                    },
+                ],
+                paddingAll: "15px",
+                backgroundColor: "#9B59B6",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: emoji,
+                        size: "3xl",
+                        align: "center",
+                    },
+                    {
+                        type: "text",
+                        text: title,
+                        size: "xl",
+                        weight: "bold",
+                        align: "center",
+                        color: "#9B59B6",
+                        margin: "sm",
+                    },
+                ],
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+// =====================
+// Error Flex
+// =====================
+
+export function createErrorFlex(
+    message: string,
+    buttons?: Array<{ label: string; text: string }>
+): FlexMessage {
+    const bodyContents: any[] = [
+        {
+            type: "text",
+            text: message,
+            size: "sm",
+            color: "#333333",
+            wrap: true,
+        },
+    ];
+
+    let footer;
+    if (buttons && buttons.length > 0) {
+        footer = {
+            type: "box",
+            layout: "horizontal",
+            contents: buttons.map(btn => ({
+                type: "button",
+                action: { type: "message", label: btn.label, text: btn.text },
+                style: "primary",
+                color: "#1E88E5",
+                height: "sm",
+            })),
+            spacing: "sm",
+            paddingAll: "15px",
+        };
+    }
+
+    return {
+        type: "flex",
+        altText: `⚠️ ${message}`,
+        contents: {
+            type: "bubble",
+            size: "kilo",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "⚠️ ขออภัย",
+                        weight: "bold",
+                        size: "lg",
+                        color: "#FFFFFF",
+                    },
+                ],
+                paddingAll: "15px",
+                backgroundColor: "#E74C3C",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: bodyContents,
+                paddingAll: "15px",
+            },
+            ...(footer ? { footer } : {}),
+        } as FlexBubble,
+    };
+}
+
+// =====================
+// Not Registered Flex
+// =====================
+
+export function createNotRegisteredFlex(): FlexMessage {
+    return {
+        type: "flex",
+        altText: "กรุณาลงทะเบียนก่อนใช้งาน",
+        contents: {
+            type: "bubble",
+            size: "kilo",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "🔒 ยังไม่ได้ลงทะเบียน",
+                        weight: "bold",
+                        size: "lg",
+                        color: "#FFFFFF",
+                    },
+                ],
+                paddingAll: "15px",
+                backgroundColor: "#F39C12",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "ลงทะเบียนก่อนเพื่อเริ่มใช้งานฟีเจอร์ทั้งหมด",
+                        size: "sm",
+                        color: "#666666",
+                        wrap: true,
+                    },
+                ],
+                paddingAll: "15px",
+            },
+            footer: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ลงทะเบียน", text: "ลงทะเบียน" },
+                        style: "primary",
+                        color: "#F39C12",
+                        height: "sm",
+                    },
+                ],
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+// =====================
+// Confirmation / Cancel Flex
+// =====================
+
+export function createConfirmationFlex(data: {
+    icon: string;
+    message: string;
+    suggestion?: string;
+    buttons?: Array<{ label: string; text: string }>;
+}): FlexMessage {
+    const bodyContents: any[] = [];
+    if (data.suggestion) {
+        bodyContents.push({
+            type: "text",
+            text: data.suggestion,
+            size: "sm",
+            color: "#666666",
+            wrap: true,
+        });
+    }
+    if (bodyContents.length === 0) {
+        bodyContents.push({ type: "filler" });
+    }
+
+    let footer;
+    if (data.buttons && data.buttons.length > 0) {
+        footer = {
+            type: "box",
+            layout: "horizontal",
+            contents: data.buttons.map(btn => ({
+                type: "button",
+                action: { type: "message", label: btn.label, text: btn.text },
+                style: "primary",
+                color: "#1E88E5",
+                height: "sm",
+            })),
+            spacing: "sm",
+            paddingAll: "15px",
+        };
+    }
+
+    return {
+        type: "flex",
+        altText: `${data.icon} ${data.message}`,
+        contents: {
+            type: "bubble",
+            size: "kilo",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: `${data.icon} ${data.message}`,
+                        weight: "bold",
+                        size: "md",
+                        color: "#FFFFFF",
+                        wrap: true,
+                    },
+                ],
+                paddingAll: "15px",
+                backgroundColor: "#95A5A6",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: bodyContents,
+                paddingAll: "15px",
+                ...(bodyContents[0]?.type === "filler" ? { height: "1px" } : {}),
+            },
+            ...(footer ? { footer } : {}),
+        } as FlexBubble,
+    };
+}
+
+// =====================
+// Registration Complete Flex
+// =====================
+
+export function createRegistrationCompleteFlex(name: string, gender?: string): FlexMessage {
+    const suffix = gender === "female" ? "ค่ะ" : "ครับ";
+    return {
+        type: "flex",
+        altText: `🎉 ลงทะเบียนเรียบร้อย! ยินดีต้อนรับ คุณ${name}`,
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "🎉 ลงทะเบียนเรียบร้อย!",
+                        weight: "bold",
+                        size: "xl",
+                        color: "#FFFFFF",
+                        align: "center",
+                    },
+                    {
+                        type: "text",
+                        text: `ยินดีต้อนรับ${suffix} คุณ${name}`,
+                        size: "sm",
+                        color: "#FFFFFF",
+                        align: "center",
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: "#27AE60",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    { type: "text", text: "สิ่งที่ทำได้ตอนนี้:", size: "md", weight: "bold", color: "#333333" },
+                    { type: "separator", margin: "md" },
+                    { type: "text", text: "📝 ส่งงาน — ส่งภาระงานเขียน", size: "sm", color: "#666666", margin: "md" },
+                    { type: "text", text: "💬 ขอผลป้อนกลับ — ให้ AI ตรวจงาน", size: "sm", color: "#666666", margin: "sm" },
+                    { type: "text", text: "🎮 เกม — เล่นเกมสะสมแต้ม 15+ เกม", size: "sm", color: "#666666", margin: "sm" },
+                    { type: "text", text: "📊 แดชบอร์ด — ดูความก้าวหน้า", size: "sm", color: "#666666", margin: "sm" },
+                ],
+                paddingAll: "20px",
+            },
+            footer: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    {
+                        type: "button",
+                        action: { type: "message", label: "เมนู", text: "เมนู" },
+                        style: "primary",
+                        color: "#1E88E5",
+                        height: "sm",
+                    },
+                    {
+                        type: "button",
+                        action: { type: "message", label: "แดชบอร์ด", text: "แดชบอร์ด" },
+                        style: "primary",
+                        color: "#27AE60",
+                        height: "sm",
+                    },
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ฝึกฝน", text: "ฝึกฝน" },
+                        style: "primary",
+                        color: "#FF6B35",
+                        height: "sm",
+                    },
+                ],
+                spacing: "sm",
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+// =====================
+// Welcome New User Flex
+// =====================
+
+export function createWelcomeNewUserFlex(): FlexMessage {
+    return {
+        type: "flex",
+        altText: "👋 ยินดีต้อนรับสู่ ProficienThAI!",
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: "👋 ยินดีต้อนรับ!",
+                        weight: "bold",
+                        size: "xl",
+                        color: "#FFFFFF",
+                        align: "center",
+                    },
+                    {
+                        type: "text",
+                        text: "ProficienThAI — ผู้ช่วยเรียนภาษาไทย",
+                        size: "sm",
+                        color: "#FFFFFF",
+                        align: "center",
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: "#1E88E5",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    { type: "text", text: "เมื่อลงทะเบียนแล้วจะสามารถ:", size: "md", weight: "bold", color: "#333333" },
+                    { type: "separator", margin: "md" },
+                    { type: "text", text: "✅ เล่นเกมฝึกภาษาไทย 15+ เกม", size: "sm", color: "#666666", margin: "md" },
+                    { type: "text", text: "✅ ส่งงานเขียนและขอ feedback จาก AI", size: "sm", color: "#666666", margin: "sm" },
+                    { type: "text", text: "✅ สะสมแต้มและเลเวลอัป", size: "sm", color: "#666666", margin: "sm" },
+                    { type: "text", text: "✅ แข่งกับเพื่อนใน Leaderboard", size: "sm", color: "#666666", margin: "sm" },
+                ],
+                paddingAll: "20px",
+            },
+            footer: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ลงทะเบียน", text: "ลงทะเบียน" },
+                        style: "primary",
+                        color: "#1E88E5",
+                        height: "sm",
+                    },
+                ],
+                paddingAll: "15px",
+            },
+        } as FlexBubble,
+    };
+}
+
+// =====================
+// Submission Result Flex
+// =====================
+
+export function createSubmissionResultFlex(data: {
+    weekNumber: number;
+    wordCount: number;
+    onTime: boolean;
+    earlyBonus: boolean;
+    points: number;
+    feedback?: {
+        totalScore: number;
+        scores: { accuracy: number; contentSelection: number; interpretation: number; taskFulfillment: number; organization: number; languageUse: number; mechanics: number };
+        feedback: string;
+    };
+    teaseMsg?: string;
+    nextWeek: number;
+}): FlexMessage {
+    const bodyContents: any[] = [
+        {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+                { type: "text", text: "📝 จำนวนคำ", size: "sm", color: "#999999", flex: 2 },
+                { type: "text", text: `${data.wordCount} คำ`, size: "sm", weight: "bold", flex: 3 },
+            ],
+        },
+        {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+                { type: "text", text: data.onTime ? "⏰ ส่งตรงเวลา" : "⚠️ ส่งเลยกำหนด", size: "sm", color: data.onTime ? "#27AE60" : "#E74C3C", flex: 2 },
+                { type: "text", text: data.earlyBonus ? "🌟 โบนัสส่งก่อน!" : "", size: "sm", color: "#F39C12", flex: 3 },
+            ],
+            margin: "sm",
+        },
+        {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+                { type: "text", text: "💰 คะแนน", size: "sm", color: "#999999", flex: 2 },
+                { type: "text", text: `+${data.points}`, size: "sm", weight: "bold", color: "#27AE60", flex: 3 },
+            ],
+            margin: "sm",
+        },
+    ];
+
+    // AI Feedback scores
+    if (data.feedback) {
+        const scoreColor = data.feedback.totalScore >= 80 ? "#27AE60" : data.feedback.totalScore >= 60 ? "#F39C12" : "#E74C3C";
+        bodyContents.push(
+            { type: "separator", margin: "lg" },
+            {
+                type: "text",
+                text: `📊 คะแนน AI: ${data.feedback.totalScore}/100`,
+                size: "lg",
+                weight: "bold",
+                color: scoreColor,
+                margin: "lg",
+            }
+        );
+
+        const criteria = [
+            { label: "ความถูกต้อง", score: data.feedback.scores.accuracy },
+            { label: "เลือกสาระ", score: data.feedback.scores.contentSelection },
+            { label: "การตีความ", score: data.feedback.scores.interpretation },
+            { label: "ทำตามภารกิจ", score: data.feedback.scores.taskFulfillment },
+            { label: "การเรียบเรียง", score: data.feedback.scores.organization },
+            { label: "ใช้ภาษา", score: data.feedback.scores.languageUse },
+            { label: "อักขระวิธี", score: data.feedback.scores.mechanics },
+        ];
+
+        for (const c of criteria) {
+            const dots = "●".repeat(c.score) + "○".repeat(4 - c.score);
+            bodyContents.push({
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    { type: "text", text: c.label, size: "xs", color: "#999999", flex: 3 },
+                    { type: "text", text: dots, size: "sm", color: c.score >= 3 ? "#27AE60" : c.score >= 2 ? "#F39C12" : "#E74C3C", flex: 2 },
+                    { type: "text", text: `${c.score}/4`, size: "xs", color: "#666666", flex: 1, align: "end" },
+                ],
+                margin: "sm",
+            });
+        }
+
+        if (data.feedback.feedback) {
+            bodyContents.push(
+                { type: "separator", margin: "lg" },
+                {
+                    type: "text",
+                    text: `💬 ${data.feedback.feedback}`,
+                    size: "sm",
+                    color: "#333333",
+                    wrap: true,
+                    margin: "lg",
+                }
+            );
+        }
+    }
+
+    // Tease/praise message
+    if (data.teaseMsg) {
+        bodyContents.push(
+            { type: "separator", margin: "lg" },
+            {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    { type: "text", text: data.teaseMsg, size: "sm", color: "#666666", wrap: true },
+                ],
+                margin: "lg",
+                paddingAll: "10px",
+                backgroundColor: "#F5F5F5",
+                cornerRadius: "8px",
+            }
+        );
+    }
+
+    return {
+        type: "flex",
+        altText: `✅ ส่งงานสัปดาห์ที่ ${data.weekNumber} เรียบร้อย!`,
+        contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                    {
+                        type: "text",
+                        text: `📝 ส่งงานสัปดาห์ที่ ${data.weekNumber}`,
+                        weight: "bold",
+                        size: "xl",
+                        color: "#FFFFFF",
+                    },
+                    {
+                        type: "text",
+                        text: "เรียบร้อยแล้ว!",
+                        size: "sm",
+                        color: "#FFFFFF",
+                    },
+                ],
+                paddingAll: "20px",
+                backgroundColor: "#1E88E5",
+            },
+            body: {
+                type: "box",
+                layout: "vertical",
+                contents: bodyContents,
+                paddingAll: "20px",
+            },
+            footer: {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                    {
+                        type: "button",
+                        action: { type: "message", label: "ส่งงานต่อ", text: "ส่งงาน" },
+                        style: "primary",
+                        color: "#1E88E5",
+                        height: "sm",
+                    },
+                    {
+                        type: "button",
+                        action: { type: "message", label: "แดชบอร์ด", text: "แดชบอร์ด" },
+                        style: "secondary",
+                        height: "sm",
+                    },
+                ],
+                spacing: "sm",
                 paddingAll: "15px",
             },
         } as FlexBubble,
