@@ -3,8 +3,7 @@ import { shuffle } from "@/lib/utils/shuffle";
 import { levenshteinDistance } from "@/lib/utils/similarity";
 import {
     getDifficultiesForLevel,
-    getRecentlyAnsweredQuestionIds,
-    filterQuestionsForUser,
+    selectQuestionsWithSRS,
     getUserLevel,
 } from "./questionHistory";
 
@@ -25,10 +24,6 @@ export async function getRandomFillBlankQuestions(
 ): Promise<FillBlankQuestion[]> {
     const userLevel = userId ? await getUserLevel(userId) : 1;
     const difficulties = getDifficultiesForLevel(userLevel);
-    const answeredIds = userId
-        ? await getRecentlyAnsweredQuestionIds(userId, "FILL_BLANK", 24)
-        : [];
-
     const allQuestions = await prisma.fillBlankQuestion.findMany({
         where: { difficulty: { in: difficulties } },
     });
@@ -42,7 +37,10 @@ export async function getRandomFillBlankQuestions(
         }));
     }
 
-    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    // SRS: ข้อถูกไม่ซ้ำ ข้อผิดวนกลับ ข้อใหม่เติมให้
+    const filtered = userId
+        ? await selectQuestionsWithSRS(allQuestions, userId, "FILL_BLANK", count, shuffle)
+        : shuffle(allQuestions).slice(0, count);
 
     return filtered.map(q => ({
         id: q.id,

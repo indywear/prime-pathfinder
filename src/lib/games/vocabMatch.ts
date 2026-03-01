@@ -2,8 +2,7 @@ import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
 import {
     getDifficultiesForLevel,
-    getRecentlyAnsweredQuestionIds,
-    filterQuestionsForUser,
+    selectQuestionsWithSRS,
     getUserLevel,
 } from "./questionHistory";
 
@@ -29,11 +28,6 @@ export async function getRandomVocabMatchQuestions(
     const userLevel = userId ? await getUserLevel(userId) : 1;
     const difficulties = getDifficultiesForLevel(userLevel);
 
-    // Get recently answered question IDs
-    const answeredIds = userId
-        ? await getRecentlyAnsweredQuestionIds(userId, "VOCAB_MATCH", 24)
-        : [];
-
     // Fetch questions matching user's difficulty level
     const allQuestions = await prisma.vocabMatchQuestion.findMany({
         where: {
@@ -56,8 +50,10 @@ export async function getRandomVocabMatchQuestions(
         }));
     }
 
-    // Filter out recently answered, prioritize new questions
-    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    // SRS: ข้อถูกไม่ซ้ำ ข้อผิดวนกลับ ข้อใหม่เติมให้
+    const filtered = userId
+        ? await selectQuestionsWithSRS(allQuestions, userId, "VOCAB_MATCH", count, shuffle)
+        : shuffle(allQuestions).slice(0, count);
 
     return filtered.map(q => ({
         id: q.id,

@@ -332,6 +332,7 @@ export interface GameSessionState {
     startedAt: string          // ISO timestamp
     answers: { questionId: string; correct: boolean; points: number }[]
     hintsUsed: string[]  // question IDs where hint was used
+    isReviewSession?: boolean  // true = ทบทวนข้อผิดจากรอบก่อน (คะแนน 50%)
 }
 
 /**
@@ -440,15 +441,18 @@ export function formatSessionSummary(session: GameSessionState): string {
     const { emoji, message } = getSessionCompleteEmoji(percentage)
 
     const gameName = GAME_TYPES[session.sessionType as GameTypeId]?.name ?? session.sessionType
-    const multiplierNote = session.pointMultiplier < 1.0
+    const reviewLabel = session.isReviewSession ? ' (ทบทวน)' : ''
+    const multiplierNote = session.pointMultiplier < 1.0 && !session.isReviewSession
         ? `\n⚠️ คะแนนลด ${Math.round((1 - session.pointMultiplier) * 100)}% (เล่นเกินรอบฟรีวันนี้)`
+        : session.isReviewSession
+        ? `\n📝 ทบทวนข้อผิด — คะแนน 50%`
         : ''
 
     const hintNote = session.hintsUsed.length > 0
         ? `\n💡 ใช้คำใบ้: ${session.hintsUsed.length} ข้อ`
         : ''
 
-    return `${emoji} จบเกม${gameName}แล้ว! ${message}
+    return `${emoji} จบเกม${gameName}${reviewLabel}แล้ว! ${message}
 
 📊 ผลคะแนน:
 ✅ ถูก: ${session.correctCount}/${session.totalQuestions} ข้อ

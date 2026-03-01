@@ -3,8 +3,7 @@ import { shuffle } from "@/lib/utils/shuffle";
 import axios from "axios";
 import {
     getDifficultiesForLevel,
-    getRecentlyAnsweredQuestionIds,
-    filterQuestionsForUser,
+    selectQuestionsWithSRS,
     getUserLevel,
 } from "./questionHistory";
 
@@ -39,10 +38,6 @@ export async function getRandomContinueStoryQuestions(
 ): Promise<ContinueStoryQuestion[]> {
     const userLevel = userId ? await getUserLevel(userId) : 1;
     const difficulties = getDifficultiesForLevel(userLevel);
-    const answeredIds = userId
-        ? await getRecentlyAnsweredQuestionIds(userId, "CONTINUE_STORY", 24)
-        : [];
-
     const allQuestions = await prisma.continueStoryQuestion.findMany({
         where: { difficulty: { in: difficulties } },
     });
@@ -55,7 +50,10 @@ export async function getRandomContinueStoryQuestions(
         }));
     }
 
-    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    // SRS: ข้อถูกไม่ซ้ำ ข้อผิดวนกลับ ข้อใหม่เติมให้
+    const filtered = userId
+        ? await selectQuestionsWithSRS(allQuestions, userId, "CONTINUE_STORY", count, shuffle)
+        : shuffle(allQuestions).slice(0, count);
     return filtered.map(q => ({
         id: q.id, storyStart: q.storyStart, keywords: q.keywords, minLength: q.minLength,
     }));

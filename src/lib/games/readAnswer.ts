@@ -2,8 +2,7 @@ import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
 import {
     getDifficultiesForLevel,
-    getRecentlyAnsweredQuestionIds,
-    filterQuestionsForUser,
+    selectQuestionsWithSRS,
     getUserLevel,
 } from "./questionHistory";
 
@@ -27,10 +26,6 @@ export async function getRandomReadAnswerQuestions(
 ): Promise<ReadAnswerQuestion[]> {
     const userLevel = userId ? await getUserLevel(userId) : 1;
     const difficulties = getDifficultiesForLevel(userLevel);
-    const answeredIds = userId
-        ? await getRecentlyAnsweredQuestionIds(userId, "READ_ANSWER", 24)
-        : [];
-
     const allQuestions = await prisma.readAnswerQuestion.findMany({
         where: { difficulty: { in: difficulties } },
     });
@@ -45,7 +40,10 @@ export async function getRandomReadAnswerQuestions(
         }));
     }
 
-    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    // SRS: ข้อถูกไม่ซ้ำ ข้อผิดวนกลับ ข้อใหม่เติมให้
+    const filtered = userId
+        ? await selectQuestionsWithSRS(allQuestions, userId, "READ_ANSWER", count, shuffle)
+        : shuffle(allQuestions).slice(0, count);
     return filtered.map(q => ({
         id: q.id, passage: q.passage, question: q.question,
         optionA: q.optionA, optionB: q.optionB, optionC: q.optionC, optionD: q.optionD,

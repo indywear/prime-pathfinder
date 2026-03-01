@@ -3,8 +3,7 @@ import { shuffle } from "@/lib/utils/shuffle";
 import { calculateSimilarity } from "@/lib/utils/similarity";
 import {
     getDifficultiesForLevel,
-    getRecentlyAnsweredQuestionIds,
-    filterQuestionsForUser,
+    selectQuestionsWithSRS,
     getUserLevel,
 } from "./questionHistory";
 
@@ -23,10 +22,6 @@ export async function getRandomVocabMeaningQuestions(
 ): Promise<VocabMeaningQuestion[]> {
     const userLevel = userId ? await getUserLevel(userId) : 1;
     const difficulties = getDifficultiesForLevel(userLevel);
-    const answeredIds = userId
-        ? await getRecentlyAnsweredQuestionIds(userId, "VOCAB_MEANING", 24)
-        : [];
-
     // Intentional: uses VocabMatchQuestion model (same word/meaning data, different game mode - type meaning instead of match)
     const allQuestions = await prisma.vocabMatchQuestion.findMany({
         where: { difficulty: { in: difficulties } },
@@ -40,7 +35,10 @@ export async function getRandomVocabMeaningQuestions(
         }));
     }
 
-    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    // SRS: ข้อถูกไม่ซ้ำ ข้อผิดวนกลับ ข้อใหม่เติมให้
+    const filtered = userId
+        ? await selectQuestionsWithSRS(allQuestions, userId, "VOCAB_MEANING", count, shuffle)
+        : shuffle(allQuestions).slice(0, count);
     return filtered.map(q => ({
         id: q.id, word: q.word, meaning: q.meaning,
     }));

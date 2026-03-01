@@ -2,8 +2,7 @@ import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
 import {
     getDifficultiesForLevel,
-    getRecentlyAnsweredQuestionIds,
-    filterQuestionsForUser,
+    selectQuestionsWithSRS,
     getUserLevel,
 } from "./questionHistory";
 
@@ -30,10 +29,6 @@ export async function getRandomRaceClockQuestions(
 ): Promise<RaceClockQuestion[]> {
     const userLevel = userId ? await getUserLevel(userId) : 1;
     const difficulties = getDifficultiesForLevel(userLevel);
-    const answeredIds = userId
-        ? await getRecentlyAnsweredQuestionIds(userId, "RACE_CLOCK", 24)
-        : [];
-
     // Combine questions from multiple choice and speed grammar
     const [multipleChoice, speedGrammar] = await Promise.all([
         prisma.multipleChoiceQuestion.findMany({
@@ -78,8 +73,10 @@ export async function getRandomRaceClockQuestions(
         if (allQuestions.length === 0) return [];
     }
 
-    // Filter out recently answered
-    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    // SRS: ข้อถูกไม่ซ้ำ ข้อผิดวนกลับ ข้อใหม่เติมให้
+    const filtered = userId
+        ? await selectQuestionsWithSRS(allQuestions, userId, "RACE_CLOCK", count, shuffle)
+        : shuffle(allQuestions).slice(0, count);
     return filtered;
 }
 

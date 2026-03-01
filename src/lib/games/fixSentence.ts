@@ -3,8 +3,7 @@ import { shuffle } from "@/lib/utils/shuffle";
 import { calculateSimilarity } from "@/lib/utils/similarity";
 import {
     getDifficultiesForLevel,
-    getRecentlyAnsweredQuestionIds,
-    filterQuestionsForUser,
+    selectQuestionsWithSRS,
     getUserLevel,
 } from "./questionHistory";
 
@@ -24,10 +23,6 @@ export async function getRandomFixSentenceQuestions(
 ): Promise<FixSentenceQuestion[]> {
     const userLevel = userId ? await getUserLevel(userId) : 1;
     const difficulties = getDifficultiesForLevel(userLevel);
-    const answeredIds = userId
-        ? await getRecentlyAnsweredQuestionIds(userId, "FIX_SENTENCE", 24)
-        : [];
-
     const allQuestions = await prisma.fixSentenceQuestion.findMany({
         where: { difficulty: { in: difficulties } },
     });
@@ -41,7 +36,10 @@ export async function getRandomFixSentenceQuestions(
         }));
     }
 
-    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    // SRS: ข้อถูกไม่ซ้ำ ข้อผิดวนกลับ ข้อใหม่เติมให้
+    const filtered = userId
+        ? await selectQuestionsWithSRS(allQuestions, userId, "FIX_SENTENCE", count, shuffle)
+        : shuffle(allQuestions).slice(0, count);
     return filtered.map(q => ({
         id: q.id, wrongSentence: q.wrongSentence,
         correctSentence: q.correctSentence, hint: q.hint,

@@ -60,11 +60,75 @@ export function createDashboardFlex(data: {
     vocabularyCount: number;
     nextLevelPoints: number;
     title?: string;
+    skillProfiles?: { category: string; categoryName: string; accuracy: number; totalAttempts: number }[];
 }): FlexMessage {
     const progressPercent = Math.min(
         100,
         Math.round((data.points / data.nextLevelPoints) * 100)
     );
+
+    // Build skill profile section for dashboard
+    const skillSection: any[] = [];
+    if (data.skillProfiles && data.skillProfiles.length > 0) {
+        const categoryColors: Record<string, string> = {
+            vocabulary: "#4CAF50",
+            grammar: "#2196F3",
+            reading: "#FF9800",
+            writing: "#9C27B0",
+            culture: "#E91E63",
+        };
+
+        skillSection.push(
+            { type: "separator", margin: "xl" },
+            { type: "text", text: "📊 ทักษะรายหมวด", weight: "bold", size: "md", margin: "xl" }
+        );
+
+        for (const profile of data.skillProfiles) {
+            const pct = Math.round(profile.accuracy * 100);
+            const color = categoryColors[profile.category] || "#999999";
+            const filledFlex = Math.max(1, pct);
+            const emptyFlex = Math.max(1, 100 - pct);
+
+            const barContents =
+                profile.totalAttempts > 0
+                    ? [
+                          { type: "box", layout: "vertical", contents: [{ type: "filler" }], flex: filledFlex, backgroundColor: color, height: "6px" },
+                          { type: "box", layout: "vertical", contents: [{ type: "filler" }], flex: emptyFlex, backgroundColor: "#E0E0E0", height: "6px" },
+                      ]
+                    : [{ type: "box", layout: "vertical", contents: [{ type: "filler" }], flex: 1, backgroundColor: "#E0E0E0", height: "6px" }];
+
+            skillSection.push({
+                type: "box",
+                layout: "vertical",
+                margin: "lg",
+                contents: [
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: [
+                            { type: "text", text: profile.categoryName, size: "sm", color: "#555555", flex: 3 },
+                            {
+                                type: "text",
+                                text: profile.totalAttempts > 0 ? `${pct}%` : "—",
+                                size: "sm",
+                                align: "end",
+                                weight: "bold",
+                                color: profile.totalAttempts > 0 ? color : "#CCCCCC",
+                                flex: 1,
+                            },
+                        ],
+                    },
+                    {
+                        type: "box",
+                        layout: "horizontal",
+                        contents: barContents,
+                        cornerRadius: "3px",
+                        margin: "sm",
+                    },
+                ],
+            });
+        }
+    }
 
     return {
         type: "flex",
@@ -185,6 +249,7 @@ export function createDashboardFlex(data: {
                             },
                         ],
                     },
+                    ...skillSection,
                 ],
                 paddingAll: "20px",
             },

@@ -2,8 +2,7 @@ import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
 import {
     getDifficultiesForLevel,
-    getRecentlyAnsweredQuestionIds,
-    filterQuestionsForUser,
+    selectQuestionsWithSRS,
     getUserLevel,
 } from "./questionHistory";
 
@@ -26,10 +25,6 @@ export async function getRandomThaiIdiomQuestions(
 ): Promise<ThaiIdiomQuestion[]> {
     const userLevel = userId ? await getUserLevel(userId) : 1;
     const difficulties = getDifficultiesForLevel(userLevel);
-    const answeredIds = userId
-        ? await getRecentlyAnsweredQuestionIds(userId, "THAI_IDIOM", 24)
-        : [];
-
     const allQuestions = await prisma.thaiIdiomQuestion.findMany({
         where: { difficulty: { in: difficulties } },
     });
@@ -44,7 +39,10 @@ export async function getRandomThaiIdiomQuestions(
         }));
     }
 
-    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    // SRS: ข้อถูกไม่ซ้ำ ข้อผิดวนกลับ ข้อใหม่เติมให้
+    const filtered = userId
+        ? await selectQuestionsWithSRS(allQuestions, userId, "THAI_IDIOM", count, shuffle)
+        : shuffle(allQuestions).slice(0, count);
     return filtered.map(q => ({
         id: q.id, idiom: q.idiom, meaning: q.meaning,
         wrongA: q.wrongA, wrongB: q.wrongB, wrongC: q.wrongC,

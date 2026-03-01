@@ -139,6 +139,7 @@ import {
     formatGachaResult,
 } from "@/lib/games/vocabGacha";
 import { recordQuestionAnswered, getUserLevel } from "@/lib/games/questionHistory";
+import { updateSkillProfile, getSkillProfile } from "@/lib/games/skillProfile";
 import { evaluateSentence, getRandomSentencePairs } from "@/lib/games/sentenceConstruction";
 import { checkFillBlankAnswer } from "@/lib/games/fillBlank";
 import { p, np, kp, sp } from "@/lib/utils/particle";
@@ -254,6 +255,9 @@ const MENU_KEYWORDS = {
 
     // Legacy support
     MULTIPLE_CHOICE_GAME: ["เลือกตอบ", "multiple choice", "เลือก"],
+
+    // === Review Mode ===
+    REVIEW_WRONG: ["ทบทวนข้อผิด", "review wrong"],
 
     // === Short keywords ต้องอยู่หลังสุดเพราะเป็น substring ของคำอื่น ===
     SHOW_ANSWER: ["เฉลย", "ดูเฉลย", "คำตอบ", "answer"],
@@ -558,6 +562,11 @@ export async function handleTextMessage(
                 // Legacy
                 case "MULTIPLE_CHOICE_GAME":
                     await handleMultipleChoiceGameStart(event.replyToken, userId);
+                    break;
+
+                // Review Wrong Answers
+                case "REVIEW_WRONG":
+                    await handleReviewWrongAnswers(event.replyToken, userId);
                     break;
             }
             return;
@@ -1024,6 +1033,9 @@ async function handleDashboard(replyToken: string, userId: string) {
 
     const totalTasks = await prisma.task.count();
 
+    // Fetch skill profiles for dashboard
+    const skillProfiles = await getSkillProfile(user.id);
+
     const levelInfo = getLevelInfo(user.currentLevel);
     const displayTitle = getDisplayTitle(user);
     const dashboardFlex = createDashboardFlex({
@@ -1035,6 +1047,12 @@ async function handleDashboard(replyToken: string, userId: string) {
         vocabularyCount: user.vocabularyProgress.length,
         nextLevelPoints: getPointsForNextLevel(user.currentLevel),
         title: displayTitle,
+        skillProfiles: skillProfiles.map((sp) => ({
+            category: sp.category,
+            categoryName: sp.categoryName,
+            accuracy: sp.accuracy,
+            totalAttempts: sp.totalAttempts,
+        })),
     });
 
     await lineClient.replyMessage({
@@ -1649,6 +1667,13 @@ async function handleShowAnswer(replyToken: string, userId: string) {
                 console.error("Failed to create game session record:", e);
             }
 
+            // Update skill profile (show answer path)
+            try {
+                await updateSkillProfile(user.id, gameType, updatedSession.correctCount, updatedSession.totalQuestions);
+            } catch (e) {
+                console.error("Failed to update skill profile:", e);
+            }
+
             let levelUpMsg = "";
             if (updatedSession.pointsEarned > 0) {
                 const result = await addPoints(user.id, updatedSession.pointsEarned, 'GAME_CORRECT');
@@ -1670,14 +1695,18 @@ async function handleShowAnswer(replyToken: string, userId: string) {
             }
 
             const summaryMsg = formatSessionSummary(updatedSession);
+            const showAnswerQR = [
+                { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
+                { label: "เกมอื่น", text: "เลือกเกม" },
+                { label: "เมนู", text: "เมนู" },
+            ];
+            if (updatedSession.wrongCount > 0 && !updatedSession.isReviewSession) {
+                showAnswerQR.unshift({ label: "ทบทวนข้อผิด", text: "ทบทวนข้อผิด" });
+            }
             await replyWithQuickReply(
                 replyToken,
                 `${answerText || "ไม่พบคำตอบ"}\n\n${summaryMsg}${levelUpMsg}${titleMsg}`,
-                [
-                    { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
-                    { label: "เกมอื่น", text: "เลือกเกม" },
-                    { label: "เมนู", text: "เมนู" },
-                ]
+                showAnswerQR
             );
         } else {
             // Save updated session, show answer + "ข้อต่อไป"
@@ -1773,6 +1802,13 @@ async function handleSkipQuestion(replyToken: string, userId: string) {
                 console.error("Failed to create game session record:", e);
             }
 
+            // Update skill profile (skip path)
+            try {
+                await updateSkillProfile(user.id, gameType, updatedSession.correctCount, updatedSession.totalQuestions);
+            } catch (e) {
+                console.error("Failed to update skill profile:", e);
+            }
+
             let levelUpMsg = "";
             if (updatedSession.pointsEarned > 0) {
                 const result = await addPoints(user.id, updatedSession.pointsEarned, 'GAME_CORRECT');
@@ -1794,14 +1830,18 @@ async function handleSkipQuestion(replyToken: string, userId: string) {
             }
 
             const summaryMsg = formatSessionSummary(updatedSession);
+            const skipQR = [
+                { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
+                { label: "เกมอื่น", text: "เลือกเกม" },
+                { label: "เมนู", text: "เมนู" },
+            ];
+            if (updatedSession.wrongCount > 0 && !updatedSession.isReviewSession) {
+                skipQR.unshift({ label: "ทบทวนข้อผิด", text: "ทบทวนข้อผิด" });
+            }
             await replyWithQuickReply(
                 replyToken,
                 `⏭️ ข้ามข้อนี้\n\n${summaryMsg}${levelUpMsg}${titleMsg}`,
-                [
-                    { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
-                    { label: "เกมอื่น", text: "เลือกเกม" },
-                    { label: "เมนู", text: "เมนู" },
-                ]
+                skipQR
             );
         } else {
             // Save updated session, show "ข้อต่อไป"
@@ -1939,6 +1979,68 @@ async function handleHint(replyToken: string, userId: string) {
 }
 
 // =====================
+// Review Wrong Answers Handler
+// =====================
+
+async function handleReviewWrongAnswers(replyToken: string, userId: string) {
+    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+    if (!user?.isRegistered) {
+        const flex = createNotRegisteredFlex();
+        await lineClient.replyMessage({ replyToken, messages: [flex] as any });
+        return;
+    }
+
+    // ถ้ากำลังเล่นเกมอยู่ ให้จบก่อน
+    if (user.currentGameType) {
+        const flex = createErrorFlex("กำลังเล่นเกมอยู่ พิมพ์ \"ออกจากเกม\" ก่อนนะ", [{ label: "ออกจากเกม", text: "ออกจากเกม" }]);
+        await lineClient.replyMessage({ replyToken, messages: [flex] as any });
+        return;
+    }
+
+    // ดึง session ล่าสุดที่เล่นจบ
+    const lastSession = await prisma.languageGameSession.findFirst({
+        where: { odUserId: userId, isCompleted: true },
+        orderBy: { completedAt: 'desc' },
+    });
+
+    if (!lastSession) {
+        const flex = createErrorFlex("ยังไม่มีเกมที่เล่นจบ ลองเล่นเกมก่อนนะ", [{ label: "เลือกเกม", text: "เลือกเกม" }]);
+        await lineClient.replyMessage({ replyToken, messages: [flex] as any });
+        return;
+    }
+
+    // หา question IDs ที่ตอบผิด
+    const questions = lastSession.questions as string[];
+    const answers = lastSession.answers as string[];
+    const wrongIds = questions.filter((_, i) => answers[i] === "wrong");
+
+    if (wrongIds.length === 0) {
+        const flex = createConfirmationFlex({ icon: "🎉", message: "ไม่มีข้อที่ตอบผิดเลย เก่งมาก!", buttons: [{ label: "เล่นต่อ", text: "เลือกเกม" }, { label: "เมนู", text: "เมนู" }] });
+        await lineClient.replyMessage({ replyToken, messages: [flex] as any });
+        return;
+    }
+
+    const gameType = lastSession.gameType;
+
+    // สร้าง review session — คะแนน 50%
+    const reviewSession = createSessionData(gameType, wrongIds, 0.5);
+    reviewSession.isReviewSession = true;
+
+    // บันทึก game state
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            currentGameType: gameType,
+            currentQuestionId: wrongIds[0],
+            gameData: JSON.stringify({ session: reviewSession }),
+        },
+    });
+
+    // แสดงคำถามแรกผ่าน handleSessionNext
+    await handleSessionNext(replyToken, userId);
+}
+
+// =====================
 // Session Next Question Handler
 // =====================
 
@@ -1988,6 +2090,13 @@ async function handleSessionNext(replyToken: string, userId: string) {
                 console.error("Failed to create game session record:", e);
             }
 
+            // Update skill profile (pendingWrong path)
+            try {
+                await updateSkillProfile(user.id, gameType, session.correctCount, session.totalQuestions);
+            } catch (e) {
+                console.error("Failed to update skill profile:", e);
+            }
+
             let levelUpMsg = "";
             if (session.pointsEarned > 0) {
                 const result = await addPoints(user.id, session.pointsEarned, 'GAME_CORRECT');
@@ -2009,14 +2118,18 @@ async function handleSessionNext(replyToken: string, userId: string) {
             }
 
             const summaryMsg = formatSessionSummary(session);
+            const pendingQR = [
+                { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
+                { label: "เกมอื่น", text: "เลือกเกม" },
+                { label: "เมนู", text: "เมนู" },
+            ];
+            if (session.wrongCount > 0 && !session.isReviewSession) {
+                pendingQR.unshift({ label: "ทบทวนข้อผิด", text: "ทบทวนข้อผิด" });
+            }
             await replyWithQuickReply(
                 replyToken,
                 `${summaryMsg}${levelUpMsg}${titleMsg}`,
-                [
-                    { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
-                    { label: "เกมอื่น", text: "เลือกเกม" },
-                    { label: "เมนู", text: "เมนู" },
-                ]
+                pendingQR
             );
             return;
         }
@@ -2573,6 +2686,13 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                         console.error("Failed to create game session record:", e);
                     }
 
+                    // Update skill profile
+                    try {
+                        await updateSkillProfile(user.id, gameType, updatedSession.correctCount, updatedSession.totalQuestions);
+                    } catch (e) {
+                        console.error("Failed to update skill profile:", e);
+                    }
+
                     // Award total points
                     let levelUpFlex: any = null;
                     if (updatedSession.pointsEarned > 0) {
@@ -2598,11 +2718,15 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                     const sessionFlexes: any[] = [createCorrectAnswerFlex({ message: getCorrectMessage(message), points: earnedThisQ, hintNote: hintNote || undefined, isLastQuestion: true, summaryMsg })];
                     if (levelUpFlex) sessionFlexes.push(levelUpFlex);
                     if (titleFlex) sessionFlexes.push(titleFlex);
-                    await replyFlexWithQuickReply(replyToken, sessionFlexes, [
+                    const quickReplies = [
                         { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
                         { label: "เกมอื่น", text: "เลือกเกม" },
                         { label: "เมนู", text: "เมนู" },
-                    ]);
+                    ];
+                    if (updatedSession.wrongCount > 0 && !updatedSession.isReviewSession) {
+                        quickReplies.unshift({ label: "ทบทวนข้อผิด", text: "ทบทวนข้อผิด" });
+                    }
+                    await replyFlexWithQuickReply(replyToken, sessionFlexes, quickReplies);
                 } else {
                     // Session not complete — save updated session, show result + "ข้อต่อไป"
                     await prisma.user.update({

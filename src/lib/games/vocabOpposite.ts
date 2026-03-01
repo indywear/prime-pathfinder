@@ -2,8 +2,7 @@ import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
 import {
     getDifficultiesForLevel,
-    getRecentlyAnsweredQuestionIds,
-    filterQuestionsForUser,
+    selectQuestionsWithSRS,
     getUserLevel,
 } from "./questionHistory";
 
@@ -25,10 +24,6 @@ export async function getRandomVocabOppositeQuestions(
 ): Promise<VocabOppositeQuestion[]> {
     const userLevel = userId ? await getUserLevel(userId) : 1;
     const difficulties = getDifficultiesForLevel(userLevel);
-    const answeredIds = userId
-        ? await getRecentlyAnsweredQuestionIds(userId, "VOCAB_OPPOSITE", 24)
-        : [];
-
     const allQuestions = await prisma.vocabOppositeQuestion.findMany({
         where: { difficulty: { in: difficulties } },
     });
@@ -42,7 +37,10 @@ export async function getRandomVocabOppositeQuestions(
         }));
     }
 
-    const filtered = filterQuestionsForUser(allQuestions, answeredIds, count, shuffle);
+    // SRS: ข้อถูกไม่ซ้ำ ข้อผิดวนกลับ ข้อใหม่เติมให้
+    const filtered = userId
+        ? await selectQuestionsWithSRS(allQuestions, userId, "VOCAB_OPPOSITE", count, shuffle)
+        : shuffle(allQuestions).slice(0, count);
     return filtered.map(q => ({
         id: q.id, word: q.word, opposite: q.opposite,
         wrongA: q.wrongA, wrongB: q.wrongB, wrongC: q.wrongC,

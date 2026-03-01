@@ -57,6 +57,7 @@ model User {
   gameSessions        LanguageGameSession[]
   questionHistory     UserQuestionHistory[]
   lessonProgress      LessonProgress[]
+  skillProfiles       UserSkillProfile[]
 }
 
 enum ThaiLevel {
@@ -656,20 +657,41 @@ model GachaVocab {
 // =====================
 
 model UserQuestionHistory {
-  id           String   @id @default(cuid())
-  userId       String
-  questionId   String   // ID of the question from any game table
-  gameType     String   // Which game (VOCAB_MATCH, FILL_BLANK, etc.)
-  wasCorrect   Boolean  @default(false)
-  answeredAt   DateTime @default(now())
+  id             String   @id @default(cuid())
+  userId         String
+  questionId     String   // ID of the question from any game table
+  gameType       String   // Which game (VOCAB_MATCH, FILL_BLANK, etc.)
+  wasCorrect     Boolean  @default(false)
+  attemptNumber  Int      @default(1)  // ครั้งที่เท่าไหร่ที่ตอบข้อนี้
+  answeredAt     DateTime @default(now())
 
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, questionId, gameType])
   @@index([userId])
   @@index([userId, gameType])
+  @@index([userId, questionId, gameType])  // สำหรับนับจำนวน attempt
   @@index([answeredAt])
+  @@index([userId, wasCorrect])            // สำหรับ query accuracy
+}
+
+// =====================
+// User Skill Profile (ติดตาม accuracy รายหมวด)
+// =====================
+
+model UserSkillProfile {
+  id              String   @id @default(cuid())
+  userId          String
+  category        String   // "vocabulary", "grammar", "reading", "writing", "culture"
+  totalAttempts   Int      @default(0)
+  correctAttempts Int      @default(0)
+  accuracy        Float    @default(0)   // 0.0 to 1.0
+  lastPracticedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+  @@index([userId])
 }
 
 // =====================
