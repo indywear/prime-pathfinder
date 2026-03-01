@@ -11,6 +11,7 @@ export interface FillBlankQuestion {
     id: string;
     sentence: string;  // Contains __________ as placeholder
     answer: string;
+    imageUrl?: string | null;
 }
 
 /**
@@ -33,7 +34,7 @@ export async function getRandomFillBlankQuestions(
         const fallback = await prisma.fillBlankQuestion.findMany();
         if (fallback.length === 0) return [];
         return shuffle(fallback).slice(0, count).map(q => ({
-            id: q.id, sentence: q.sentence, answer: q.answer,
+            id: q.id, sentence: q.sentence, answer: q.answer, imageUrl: q.imageUrl,
         }));
     }
 
@@ -46,6 +47,7 @@ export async function getRandomFillBlankQuestions(
         id: q.id,
         sentence: q.sentence,
         answer: q.answer,
+        imageUrl: q.imageUrl,
     }));
 }
 

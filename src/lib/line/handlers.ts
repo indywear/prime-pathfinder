@@ -141,7 +141,8 @@ import {
 import { recordQuestionAnswered, getUserLevel } from "@/lib/games/questionHistory";
 import { updateSkillProfile, getSkillProfile } from "@/lib/games/skillProfile";
 import { evaluateSentence, getRandomSentencePairs } from "@/lib/games/sentenceConstruction";
-import { checkFillBlankAnswer } from "@/lib/games/fillBlank";
+import { checkFillBlankAnswer, getRandomFillBlankQuestions } from "@/lib/games/fillBlank";
+import { getRandomMultipleChoiceQuestions } from "@/lib/games/multipleChoice";
 import { p, np, kp, sp } from "@/lib/utils/particle";
 import { BOT_NAME, getTimeGreeting, getEncouragement } from "@/lib/line/botCharacter";
 import {
@@ -1274,19 +1275,11 @@ async function handleFillBlankGameStart(replyToken: string, userId: string) {
 
     const numQ = GAME_TYPES.FILL_BLANK.questionsPerRound;
 
-    // Load N random questions by shuffling IDs
-    const allIds = await prisma.fillBlankQuestion.findMany({ select: { id: true } });
-    if (allIds.length === 0) {
-        { const flex = createErrorFlex("ยังไม่มีคำถามในระบบ กรุณาติดต่อผู้ดูแลระบบ", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
-        return;
-    }
-
-    const shuffled = allIds.sort(() => Math.random() - 0.5);
-    const selectedIds = shuffled.slice(0, numQ).map(q => q.id);
-    const questions = await prisma.fillBlankQuestion.findMany({ where: { id: { in: selectedIds } } });
+    // ใช้ game library ที่มี SRS + difficulty filtering
+    const questions = await getRandomFillBlankQuestions(userId, numQ);
 
     if (questions.length === 0) {
-        { const flex = createErrorFlex("เกิดข้อผิดพลาด กรุณาลองใหม่", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
+        { const flex = createErrorFlex("ยังไม่มีคำถามในระบบ กรุณาติดต่อผู้ดูแลระบบ", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
@@ -1324,18 +1317,11 @@ async function handleFillBlankGameStart(replyToken: string, userId: string) {
 async function handleMultipleChoiceGameStart(replyToken: string, userId: string) {
     const numQ = 5; // Default 5 questions per round for legacy multiple choice
 
-    const allIds = await prisma.multipleChoiceQuestion.findMany({ select: { id: true } });
-    if (allIds.length === 0) {
-        { const flex = createErrorFlex("ยังไม่มีคำถามในระบบ กรุณาติดต่อผู้ดูแลระบบ", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
-        return;
-    }
-
-    const shuffled = allIds.sort(() => Math.random() - 0.5);
-    const selectedIds = shuffled.slice(0, numQ).map(q => q.id);
-    const questions = await prisma.multipleChoiceQuestion.findMany({ where: { id: { in: selectedIds } } });
+    // ใช้ game library ที่มี SRS + difficulty filtering
+    const questions = await getRandomMultipleChoiceQuestions(userId, numQ);
 
     if (questions.length === 0) {
-        { const flex = createErrorFlex("เกิดข้อผิดพลาด กรุณาลองใหม่", [{ label: "เมนู", text: "เมนู" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
+        { const flex = createErrorFlex("ยังไม่มีคำถามในระบบ กรุณาติดต่อผู้ดูแลระบบ", [{ label: "เลือกเกม", text: "เลือกเกม" }]); await lineClient.replyMessage({ replyToken, messages: [flex] as any }); }
         return;
     }
 
