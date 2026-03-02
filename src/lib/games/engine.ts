@@ -321,6 +321,7 @@ export function checkLevelGate(gameType: string, userLevel: number): string | nu
 
 export interface GameSessionState {
     sessionType: string        // game type id
+    gameType: string           // alias for sessionType (consistency with DB model)
     questionIds: string[]      // all question IDs in this session
     currentIndex: number       // 0-based index of current question
     totalQuestions: number     // total questions in session
@@ -347,6 +348,7 @@ export function createSessionData(
     const config = GAME_TYPES[gameType as GameTypeId]
     return {
         sessionType: gameType,
+        gameType,
         questionIds,
         currentIndex: 0,
         totalQuestions: questionIds.length,
