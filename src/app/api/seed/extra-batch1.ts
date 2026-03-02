@@ -712,10 +712,10 @@ export const extraVocabOppositeQuestions: {
   },
   {
     word: "คุณธรรม",
-    opposite: "ทุจริต",
+    opposite: "อธรรม",
     wrongA: "ศีลธรรม",
     wrongB: "จริยธรรม",
-    wrongC: "มารยาท",
+    wrongC: "ทุจริต",
     difficulty: "HARD",
   },
   {
@@ -865,10 +865,10 @@ export const extraVocabSynonymQuestions: {
   },
   {
     word: "แก้ไข",
-    synonym: "ปรับปรุง",
+    synonym: "ซ่อมแซม",
     wrongA: "ทำลาย",
     wrongB: "ละเลย",
-    wrongC: "เพิกเฉย",
+    wrongC: "ปรับปรุง",
     difficulty: "MEDIUM",
   },
   {
@@ -898,9 +898,9 @@ export const extraVocabSynonymQuestions: {
     difficulty: "HARD",
   },
   {
-    word: "สวรรคต",
-    synonym: "เสด็จสวรรคต",
-    wrongA: "ประสูติ",
+    word: "อาพาธ",
+    synonym: "ประชวร",
+    wrongA: "สิ้นพระชนม์",
     wrongB: "ทรงพระเจริญ",
     wrongC: "เสด็จพระราชดำเนิน",
     difficulty: "HARD",

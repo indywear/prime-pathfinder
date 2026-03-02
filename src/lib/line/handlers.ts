@@ -2642,10 +2642,13 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                 const updatedSession = advanceSession(session, isCorrect, hintUsed);
 
                 // Partial credit: advanceSession gave 0 points (isCorrect=false), add partial points manually
+                // Apply pointMultiplier and hintPenalty to match how advanceSession calculates correct points
                 if (isPartial && !isCorrect && points > 0) {
-                    updatedSession.pointsEarned += points;
+                    const hintPenalty = hintUsed ? 0.5 : 1.0;
+                    const adjustedPoints = Math.round(points * session.pointMultiplier * hintPenalty);
+                    updatedSession.pointsEarned += adjustedPoints;
                     const lastAns = updatedSession.answers[updatedSession.answers.length - 1];
-                    if (lastAns) lastAns.points = points;
+                    if (lastAns) lastAns.points = adjustedPoints;
                 }
 
                 const earnedThisQ = updatedSession.pointsEarned - session.pointsEarned;
