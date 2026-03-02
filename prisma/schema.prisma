@@ -670,6 +670,7 @@ model UserQuestionHistory {
 
   @@index([userId])
   @@index([userId, gameType])
+  @@index([userId, gameType, answeredAt])  // สำหรับ SRS query (mastery status)
   @@index([userId, questionId, gameType])  // สำหรับนับจำนวน attempt
   @@index([answeredAt])
   @@index([userId, wasCorrect])            // สำหรับ query accuracy

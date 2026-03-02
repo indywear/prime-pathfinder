@@ -1,5 +1,25 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db/prisma";
+import {
+    extraMultipleChoiceQuestions,
+    extraFillBlankQuestions,
+    extraVocabMatchQuestions,
+    extraVocabOppositeQuestions,
+    extraVocabSynonymQuestions,
+} from "./extra-batch1";
+import {
+    extraFixSentenceQuestions,
+    extraArrangeSentenceQuestions,
+    extraSpeedGrammarQuestions,
+    extraSentenceConstructionPairs,
+    extraReadAnswerQuestions,
+} from "./extra-batch2";
+import {
+    extraSummarizeQuestions,
+    extraContinueStoryQuestions,
+    thaiIdiomQuestions,
+    thaiCultureQuestions,
+} from "../../../../prisma/seed-extra-questions";
 
 export const dynamic = 'force-dynamic';
 
@@ -269,9 +289,69 @@ export async function POST() {
         await seedData("dailyVocab", () => prisma.dailyVocab.count(), (d) => prisma.dailyVocab.create({ data: d }), dailyVocabs);
         await seedData("gachaVocab", () => prisma.gachaVocab.count(), (d) => prisma.gachaVocab.create({ data: d }), gachaVocabs);
 
+        // NEW: Thai Idiom & Culture (ไม่มี initial data — seed ตรงจาก batch)
+        await seedData("thaiIdiom", () => prisma.thaiIdiomQuestion.count(), (d) => prisma.thaiIdiomQuestion.create({ data: d }), thaiIdiomQuestions as any[]);
+        await seedData("thaiCulture", () => prisma.thaiCultureQuestion.count(), (d) => prisma.thaiCultureQuestion.create({ data: d }), thaiCultureQuestions as any[]);
+
+        // ============================================================
+        // EXTRAS: เพิ่มคำถามเสริมให้ครบ 30 ข้อต่อเกม (ใช้ createMany)
+        // ============================================================
+        const TARGET = 30;
+
+        async function seedExtras(
+            name: string,
+            countFn: () => Promise<number>,
+            createManyFn: (args: { data: any[]; skipDuplicates?: boolean }) => Promise<unknown>,
+            items: any[]
+        ) {
+            const existing = await countFn();
+            if (existing >= TARGET || items.length === 0) {
+                results[name + "_extras"] = 0;
+                return;
+            }
+            await createManyFn({ data: items });
+            results[name + "_extras"] = items.length;
+        }
+
+        await seedExtras("multipleChoice", () => prisma.multipleChoiceQuestion.count(),
+            (args) => prisma.multipleChoiceQuestion.createMany(args), extraMultipleChoiceQuestions as any[]);
+
+        await seedExtras("fillBlank", () => prisma.fillBlankQuestion.count(),
+            (args) => prisma.fillBlankQuestion.createMany(args), extraFillBlankQuestions as any[]);
+
+        await seedExtras("vocabMatch", () => prisma.vocabMatchQuestion.count(),
+            (args) => prisma.vocabMatchQuestion.createMany(args), extraVocabMatchQuestions as any[]);
+
+        await seedExtras("vocabOpposite", () => prisma.vocabOppositeQuestion.count(),
+            (args) => prisma.vocabOppositeQuestion.createMany(args), extraVocabOppositeQuestions as any[]);
+
+        await seedExtras("vocabSynonym", () => prisma.vocabSynonymQuestion.count(),
+            (args) => prisma.vocabSynonymQuestion.createMany(args), extraVocabSynonymQuestions as any[]);
+
+        await seedExtras("fixSentence", () => prisma.fixSentenceQuestion.count(),
+            (args) => prisma.fixSentenceQuestion.createMany(args), extraFixSentenceQuestions as any[]);
+
+        await seedExtras("arrangeSentence", () => prisma.arrangeSentenceQuestion.count(),
+            (args) => prisma.arrangeSentenceQuestion.createMany(args), extraArrangeSentenceQuestions as any[]);
+
+        await seedExtras("speedGrammar", () => prisma.speedGrammarQuestion.count(),
+            (args) => prisma.speedGrammarQuestion.createMany(args), extraSpeedGrammarQuestions as any[]);
+
+        await seedExtras("sentence", () => prisma.sentenceConstructionPair.count(),
+            (args) => prisma.sentenceConstructionPair.createMany(args), extraSentenceConstructionPairs as any[]);
+
+        await seedExtras("readAnswer", () => prisma.readAnswerQuestion.count(),
+            (args) => prisma.readAnswerQuestion.createMany(args), extraReadAnswerQuestions as any[]);
+
+        await seedExtras("summarize", () => prisma.summarizeQuestion.count(),
+            (args) => prisma.summarizeQuestion.createMany(args), extraSummarizeQuestions as any[]);
+
+        await seedExtras("continueStory", () => prisma.continueStoryQuestion.count(),
+            (args) => prisma.continueStoryQuestion.createMany(args), extraContinueStoryQuestions as any[]);
+
         return NextResponse.json({
             status: "ok",
-            message: "Seed completed for all 15 game types",
+            message: "Seed completed for all 16 game types (with extras to 30 each)",
             results,
         });
     } catch (error: any) {
@@ -303,6 +383,9 @@ export async function GET() {
         // Fun games
         dailyVocabs: await prisma.dailyVocab.count(),
         gachaVocabs: await prisma.gachaVocab.count(),
+        // Thai Idiom & Culture
+        thaiIdiomQuestions: await prisma.thaiIdiomQuestion.count(),
+        thaiCultureQuestions: await prisma.thaiCultureQuestion.count(),
     };
 
     return NextResponse.json({

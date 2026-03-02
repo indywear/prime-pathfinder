@@ -1,6 +1,6 @@
 import prisma from "@/lib/db/prisma";
 import { shuffle } from "@/lib/utils/shuffle";
-import { getDifficultiesForLevel, getUserLevel } from "./questionHistory";
+import { getDifficultiesForLevel, selectQuestionsWithSRS, getUserLevel } from "./questionHistory";
 import axios from "axios";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -45,8 +45,12 @@ export async function getRandomSentencePairs(userId?: string, count: number = 3)
         }));
     }
 
-    const shuffled = shuffle(allPairs);
-    return shuffled.slice(0, count).map(p => ({
+    // SRS: ข้อถูกไม่ซ้ำ ข้อผิดวนกลับ ข้อใหม่เติมให้
+    const filtered = userId
+        ? await selectQuestionsWithSRS(allPairs, userId, "SENTENCE_WRITING", count, shuffle)
+        : shuffle(allPairs).slice(0, count);
+
+    return filtered.map(p => ({
         id: p.id,
         word1: p.word1,
         word2: p.word2,
@@ -133,7 +137,7 @@ export async function evaluateSentence(
                     }
                 ],
                 temperature: 0.3,
-                max_tokens: 150,
+                max_tokens: 200,
             },
             {
                 headers: {

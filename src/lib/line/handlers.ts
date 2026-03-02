@@ -142,6 +142,7 @@ import { recordQuestionAnswered, getUserLevel } from "@/lib/games/questionHistor
 import { updateSkillProfile, getSkillProfile } from "@/lib/games/skillProfile";
 import { evaluateSentence, getRandomSentencePairs } from "@/lib/games/sentenceConstruction";
 import { checkFillBlankAnswer, getRandomFillBlankQuestions } from "@/lib/games/fillBlank";
+import { smartCheckFillBlank, smartCheckFixSentence, smartCheckArrangeSentence, type SmartEvalResult } from "@/lib/games/smartEvaluator";
 import { getRandomMultipleChoiceQuestions } from "@/lib/games/multipleChoice";
 import { p, np, kp, sp } from "@/lib/utils/particle";
 import { BOT_NAME, getTimeGreeting, getEncouragement } from "@/lib/line/botCharacter";
@@ -1315,7 +1316,7 @@ async function handleFillBlankGameStart(replyToken: string, userId: string) {
 }
 
 async function handleMultipleChoiceGameStart(replyToken: string, userId: string) {
-    const numQ = 5; // Default 5 questions per round for legacy multiple choice
+    const numQ = GAME_TYPES.MULTIPLE_CHOICE.questionsPerRound;
 
     // ใช้ game library ที่มี SRS + difficulty filtering
     const questions = await getRandomMultipleChoiceQuestions(userId, numQ);
@@ -2362,6 +2363,7 @@ async function handleSessionNext(replyToken: string, userId: string) {
 async function handleGameAnswer(replyToken: string, user: any, text: string) {
     try {
         let isCorrect = false;
+        let isPartial = false;
         let points = 0;
         let correctAnswer = "";
         let message = "";
@@ -2424,26 +2426,25 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                 return;
             }
             correctAnswer = question.answer;
-            if (checkFillBlankAnswer(text, question.answer)) {
-                isCorrect = true;
-                points = 10;
-            } else {
-                message = `คำตอบที่ถูกคือ: ${question.answer}`;
-            }
+            const evalResult = await smartCheckFillBlank(text, question.answer, question.sentence);
+            isCorrect = evalResult.status === "correct";
+            isPartial = evalResult.status === "partial";
+            points = Math.round(10 * evalResult.scoreMultiplier);
+            message = evalResult.feedback;
         }
         else if (gameType === "FIX_SENTENCE") {
-            isCorrect = checkFixSentenceAnswer(text, gameData.correctSentence);
-            points = isCorrect ? 12 : 0;
-            if (!isCorrect) {
-                message = `ประโยคที่ถูกคือ:\n"${gameData.correctSentence}"`;
-            }
+            const evalResult = await smartCheckFixSentence(text, gameData.correctSentence);
+            isCorrect = evalResult.status === "correct";
+            isPartial = evalResult.status === "partial";
+            points = Math.round(12 * evalResult.scoreMultiplier);
+            message = evalResult.feedback;
         }
         else if (gameType === "ARRANGE_SENTENCE") {
-            isCorrect = checkArrangeSentenceAnswer(text, gameData.correctSentence);
-            points = isCorrect ? 12 : 0;
-            if (!isCorrect) {
-                message = `ประโยคที่ถูกคือ:\n"${gameData.correctSentence}"`;
-            }
+            const evalResult = await smartCheckArrangeSentence(text, gameData.correctSentence);
+            isCorrect = evalResult.status === "correct";
+            isPartial = evalResult.status === "partial";
+            points = Math.round(12 * evalResult.scoreMultiplier);
+            message = evalResult.feedback;
         }
         else if (gameType === "SPEED_GRAMMAR") {
             const normalizedAnswer = answerMap[text.trim()] || text.trim().toUpperCase();
@@ -2618,6 +2619,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
         // ==================
 
         // Record question history for all games (so questions don't repeat within 24h)
+        // Partial credit counts as incorrect for SRS — question will come back for review
         if (user.currentQuestionId && gameType) {
             try {
                 await recordQuestionAnswered(user.lineUserId, user.currentQuestionId, gameType, isCorrect);
@@ -2634,10 +2636,18 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
             const isPendingWrong = gameData.pendingWrong === true;
             const wasHintUsed = gameData.hintUsedForCurrent === true;
 
-            if (isCorrect) {
-                // Correct answer (possibly after retry with hint)
+            if (isCorrect || isPartial) {
+                // Correct or partial answer (possibly after retry with hint)
                 const hintUsed = isPendingWrong && wasHintUsed;
-                const updatedSession = advanceSession(session, true, hintUsed);
+                const updatedSession = advanceSession(session, isCorrect, hintUsed);
+
+                // Partial credit: advanceSession gave 0 points (isCorrect=false), add partial points manually
+                if (isPartial && !isCorrect && points > 0) {
+                    updatedSession.pointsEarned += points;
+                    const lastAns = updatedSession.answers[updatedSession.answers.length - 1];
+                    if (lastAns) lastAns.points = points;
+                }
+
                 const earnedThisQ = updatedSession.pointsEarned - session.pointsEarned;
                 const hintNote = hintUsed ? " (ใช้คำใบ้ -50%)" : "";
 
@@ -2659,7 +2669,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                                 odUserId: user.lineUserId,
                                 gameType: gameType as any,
                                 questions: updatedSession.questionIds,
-                                answers: updatedSession.answers.map(a => a.correct ? "correct" : "wrong"),
+                                answers: updatedSession.answers.map((a, i) => a.correct ? "correct" : (a.points > 0 ? "partial" : "wrong")),
                                 currentIndex: updatedSession.totalQuestions,
                                 isCompleted: true,
                                 correctCount: updatedSession.correctCount,
@@ -2758,7 +2768,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
             }
         } else {
             // ===== LEGACY MODE: single-question flow (no session) =====
-            if (isCorrect || ((gameType === "SUMMARIZE" || gameType === "CONTINUE_STORY") && points > 0)) {
+            if (isCorrect || isPartial || ((gameType === "SUMMARIZE" || gameType === "CONTINUE_STORY") && points > 0)) {
                 await prisma.user.update({
                     where: { id: user.id },
                     data: { currentGameType: null, currentQuestionId: null, gameData: null },

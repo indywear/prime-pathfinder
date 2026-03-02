@@ -86,7 +86,10 @@ export async function recordQuestionAnswered(
     wasCorrect: boolean
 ): Promise<void> {
     const userId = await getInternalUserId(lineUserId);
-    if (!userId) return;
+    if (!userId) {
+        console.warn(`[SRS] recordQuestionAnswered: user not found for lineUserId=${lineUserId}, questionId=${questionId}, gameType=${gameType}`);
+        return;
+    }
 
     // นับจำนวน attempt ก่อนหน้า
     const previousAttempts = await prisma.userQuestionHistory.count({
@@ -161,7 +164,7 @@ export function filterQuestionsForUser<T extends { id: string }>(
 export async function getQuestionMasteryStatus(
     lineUserId: string,
     gameType: string,
-    reviewCooldownHours: number = 1
+    reviewCooldownHours: number = 4
 ): Promise<{
     masteredIds: string[];
     dueForReviewIds: string[];
@@ -209,9 +212,37 @@ export async function getQuestionMasteryStatus(
 }
 
 /**
+ * ดึง ID ข้อ mastered เรียงจากเก่าสุด (ตอบนานสุด) → ใหม่สุด
+ * ใช้สำหรับ fallback เมื่อข้อใหม่หมด = spaced repetition จริง
+ */
+async function getMasteredQuestionsSortedByOldest(
+    lineUserId: string,
+    gameType: string,
+    masteredIds: string[]
+): Promise<string[]> {
+    if (masteredIds.length === 0) return [];
+    const userId = await getInternalUserId(lineUserId);
+    if (!userId) return [];
+
+    const history = await prisma.userQuestionHistory.findMany({
+        where: {
+            userId,
+            gameType,
+            questionId: { in: masteredIds },
+            wasCorrect: true,
+        },
+        select: { questionId: true, answeredAt: true },
+        orderBy: { answeredAt: 'asc' },
+        distinct: ['questionId'],
+    });
+
+    return history.map(h => h.questionId);
+}
+
+/**
  * เลือกคำถามด้วยระบบ SRS
- * ลำดับ: ข้อที่ต้องทบทวน (ตอบผิด) → ข้อใหม่ (ยังไม่เคยตอบ)
- * ข้อที่ตอบถูกแล้ว → ไม่โผล่มาอีกเลย
+ * ลำดับ: 1) ข้อทบทวน (ตอบผิด) → 2) ข้อใหม่ → 3) ข้อ mastered (เก่าสุดก่อน)
+ * ข้อ mastered จะวนกลับเมื่อข้อใหม่หมด (spaced repetition)
  */
 export async function selectQuestionsWithSRS<T extends { id: string }>(
     allQuestions: T[],
@@ -234,6 +265,23 @@ export async function selectQuestionsWithSRS<T extends { id: string }>(
         !masteredSet.has(q.id) && !reviewSet.has(q.id) && !recentWrongSet.has(q.id)
     ));
 
-    // รวม: ทบทวนก่อน แล้วเติมข้อใหม่
-    return [...reviewQuestions, ...newQuestions].slice(0, count);
+    const result = [...reviewQuestions, ...newQuestions].slice(0, count);
+
+    // 3. Fallback: ถ้ายังไม่ครบ → วนข้อ mastered กลับมา (เอาข้อเก่าสุดก่อน)
+    if (result.length < count && masteredIds.length > 0) {
+        const sortedMasteredIds = await getMasteredQuestionsSortedByOldest(lineUserId, gameType, masteredIds);
+        const questionMap = new Map(allQuestions.map(q => [q.id, q]));
+        const existingIds = new Set(result.map(r => r.id));
+
+        for (const qId of sortedMasteredIds) {
+            if (result.length >= count) break;
+            const q = questionMap.get(qId);
+            if (q && !existingIds.has(q.id)) {
+                result.push(q);
+                existingIds.add(q.id);
+            }
+        }
+    }
+
+    return result.slice(0, count);
 }
