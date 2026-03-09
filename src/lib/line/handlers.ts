@@ -1966,8 +1966,9 @@ async function handleHint(replyToken: string, userId: string) {
         answerInstruction,
     });
 
-    // After hint: user should TRY to answer first (no เฉลย/ข้อต่อไป yet)
+    // After hint: user can try answering or see answer (hint penalty already applied)
     await replyFlexWithQuickReply(replyToken, [hintFlex], [
+        { label: "เฉลย", text: "เฉลย" },
         { label: "ออก", text: "ออกจากเกม" },
     ]);
 }
@@ -2228,7 +2229,7 @@ async function handleSessionNext(replyToken: string, userId: string) {
                 data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, correctSentence: q.correctSentence }) },
             });
             await replyWithQuickReply(replyToken, formatFixSentenceQuestion(q as any, idx, total), [
-                { label: "เฉลย", text: "เฉลย" }, { label: "ข้าม", text: "ข้าม" }, { label: "ออก", text: "ออกจากเกม" },
+                { label: "Hint 💡", text: HINT_CMD }, { label: "ข้าม", text: "ข้าม" }, { label: "ออก", text: "ออกจากเกม" },
             ], q.imageUrl);
         }
         else if (gameType === "ARRANGE_SENTENCE") {
@@ -2239,7 +2240,7 @@ async function handleSessionNext(replyToken: string, userId: string) {
                 data: { currentQuestionId: questionId, gameData: JSON.stringify({ session, correctSentence: q.correctSentence }) },
             });
             await replyWithQuickReply(replyToken, formatArrangeSentenceQuestion(q as any, idx, total), [
-                { label: "เฉลย", text: "เฉลย" }, { label: "ข้าม", text: "ข้าม" }, { label: "ออก", text: "ออกจากเกม" },
+                { label: "Hint 💡", text: HINT_CMD }, { label: "ข้าม", text: "ข้าม" }, { label: "ออก", text: "ออกจากเกม" },
             ], q.imageUrl);
         }
         else if (gameType === "SPEED_GRAMMAR") {
@@ -2760,7 +2761,7 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                 const retryMsg = getWrongMessage(message, isPendingWrong);
                 const wrongFlex = createWrongAnswerFlex({ message: retryMsg, currentIndex: session.currentIndex, totalQuestions: session.totalQuestions, correctCount: session.correctCount });
 
-                // Don't show Hint button if already used
+                // Hint before Answer: hide เฉลย until hint is used
                 const buttons = wasHintUsed
                     ? [
                         { label: "เฉลย", text: "เฉลย" },
@@ -2769,7 +2770,6 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                     ]
                     : [
                         { label: "Hint 💡", text: HINT_CMD },
-                        { label: "เฉลย", text: "เฉลย" },
                         { label: "ข้อต่อไป ▶", text: NEXT_QUESTION_CMD },
                         { label: "ออก", text: "ออกจากเกม" },
                     ];
@@ -3436,7 +3436,7 @@ async function handleFixSentenceGameStart(replyToken: string, userId: string) {
     let questionText = formatFixSentenceQuestion(question, 0, questions.length);
     if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "แก้ประโยค") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
-        { label: "เฉลย", text: "เฉลย" },
+        { label: "Hint 💡", text: HINT_CMD },
         { label: "ข้าม", text: "ข้าม" },
         { label: "ออก", text: "ออกจากเกม" },
     ], (question as any).imageUrl);
@@ -3474,7 +3474,7 @@ async function handleArrangeSentenceGameStart(replyToken: string, userId: string
     let questionText = formatArrangeSentenceQuestion(question, 0, questions.length);
     if (multiplier < 1) questionText = getDailyLimitMessage(roundCount, "เรียงประโยค") + "\n\n" + questionText;
     await replyWithQuickReply(replyToken, questionText, [
-        { label: "เฉลย", text: "เฉลย" },
+        { label: "Hint 💡", text: HINT_CMD },
         { label: "ข้าม", text: "ข้าม" },
         { label: "ออก", text: "ออกจากเกม" },
     ], (question as any).imageUrl);
