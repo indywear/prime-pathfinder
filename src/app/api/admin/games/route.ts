@@ -81,6 +81,11 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: 'gameType is required' }, { status: 400 })
         }
 
+        const validGameTypes = ALL_GAMES.map(g => g.gameType)
+        if (!validGameTypes.includes(gameType)) {
+            return NextResponse.json({ error: 'Invalid gameType' }, { status: 400 })
+        }
+
         if (typeof isEnabled !== 'boolean') {
             return NextResponse.json({ error: 'isEnabled must be a boolean' }, { status: 400 })
         }

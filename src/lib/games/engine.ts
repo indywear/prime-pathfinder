@@ -651,7 +651,7 @@ export async function resumeSession(sessionId: string): Promise<GameSessionData>
         correctCount: session.correctCount,
         pointsEarned: session.pointsEarned,
         startedAt: session.startedAt,
-        lastActivityAt: session.startedAt,
+        lastActivityAt: new Date(),
     }
 }
 

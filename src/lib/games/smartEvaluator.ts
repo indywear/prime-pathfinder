@@ -73,20 +73,17 @@ export async function smartCheckFillBlank(
     }
 
     // Layer 4: Substring match — "รับรางวัล" ⊂ "งานรับรางวัล"
-    if (user.length >= 3) {
-        const isUserSubstring = correct.includes(user);
-        const isCorrectSubstring = user.includes(correct);
-        if (isUserSubstring || isCorrectSubstring) {
-            const shorter = Math.min(user.length, correct.length);
-            const longer = Math.max(user.length, correct.length);
-            // ต้องครอบคลุมอย่างน้อย 50% ของคำตอบเต็ม
-            if (shorter / longer >= 0.5) {
-                return {
-                    status: "partial",
-                    scoreMultiplier: 0.5,
-                    feedback: `ใกล้เคียง! คำตอบเต็มคือ: "${correctAnswer}"`,
-                };
-            }
+    // Only give partial when user typed LESS than correct (correct contains user)
+    // NOT when user typed MORE (user contains correct) — that's a different/wrong answer
+    if (user.length >= 3 && correct.includes(user)) {
+        const ratio = user.length / correct.length;
+        // ต้องครอบคลุมอย่างน้อย 50% ของคำตอบเต็ม
+        if (ratio >= 0.5) {
+            return {
+                status: "partial",
+                scoreMultiplier: 0.5,
+                feedback: `ใกล้เคียง! คำตอบเต็มคือ: "${correctAnswer}"`,
+            };
         }
     }
 

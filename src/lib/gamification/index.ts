@@ -43,7 +43,7 @@ export async function addPoints(
     points: number,
     _source?: string,
     _referenceId?: string,
-    _description?: string
+    _description?: string,
 ): Promise<{ newTotal: number; leveledUp: boolean; newLevel?: number }> {
     return await prisma.$transaction(async (tx) => {
         const user = await tx.user.findUnique({
@@ -56,19 +56,18 @@ export async function addPoints(
         const newTotal = user.totalPoints + points
         const newLevel = calculateLevel(newTotal)
         const leveledUp = newLevel > user.currentLevel
-        const finalTotal = newTotal + (leveledUp ? POINT_VALUES.LEVEL_UP : 0)
 
         await tx.user.update({
             where: { id: userId },
             data: {
-                totalPoints: finalTotal,
+                totalPoints: newTotal,
                 currentLevel: newLevel,
                 updatedAt: new Date(),
             },
         })
 
         return {
-            newTotal: finalTotal,
+            newTotal,
             leveledUp,
             newLevel: leveledUp ? newLevel : undefined,
         }

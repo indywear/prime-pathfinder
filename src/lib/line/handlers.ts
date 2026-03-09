@@ -1899,6 +1899,13 @@ async function handleHint(replyToken: string, userId: string) {
     let gameData: any = {};
     try { gameData = user.gameData ? JSON.parse(user.gameData) : {}; } catch { gameData = {}; }
 
+    // Prevent using hint more than once per question
+    if (gameData.hintUsedForCurrent) {
+        const flex = createErrorFlex("ใช้คำใบ้ไปแล้ว พิมพ์คำตอบได้เลย", [{ label: "ออก", text: "ออกจากเกม" }]);
+        await lineClient.replyMessage({ replyToken, messages: [flex] as any });
+        return;
+    }
+
     // Look up hint from DB based on game type
     let hintText: string | null = null;
 
