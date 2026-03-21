@@ -445,6 +445,9 @@ const GAME_CATEGORY_MAP: Record<string, string> = {
     DAILY_VOCAB: 'vocab',
     RACE_CLOCK: 'grammar',
     VOCAB_GACHA: 'vocab',
+    THAI_IDIOM: 'vocab',
+    THAI_CULTURE: 'reading',
+    SENTENCE_WRITING: 'reading',
 }
 
 /**
@@ -453,6 +456,27 @@ const GAME_CATEGORY_MAP: Record<string, string> = {
  * @param lineUserId - LINE user ID (stored in languageGameSession.odUserId)
  * @param gameType - Game type string (e.g. "VOCAB_MATCH")
  */
+/** Count how many consecutive correct answers the user has (most recent first) */
+async function getConsecutiveCorrectCount(lineUserId: string): Promise<number> {
+    const user = await prisma.user.findUnique({ where: { lineUserId }, select: { id: true } })
+    if (!user) return 0
+
+    // Get last 25 answers ordered newest first
+    const recentAnswers = await prisma.userQuestionHistory.findMany({
+        where: { userId: user.id },
+        orderBy: { answeredAt: 'desc' },
+        take: 25,
+        select: { wasCorrect: true },
+    })
+
+    let count = 0
+    for (const answer of recentAnswers) {
+        if (answer.wasCorrect) count++
+        else break
+    }
+    return count
+}
+
 export async function checkAndAwardTitle(
     lineUserId: string,
     gameType: string
@@ -461,14 +485,10 @@ export async function checkAndAwardTitle(
 
     // Count completed game sessions by category
     const allSessions = await prisma.languageGameSession.findMany({
-        where: {
-            odUserId: lineUserId,
-            isCompleted: true,
-        },
+        where: { odUserId: lineUserId, isCompleted: true },
         select: { gameType: true },
     })
 
-    // Count by category
     const categoryCounts: Record<string, number> = { vocab: 0, grammar: 0, reading: 0, all: 0 }
     for (const session of allSessions) {
         const cat = GAME_CATEGORY_MAP[session.gameType] || 'vocab'
@@ -476,28 +496,24 @@ export async function checkAndAwardTitle(
         categoryCounts['all'] = (categoryCounts['all'] || 0) + 1
     }
 
-    // Find the highest title earned for the current category
+    // Check accuracy (SHARPSHOOTER) — consecutive correct answers across all games
+    const consecutiveCorrect = await getConsecutiveCorrectCount(lineUserId)
+    categoryCounts['accuracy'] = consecutiveCorrect
+
+    // Find the highest title earned for the current category + accuracy + all
     const relevantTitles = ACHIEVEMENT_TITLES.filter(
-        t => t.gameCategory === category || t.gameCategory === 'all'
+        t => t.gameCategory === category || t.gameCategory === 'all' || t.gameCategory === 'accuracy'
     )
 
-    // Sort by gamesRequired descending to find highest first
     const sortedTitles = [...relevantTitles].sort((a, b) => b.gamesRequired - a.gamesRequired)
+
+    const user = await prisma.user.findUnique({ where: { lineUserId }, select: { title: true } })
 
     for (const titleDef of sortedTitles) {
         const count = categoryCounts[titleDef.gameCategory] || 0
         if (count >= titleDef.gamesRequired) {
-            // Check if user already has this title
-            const user = await prisma.user.findUnique({
-                where: { lineUserId },
-                select: { title: true },
-            })
+            if (user?.title === titleDef.title) return null // Already has this title
 
-            if (user?.title === titleDef.title) {
-                return null // Already has this title
-            }
-
-            // Award the new title!
             await prisma.user.update({
                 where: { lineUserId },
                 data: { title: titleDef.title },
@@ -547,7 +563,7 @@ export async function getUserTitleProgress(
     }
 
     return ACHIEVEMENT_TITLES
-        .filter(t => t.gameCategory !== 'accuracy') // exclude accuracy for now
+        .filter(t => t.gameCategory !== 'does-not-exist') // include all categories
         .map(t => ({
             title: t.title,
             emoji: t.emoji,
