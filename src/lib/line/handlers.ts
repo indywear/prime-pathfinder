@@ -1064,7 +1064,12 @@ async function handleDashboard(replyToken: string, userId: string) {
 }
 
 async function handleProfile(replyToken: string, userId: string) {
-    const user = await prisma.user.findUnique({ where: { lineUserId: userId } });
+    const user = await prisma.user.findUnique({
+        where: { lineUserId: userId },
+        include: {
+            badges: { include: { badge: true }, orderBy: { earnedAt: 'desc' } },
+        },
+    });
 
     if (!user?.isRegistered) {
         const flex = createNotRegisteredFlex();
@@ -1072,7 +1077,20 @@ async function handleProfile(replyToken: string, userId: string) {
         return;
     }
 
-    const profileDisplayTitle = getDisplayTitle(user);
+    // Level title (by level)
+    const levelTitle = getDisplayTitle({ title: null, currentLevel: user.currentLevel });
+    // Achievement title (earned by gameplay)
+    const achievementTitle = user.title ? getDisplayTitle(user) : undefined;
+
+    const BADGE_EMOJI_MAP: Record<string, string> = {
+        FIRST_GAME: '🌟', GAME_10: '🎮', GAME_50: '🏅',
+        PERFECT_ROUND: '✨', FIRE_STREAK: '🔥', GRADUATE: '🎓', ANSWER_100: '💯',
+    };
+    const badges = user.badges.map(ub => ({
+        nameThai: ub.badge.nameThai,
+        emoji: BADGE_EMOJI_MAP[ub.badge.badgeType] || '🏅',
+    }));
+
     const profileFlex = createProfileFlex({
         chineseName: user.chineseName || "-",
         thaiName: user.thaiName || "-",
@@ -1081,14 +1099,17 @@ async function handleProfile(replyToken: string, userId: string) {
         nationality: user.nationality || "-",
         thaiLevel: user.thaiLevel,
         level: user.currentLevel,
-        title: profileDisplayTitle,
+        title: levelTitle,
+        achievementTitle,
         totalPoints: user.totalPoints,
+        badges,
     });
 
-    await lineClient.replyMessage({
-        replyToken,
-        messages: [profileFlex] as any,
-    });
+    await replyFlexWithQuickReply(replyToken, [profileFlex], [
+        { label: "✏️ แก้ไขข้อมูล", text: "แก้ไขข้อมูล" },
+        { label: "📊 แดชบอร์ด", text: "แดชบอร์ด" },
+        { label: "🏠 เมนู", text: "เมนู" },
+    ]);
 }
 
 async function handleHelp(replyToken: string, userId: string) {

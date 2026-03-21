@@ -293,8 +293,33 @@ export function createProfileFlex(data: {
     thaiLevel: string;
     level?: number;
     title?: string;
+    achievementTitle?: string;
     totalPoints?: number;
+    badges?: Array<{ nameThai: string; emoji: string }>;
 }): FlexMessage {
+    const badgeSection: any[] = data.badges && data.badges.length > 0 ? [
+        {
+            type: "separator",
+            margin: "md",
+        },
+        {
+            type: "text",
+            text: "🎖️ Badges ที่ได้รับ",
+            size: "sm",
+            color: "#666666",
+            margin: "md",
+            weight: "bold",
+        },
+        {
+            type: "text",
+            text: data.badges.map(b => `${b.emoji} ${b.nameThai}`).join("  "),
+            size: "sm",
+            color: "#333333",
+            wrap: true,
+            margin: "sm",
+        },
+    ] : [];
+
     return {
         type: "flex",
         altText: "My Profile",
@@ -307,7 +332,7 @@ export function createProfileFlex(data: {
                 contents: [
                     {
                         type: "text",
-                        text: "My Profile",
+                        text: "👤 โปรไฟล์ของฉัน",
                         weight: "bold",
                         size: "xl",
                         color: "#5B5BFF",
@@ -320,16 +345,20 @@ export function createProfileFlex(data: {
                 type: "box",
                 layout: "vertical",
                 contents: [
-                    createProfileRow("Name", data.chineseName),
-                    createProfileRow("Thai Name", data.thaiName),
-                    createProfileRow("University", data.university),
-                    createProfileRow("Email", data.email),
-                    createProfileRow("Nationality", data.nationality),
-                    createProfileRow("Thai Level", data.thaiLevel),
+                    createProfileRow("ชื่อจีน", data.chineseName),
+                    createProfileRow("ชื่อไทย", data.thaiName),
+                    createProfileRow("มหาวิทยาลัย", data.university),
+                    createProfileRow("อีเมล", data.email),
+                    createProfileRow("สัญชาติ", data.nationality),
+                    createProfileRow("ระดับภาษาไทย", data.thaiLevel),
                     ...(data.level ? [
-                        createProfileRow("Level", `Lv.${data.level} ${data.title || ''}`),
-                        createProfileRow("Points", `${data.totalPoints || 0} pts`),
+                        createProfileRow("เลเวล", `Lv.${data.level} · ${data.title || ''}`),
+                        createProfileRow("คะแนน", `${data.totalPoints || 0} pts`),
                     ] : []),
+                    ...(data.achievementTitle ? [
+                        createProfileRow("🏅 ฉายา", data.achievementTitle),
+                    ] : []),
+                    ...badgeSection,
                 ],
                 paddingAll: "20px",
                 spacing: "md",
@@ -339,11 +368,14 @@ export function createProfileFlex(data: {
                 layout: "vertical",
                 contents: [
                     {
-                        type: "text",
-                        text: "Want to edit your info?",
-                        size: "sm",
-                        color: "#666666",
-                        align: "center",
+                        type: "button",
+                        action: {
+                            type: "message",
+                            label: "✏️ แก้ไขข้อมูล",
+                            text: "แก้ไขข้อมูล",
+                        },
+                        style: "primary",
+                        color: "#5B5BFF",
                     },
                 ],
                 paddingAll: "15px",
