@@ -60,7 +60,7 @@ import {
     getPointsForNextLevel,
     formatPointsMessage,
 } from "@/lib/gamification/points";
-import { addPoints, getLevelInfo, LEVEL_CONFIG, checkAndAwardTitle, getDisplayTitle } from "@/lib/gamification";
+import { addPoints, getLevelInfo, LEVEL_CONFIG, checkAndAwardTitle, getDisplayTitle, checkAndAwardGameBadges } from "@/lib/gamification";
 import { SPIN_WHEEL_PRIZES } from "@/lib/gamification/rewards";
 
 // Game Logic Imports
@@ -1681,6 +1681,20 @@ async function handleShowAnswer(replyToken: string, userId: string) {
                 console.error("Failed to check title:", e);
             }
 
+            // Check for badges
+            let badgeMsg = "";
+            try {
+                const newBadges = await checkAndAwardGameBadges(user.lineUserId, {
+                    sessionCorrectCount: updatedSession.correctCount,
+                    sessionTotalCount: updatedSession.totalQuestions,
+                });
+                if (newBadges.length > 0) {
+                    badgeMsg = "\n\n" + newBadges.map(b => `🎖️ Badge ใหม่: "${b.emoji} ${b.nameThai}"!`).join("\n");
+                }
+            } catch (e) {
+                console.error("Failed to check badges:", e);
+            }
+
             const summaryMsg = formatSessionSummary(updatedSession);
             const showAnswerQR = [
                 { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
@@ -1692,7 +1706,7 @@ async function handleShowAnswer(replyToken: string, userId: string) {
             }
             await replyWithQuickReply(
                 replyToken,
-                `${answerText || "ไม่พบคำตอบ"}\n\n${summaryMsg}${levelUpMsg}${titleMsg}`,
+                `${answerText || "ไม่พบคำตอบ"}\n\n${summaryMsg}${levelUpMsg}${titleMsg}${badgeMsg}`,
                 showAnswerQR
             );
         } else {
@@ -1816,6 +1830,17 @@ async function handleSkipQuestion(replyToken: string, userId: string) {
                 console.error("Failed to check title:", e);
             }
 
+            let badgeMsg = "";
+            try {
+                const newBadges = await checkAndAwardGameBadges(user.lineUserId, {
+                    sessionCorrectCount: updatedSession.correctCount,
+                    sessionTotalCount: updatedSession.totalQuestions,
+                });
+                if (newBadges.length > 0) {
+                    badgeMsg = "\n\n" + newBadges.map(b => `🎖️ Badge ใหม่: "${b.emoji} ${b.nameThai}"!`).join("\n");
+                }
+            } catch (e) { console.error("Failed to check badges:", e); }
+
             const summaryMsg = formatSessionSummary(updatedSession);
             const skipQR = [
                 { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
@@ -1827,7 +1852,7 @@ async function handleSkipQuestion(replyToken: string, userId: string) {
             }
             await replyWithQuickReply(
                 replyToken,
-                `⏭️ ข้ามข้อนี้\n\n${summaryMsg}${levelUpMsg}${titleMsg}`,
+                `⏭️ ข้ามข้อนี้\n\n${summaryMsg}${levelUpMsg}${titleMsg}${badgeMsg}`,
                 skipQR
             );
         } else {
@@ -2112,6 +2137,17 @@ async function handleSessionNext(replyToken: string, userId: string) {
                 console.error("Failed to check title:", e);
             }
 
+            let badgeMsg = "";
+            try {
+                const newBadges = await checkAndAwardGameBadges(user.lineUserId, {
+                    sessionCorrectCount: session.correctCount,
+                    sessionTotalCount: session.totalQuestions,
+                });
+                if (newBadges.length > 0) {
+                    badgeMsg = "\n\n" + newBadges.map(b => `🎖️ Badge ใหม่: "${b.emoji} ${b.nameThai}"!`).join("\n");
+                }
+            } catch (e) { console.error("Failed to check badges:", e); }
+
             const summaryMsg = formatSessionSummary(session);
             const pendingQR = [
                 { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
@@ -2123,7 +2159,7 @@ async function handleSessionNext(replyToken: string, userId: string) {
             }
             await replyWithQuickReply(
                 replyToken,
-                `${summaryMsg}${levelUpMsg}${titleMsg}`,
+                `${summaryMsg}${levelUpMsg}${titleMsg}${badgeMsg}`,
                 pendingQR
             );
             return;
@@ -2721,10 +2757,22 @@ async function handleGameAnswer(replyToken: string, user: any, text: string) {
                         console.error("Failed to check title:", e);
                     }
 
+                    let badgeFlex: any[] = [];
+                    try {
+                        const newBadges = await checkAndAwardGameBadges(user.lineUserId, {
+                            sessionCorrectCount: updatedSession.correctCount,
+                            sessionTotalCount: updatedSession.totalQuestions,
+                        });
+                        if (newBadges.length > 0) {
+                            badgeFlex = newBadges.map(b => createTitleAchievementFlex(b.emoji, `🎖️ Badge ใหม่: "${b.nameThai}"`));
+                        }
+                    } catch (e) { console.error("Failed to check badges:", e); }
+
                     const summaryMsg = formatSessionSummary(updatedSession);
                     const sessionFlexes: any[] = [createCorrectAnswerFlex({ message: getCorrectMessage(message), points: earnedThisQ, hintNote: hintNote || undefined, isLastQuestion: true, summaryMsg })];
                     if (levelUpFlex) sessionFlexes.push(levelUpFlex);
                     if (titleFlex) sessionFlexes.push(titleFlex);
+                    sessionFlexes.push(...badgeFlex);
                     const quickReplies = [
                         { label: "เล่นใหม่", text: getGameStartCommand(gameType) },
                         { label: "เกมอื่น", text: "เลือกเกม" },

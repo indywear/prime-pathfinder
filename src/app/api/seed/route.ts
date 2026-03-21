@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db/prisma";
+import { seedGameBadges } from "@/lib/gamification";
 import {
     extraMultipleChoiceQuestions,
     extraFillBlankQuestions,
@@ -293,6 +294,10 @@ export async function POST() {
         await seedData("thaiIdiom", () => prisma.thaiIdiomQuestion.count(), (d) => prisma.thaiIdiomQuestion.create({ data: d }), thaiIdiomQuestions as any[]);
         await seedData("thaiCulture", () => prisma.thaiCultureQuestion.count(), (d) => prisma.thaiCultureQuestion.create({ data: d }), thaiCultureQuestions as any[]);
 
+        // Badges
+        const badgesCreated = await seedGameBadges();
+        results['badges'] = badgesCreated;
+
         // ============================================================
         // EXTRAS: เพิ่มคำถามเสริมให้ครบ 30 ข้อต่อเกม (ใช้ createMany)
         // ============================================================
@@ -386,6 +391,7 @@ export async function GET() {
         // Thai Idiom & Culture
         thaiIdiomQuestions: await prisma.thaiIdiomQuestion.count(),
         thaiCultureQuestions: await prisma.thaiCultureQuestion.count(),
+        badges: await prisma.badge.count(),
     };
 
     return NextResponse.json({

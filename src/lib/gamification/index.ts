@@ -573,3 +573,100 @@ export async function getUserTitleProgress(
             earned: (categoryCounts[t.gameCategory] || 0) >= t.gamesRequired,
         }))
 }
+
+// ==================== BADGE SYSTEM ====================
+
+const BADGE_EMOJI: Record<string, string> = {
+    FIRST_GAME:     '🌟',
+    GAME_10:        '🎮',
+    GAME_50:        '🏅',
+    PERFECT_ROUND:  '✨',
+    FIRE_STREAK:    '🔥',
+    GRADUATE:       '🎓',
+    ANSWER_100:     '💯',
+}
+
+/**
+ * Check and award all applicable game badges after a session completes.
+ * Returns list of newly awarded badges (empty if none).
+ */
+export async function checkAndAwardGameBadges(
+    lineUserId: string,
+    opts: {
+        sessionCorrectCount?: number
+        sessionTotalCount?: number
+        newLevel?: number
+    } = {}
+): Promise<Array<{ nameThai: string; emoji: string }>> {
+    const user = await prisma.user.findUnique({ where: { lineUserId }, select: { id: true } })
+    if (!user) return []
+
+    const userId = user.id
+
+    // Count completed sessions
+    const totalSessions = await prisma.languageGameSession.count({
+        where: { odUserId: lineUserId, isCompleted: true },
+    })
+
+    // Count total answers
+    const totalAnswers = await prisma.userQuestionHistory.count({ where: { userId } })
+
+    // Check 7-day streak from game sessions
+    const today = getBangkokStartOfDay()
+    const sevenDaysAgo = new Date(today)
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+    const recentSessions = await prisma.languageGameSession.findMany({
+        where: { odUserId: lineUserId, isCompleted: true, completedAt: { gte: sevenDaysAgo } },
+        select: { completedAt: true },
+    })
+    const playedDays = new Set(recentSessions.map(s => getBangkokDateString(new Date(s.completedAt!))))
+    const hasSevenDayStreak = playedDays.size >= 7
+
+    // Determine which badges to try awarding
+    const toCheck: string[] = []
+    if (totalSessions >= 1)  toCheck.push('FIRST_GAME')
+    if (totalSessions >= 10) toCheck.push('GAME_10')
+    if (totalSessions >= 50) toCheck.push('GAME_50')
+    if (totalAnswers >= 100)  toCheck.push('ANSWER_100')
+    if (hasSevenDayStreak)   toCheck.push('FIRE_STREAK')
+    if ((opts.newLevel ?? 0) >= 5) toCheck.push('GRADUATE')
+    if (
+        opts.sessionCorrectCount !== undefined &&
+        opts.sessionTotalCount !== undefined &&
+        opts.sessionTotalCount > 0 &&
+        opts.sessionCorrectCount === opts.sessionTotalCount
+    ) toCheck.push('PERFECT_ROUND')
+
+    const awarded: Array<{ nameThai: string; emoji: string }> = []
+    for (const code of toCheck) {
+        const result = await checkAndAwardBadge(userId, code)
+        if (result.awarded && result.badge) {
+            awarded.push({ nameThai: result.badge.nameThai, emoji: BADGE_EMOJI[code] || '🏅' })
+        }
+    }
+
+    return awarded
+}
+
+/** Seed game badges into the Badge table (idempotent — skips existing). */
+export async function seedGameBadges(): Promise<number> {
+    const badges = [
+        { badgeType: 'FIRST_GAME',    name: 'First Step',       nameThai: 'นักเดินทางคนใหม่',  description: 'เล่นเกมครบ 1 รอบ',             requirement: 1 },
+        { badgeType: 'GAME_10',       name: 'Game Collector',   nameThai: 'นักสะสมรอบ',         description: 'เล่นเกมครบ 10 รอบ',            requirement: 10 },
+        { badgeType: 'GAME_50',       name: 'Game Veteran',     nameThai: 'นักเล่นเกมตัวยง',    description: 'เล่นเกมครบ 50 รอบ',            requirement: 50 },
+        { badgeType: 'PERFECT_ROUND', name: 'Flawless',         nameThai: 'ไร้ที่ติ',            description: 'ตอบถูกทุกข้อใน 1 รอบ',         requirement: 1 },
+        { badgeType: 'FIRE_STREAK',   name: 'On Fire',          nameThai: 'ไฟแห่งความมุ่งมั่น',  description: 'เล่นติดต่อกัน 7 วัน',           requirement: 7 },
+        { badgeType: 'GRADUATE',      name: 'Graduate',         nameThai: 'นักเรียนดีเด่น',      description: 'เลื่อนเป็น Level 5',            requirement: 5 },
+        { badgeType: 'ANSWER_100',    name: 'Century',          nameThai: 'ร้อยคำตอบ',           description: 'ตอบคำถามรวม 100 ข้อ',           requirement: 100 },
+    ]
+
+    let created = 0
+    for (const badge of badges) {
+        const existing = await prisma.badge.findFirst({ where: { badgeType: badge.badgeType } })
+        if (!existing) {
+            await prisma.badge.create({ data: badge })
+            created++
+        }
+    }
+    return created
+}
