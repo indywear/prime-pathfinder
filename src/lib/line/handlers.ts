@@ -761,7 +761,7 @@ async function handleSubmitStart(replyToken: string, userId: string) {
         });
 
         const deadlineStr = task.deadline ? new Date(task.deadline).toLocaleDateString("th-TH") : "ไม่ระบุ";
-        const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://proficienthai.vercel.app').trim().replace(/\/+$/, '');
+        const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://proficienthai-iota.vercel.app').trim().replace(/\/+$/, '');
         const taskUrl = `${baseUrl}/task/${task.slug}`;
 
         await replyWithQuickReply(

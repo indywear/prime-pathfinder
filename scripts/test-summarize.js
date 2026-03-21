@@ -19,7 +19,7 @@ async function main() {
 
     // Start SUMMARIZE
     const ts = Date.now();
-    await httpPost('https://proficienthai.vercel.app/api/line/webhook', {
+    await httpPost('https://proficienthai-iota.vercel.app/api/line/webhook', {
         destination: 'test', events: [{
             type: 'message', message: { type: 'text', id: 'sum-'+ts, text: 'สรุปเรื่อง' },
             timestamp: ts, replyToken: 'sum-token-'+ts,
@@ -49,7 +49,7 @@ async function main() {
     console.log('Sending summary:', goodSummary);
 
     const ts2 = Date.now();
-    await httpPost('https://proficienthai.vercel.app/api/line/webhook', {
+    await httpPost('https://proficienthai-iota.vercel.app/api/line/webhook', {
         destination: 'test', events: [{
             type: 'message', message: { type: 'text', id: 'ans-sum-'+ts2, text: goodSummary },
             timestamp: ts2, replyToken: 'ans-sum-token-'+ts2,

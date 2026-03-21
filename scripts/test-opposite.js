@@ -18,7 +18,7 @@ async function main() {
     await prisma.user.update({ where: { id: user.id }, data: { currentGameType: null, currentQuestionId: null, gameData: null } });
 
     const ts = Date.now();
-    const res = await httpPost('https://proficienthai.vercel.app/api/line/webhook', {
+    const res = await httpPost('https://proficienthai-iota.vercel.app/api/line/webhook', {
         destination: 'test', events: [{
             type: 'message', message: { type: 'text', id: 'opp3-'+ts, text: 'คำตรงข้าม' },
             timestamp: ts, replyToken: 'opp3-token-'+ts,
@@ -38,7 +38,7 @@ async function main() {
 
         const thaiAnswer = { A: 'ก', B: 'ข', C: 'ค', D: 'ง' }[gd.correctAnswer];
         const ts2 = Date.now();
-        await httpPost('https://proficienthai.vercel.app/api/line/webhook', {
+        await httpPost('https://proficienthai-iota.vercel.app/api/line/webhook', {
             destination: 'test', events: [{
                 type: 'message', message: { type: 'text', id: 'ans3-'+ts2, text: thaiAnswer },
                 timestamp: ts2, replyToken: 'ans3-token-'+ts2,

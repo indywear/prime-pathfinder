@@ -23,7 +23,7 @@ async function main() {
     // Start CONTINUE_STORY game
     const ts = Date.now();
     console.log('\n=== Starting CONTINUE_STORY game ===');
-    await httpPost('https://proficienthai.vercel.app/api/line/webhook', {
+    await httpPost('https://proficienthai-iota.vercel.app/api/line/webhook', {
         destination: 'test', events: [{
             type: 'message', message: { type: 'text', id: 'cs-'+ts, text: 'เขียนต่อ' },
             timestamp: ts, replyToken: 'cs-token-'+ts,
@@ -67,7 +67,7 @@ async function main() {
     }
 
     const ts2 = Date.now();
-    await httpPost('https://proficienthai.vercel.app/api/line/webhook', {
+    await httpPost('https://proficienthai-iota.vercel.app/api/line/webhook', {
         destination: 'test', events: [{
             type: 'message', message: { type: 'text', id: 'acs-'+ts2, text: continuation },
             timestamp: ts2, replyToken: 'acs-token-'+ts2,

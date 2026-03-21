@@ -23,7 +23,7 @@ async function main() {
     // Start SUMMARIZE game
     const ts = Date.now();
     console.log('\n=== Starting SUMMARIZE game ===');
-    await httpPost('https://proficienthai.vercel.app/api/line/webhook', {
+    await httpPost('https://proficienthai-iota.vercel.app/api/line/webhook', {
         destination: 'test', events: [{
             type: 'message', message: { type: 'text', id: 'sf-'+ts, text: 'สรุปเรื่อง' },
             timestamp: ts, replyToken: 'sf-token-'+ts,
@@ -61,7 +61,7 @@ async function main() {
     }
 
     const ts2 = Date.now();
-    const res = await httpPost('https://proficienthai.vercel.app/api/line/webhook', {
+    const res = await httpPost('https://proficienthai-iota.vercel.app/api/line/webhook', {
         destination: 'test', events: [{
             type: 'message', message: { type: 'text', id: 'asf-'+ts2, text: goodSummary },
             timestamp: ts2, replyToken: 'asf-token-'+ts2,

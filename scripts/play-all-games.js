@@ -7,7 +7,7 @@ const { PrismaClient } = require('@prisma/client');
 const https = require('https');
 const prisma = new PrismaClient();
 
-const WEBHOOK_URL = 'https://proficienthai.vercel.app/api/line/webhook';
+const WEBHOOK_URL = 'https://proficienthai-iota.vercel.app/api/line/webhook';
 const LINE_PUSH_URL = 'https://api.line.me/v2/bot/message/push';
 const USER_ID = 'U7433223088c3015ffa0533a4ac689557';
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || 'oo/bmBO2zDzz6xxKRCEvwV+Z5EMbwt39xohAbaTSvSdYciBbnwhxFDXLkQnW1aWbpl7oX3NoT0+lBdFt86De5cgDc611XHmb7oVOi/fNmkwenQGZp/3bXcJA6XxkGMsJ/jA+0e5glBhs+tOPjGHrMwdB04t89/1O/w1cDnyilFU=';

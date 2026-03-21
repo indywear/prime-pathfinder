@@ -17,7 +17,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
-const WEBHOOK_URL = process.env.TEST_WEBHOOK_URL || 'https://proficienthai-vert.vercel.app/api/line/webhook';
+const WEBHOOK_URL = process.env.TEST_WEBHOOK_URL || 'https://proficienthai-iota.vercel.app/api/line/webhook';
 const TEST_USER_ID = `Utest_feat_${Date.now()}`;
 
 let passed = 0, failed = 0, skipped = 0;
